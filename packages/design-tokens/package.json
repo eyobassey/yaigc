@@ -1,0 +1,23 @@
+{
+  "name": "@igc/design-tokens",
+  "version": "0.0.0",
+  "private": true,
+  "description": "You Are In Good Company - brand design tokens. Colours, typography, spacing, radii. Source of truth for the visual system. Consumed by Tailwind config and component styles.",
+  "type": "module",
+  "main": "./src/index.mjs",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.mjs"
+    }
+  },
+  "files": ["src"],
+  "scripts": {
+    "lint": "echo 'design-tokens: no lint rules yet' && exit 0",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

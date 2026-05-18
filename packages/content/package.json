@@ -1,0 +1,19 @@
+{
+  "name": "@igc/content",
+  "version": "0.0.0",
+  "private": true,
+  "description": "You Are In Good Company - customer-facing strings. Single source of truth for the brand voice. Linted by scripts/lint-content.ts in CI.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./en-GB": "./src/en-GB.ts"
+  },
+  "scripts": {
+    "lint": "echo 'content package: linted by repo-root lint:content' && exit 0",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}
