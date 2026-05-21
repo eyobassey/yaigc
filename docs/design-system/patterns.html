@@ -1,0 +1,1902 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Design System v0 - You Are In Good Company</title>
+  <meta name="description" content="Pattern catalogue and design tokens for the You Are In Good Company web platform." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <style>
+    /* ============================================================
+       Tokens - the source of truth for the design system
+       ============================================================ */
+    :root {
+      /* Colour: Brand */
+      --color-moss:           #3C5A3A;
+      --color-moss-dark:      #2D4429;
+      --color-cream:          #FAF8F3;
+      --color-cream-deep:     #F2EFE4;
+      --color-charcoal:       #2D2D2D;
+      --color-terracotta:     #C97B5F;
+      --color-terracotta-light: #E5B59E;
+      --color-sage:           #A3B8A3;
+      --color-stone:          #8B8680;
+      --color-paper:          #FFFEFB;
+
+      /* Colour: Functional */
+      --color-success:        #5E8E5A;
+      --color-warning:        #D4A547;
+      --color-alert:          #B84A39;
+
+      /* Typography: families */
+      --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+      --font-body:    'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono:    'JetBrains Mono', Consolas, monospace;
+
+      /* Typography: scale (clamp values for fluid sizing) */
+      --type-display-xl:  clamp(2.5rem, 7vw, 5.5rem);  /* 40-88px */
+      --type-display-lg:  clamp(2rem, 5vw, 3.5rem);    /* 32-56px */
+      --type-display-md:  clamp(1.5rem, 3vw, 2.125rem); /* 24-34px */
+      --type-display-sm:  clamp(1.25rem, 2vw, 1.5rem);  /* 20-24px */
+      --type-body-lg:     clamp(1.125rem, 1.7vw, 1.3125rem); /* 18-21px */
+      --type-body-md:     1.125rem;  /* 18px */
+      --type-body-sm:     1rem;      /* 16px */
+      --type-body-xs:     0.875rem;  /* 14px */
+      --type-caption:     0.8125rem; /* 13px */
+
+      /* Spacing scale (4px base) */
+      --space-1:   0.25rem;   /* 4px */
+      --space-2:   0.5rem;    /* 8px */
+      --space-3:   0.75rem;   /* 12px */
+      --space-4:   1rem;      /* 16px */
+      --space-6:   1.5rem;    /* 24px */
+      --space-8:   2rem;      /* 32px */
+      --space-12:  3rem;      /* 48px */
+      --space-16:  4rem;      /* 64px */
+      --space-24:  6rem;      /* 96px */
+      --space-32:  8rem;      /* 128px */
+
+      /* Radii */
+      --radius-none:  0;
+      --radius-sm:    4px;
+      --radius-md:    8px;
+      --radius-lg:    16px;
+      --radius-xl:    24px;
+      --radius-full:  9999px;
+
+      /* Shadows */
+      --shadow-none:     none;
+      --shadow-sm:       0 1px 2px rgba(60, 90, 58, 0.04);
+      --shadow-md:       0 4px 12px rgba(60, 90, 58, 0.06);
+      --shadow-lg:       0 12px 32px rgba(60, 90, 58, 0.10);
+      --shadow-portrait: 0 1px 2px rgba(0, 0, 0, 0.03), 0 20px 60px rgba(60, 90, 58, 0.08);
+
+      /* Motion */
+      --duration-instant:   100ms;
+      --duration-quick:     200ms;
+      --duration-standard:  300ms;
+      --duration-slow:      600ms;
+      --duration-hero:      800ms;
+      --easing-standard:    cubic-bezier(0.4, 0, 0.2, 1);
+      --easing-ease:        ease;
+
+      /* Breakpoints (documented as custom properties for reference;
+         actual breakpoints set in media queries) */
+      --bp-sm:   600px;
+      --bp-md:   760px;
+      --bp-lg:   1000px;
+      --bp-xl:   1240px;
+
+      /* Layout */
+      --container-max:  1240px;
+      --container-narrow: 880px;
+      --gutter: clamp(1.25rem, 4vw, 2.5rem);
+    }
+
+    /* ============================================================
+       Reset and base
+       ============================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+    body {
+      font-family: var(--font-body);
+      font-size: 16px;
+      line-height: 1.6;
+      color: var(--color-charcoal);
+      background: var(--color-cream);
+      -webkit-font-smoothing: antialiased;
+    }
+    img, svg { display: block; max-width: 100%; height: auto; }
+    a { color: var(--color-moss); text-decoration: none; transition: color var(--duration-quick) var(--easing-standard); }
+    a:hover { color: var(--color-terracotta); }
+    button { font-family: inherit; cursor: pointer; border: none; background: none; }
+    code { font-family: var(--font-mono); font-size: 0.875em; background: var(--color-cream-deep); padding: 0.1em 0.4em; border-radius: var(--radius-sm); color: var(--color-moss); }
+    ::selection { background: var(--color-terracotta); color: var(--color-cream); }
+
+    /* Page chrome */
+    .page-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(250, 248, 243, 0.92);
+      backdrop-filter: saturate(180%) blur(12px);
+      -webkit-backdrop-filter: saturate(180%) blur(12px);
+      border-bottom: 1px solid rgba(60, 90, 58, 0.08);
+    }
+    .page-nav-inner {
+      max-width: var(--container-max);
+      margin: 0 auto;
+      padding: var(--space-4) var(--gutter);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-8);
+    }
+    .page-logo {
+      font-family: var(--font-display);
+      font-size: 1.125rem;
+      font-weight: 500;
+      color: var(--color-moss);
+      display: flex;
+      align-items: baseline;
+      gap: 0.25rem;
+      white-space: nowrap;
+    }
+    .page-logo::before {
+      content: '';
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--color-terracotta);
+      margin-right: 0.5rem;
+      transform: translateY(-1px);
+    }
+    .page-nav-meta {
+      font-size: var(--type-caption);
+      color: var(--color-stone);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .page-hero {
+      max-width: var(--container-max);
+      margin: 0 auto;
+      padding: var(--space-24) var(--gutter) var(--space-16);
+    }
+    .page-hero h1 {
+      font-family: var(--font-display);
+      font-size: var(--type-display-xl);
+      font-weight: 400;
+      color: var(--color-moss);
+      letter-spacing: -0.025em;
+      line-height: 1.05;
+      max-width: 14ch;
+    }
+    .page-hero h1 em {
+      font-style: italic;
+      color: var(--color-terracotta);
+    }
+    .page-hero p {
+      font-size: var(--type-body-lg);
+      color: var(--color-charcoal);
+      max-width: 50ch;
+      margin-top: var(--space-6);
+      line-height: 1.55;
+    }
+    .page-hero .eyebrow {
+      margin-bottom: var(--space-6);
+    }
+
+    /* Section wrapper */
+    .section {
+      max-width: var(--container-max);
+      margin: 0 auto;
+      padding: var(--space-16) var(--gutter);
+      border-top: 1px solid rgba(60, 90, 58, 0.1);
+    }
+    .section-header {
+      margin-bottom: var(--space-12);
+    }
+    .section-header h2 {
+      font-family: var(--font-display);
+      font-size: var(--type-display-lg);
+      font-weight: 400;
+      color: var(--color-moss);
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+      max-width: 20ch;
+    }
+    .section-header h2 em {
+      font-style: italic;
+      color: var(--color-terracotta);
+    }
+    .section-header p {
+      font-size: var(--type-body-lg);
+      color: var(--color-charcoal);
+      max-width: 50ch;
+      margin-top: var(--space-4);
+      line-height: 1.55;
+    }
+
+    /* Eyebrow */
+    .eyebrow {
+      display: inline-block;
+      font-family: var(--font-body);
+      font-size: var(--type-caption);
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-stone);
+    }
+
+    /* Subsection */
+    .subsection {
+      margin-bottom: var(--space-12);
+    }
+    .subsection-title {
+      font-family: var(--font-display);
+      font-size: var(--type-display-md);
+      color: var(--color-charcoal);
+      font-weight: 500;
+      margin-bottom: var(--space-4);
+      line-height: 1.2;
+    }
+    .subsection-description {
+      font-size: var(--type-body-md);
+      color: var(--color-charcoal);
+      max-width: 60ch;
+      margin-bottom: var(--space-6);
+      line-height: 1.55;
+    }
+
+    /* Specimen frame: shows the rendered example */
+    .specimen {
+      background: var(--color-paper);
+      border: 1px solid rgba(60, 90, 58, 0.12);
+      border-radius: var(--radius-lg);
+      padding: var(--space-8);
+      margin-bottom: var(--space-2);
+      position: relative;
+    }
+    .specimen-dark {
+      background: var(--color-moss);
+      border-color: var(--color-moss);
+    }
+    .specimen-label {
+      position: absolute;
+      top: var(--space-3);
+      right: var(--space-4);
+      font-size: var(--type-caption);
+      color: var(--color-stone);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-family: var(--font-mono);
+    }
+    .specimen-dark .specimen-label {
+      color: var(--color-terracotta-light);
+    }
+
+    /* Code block under specimen */
+    .code-block {
+      background: var(--color-charcoal);
+      color: var(--color-cream);
+      border-radius: var(--radius-md);
+      padding: var(--space-4) var(--space-6);
+      overflow-x: auto;
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      line-height: 1.6;
+      margin-bottom: var(--space-8);
+    }
+    .code-block .c-comment { color: var(--color-stone); font-style: italic; }
+    .code-block .c-tag     { color: var(--color-terracotta-light); }
+    .code-block .c-attr    { color: var(--color-sage); }
+    .code-block .c-value   { color: var(--color-cream); }
+    .code-block .c-keyword { color: var(--color-terracotta-light); }
+    .code-block .c-prop    { color: var(--color-sage); }
+
+    /* Token grids */
+    .token-grid-colors {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: var(--space-4);
+    }
+    .color-token {
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      border: 1px solid rgba(60, 90, 58, 0.1);
+    }
+    .color-swatch {
+      height: 110px;
+      display: flex;
+      align-items: flex-end;
+      padding: var(--space-3);
+    }
+    .color-info {
+      background: var(--color-paper);
+      padding: var(--space-3) var(--space-4);
+      font-size: var(--type-body-xs);
+    }
+    .color-name {
+      font-family: var(--font-display);
+      font-size: 0.9375rem;
+      color: var(--color-moss);
+      font-weight: 500;
+      margin-bottom: 2px;
+    }
+    .color-hex {
+      font-family: var(--font-mono);
+      color: var(--color-charcoal);
+      font-size: 0.75rem;
+    }
+    .color-usage {
+      font-size: 0.75rem;
+      color: var(--color-stone);
+      margin-top: var(--space-1);
+      line-height: 1.4;
+    }
+
+    /* Typography specimens */
+    .type-specimen {
+      padding: var(--space-4) 0;
+      border-bottom: 1px solid rgba(60, 90, 58, 0.1);
+      display: grid;
+      grid-template-columns: 1fr 240px;
+      gap: var(--space-6);
+      align-items: baseline;
+    }
+    @media (max-width: 760px) {
+      .type-specimen { grid-template-columns: 1fr; }
+    }
+    .type-specimen:last-child { border-bottom: none; }
+    .type-specimen-meta {
+      font-family: var(--font-mono);
+      font-size: var(--type-caption);
+      color: var(--color-stone);
+      line-height: 1.6;
+    }
+    .type-specimen-meta strong {
+      color: var(--color-moss);
+      font-weight: 500;
+      font-family: var(--font-mono);
+    }
+
+    /* Spacing scale visualization */
+    .spacing-grid {
+      display: grid;
+      gap: var(--space-3);
+    }
+    .spacing-row {
+      display: grid;
+      grid-template-columns: 120px 100px 1fr;
+      gap: var(--space-4);
+      align-items: center;
+      padding: var(--space-2) 0;
+      border-bottom: 1px solid rgba(60, 90, 58, 0.06);
+    }
+    .spacing-name {
+      font-family: var(--font-mono);
+      font-size: var(--type-body-xs);
+      color: var(--color-moss);
+      font-weight: 500;
+    }
+    .spacing-value {
+      font-family: var(--font-mono);
+      font-size: var(--type-body-xs);
+      color: var(--color-stone);
+    }
+    .spacing-bar {
+      background: var(--color-terracotta);
+      height: 12px;
+      border-radius: var(--radius-sm);
+    }
+
+    /* Radii showcase */
+    .radii-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: var(--space-4);
+    }
+    .radius-specimen {
+      background: var(--color-sage);
+      height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--color-cream);
+      font-family: var(--font-mono);
+      font-size: var(--type-body-xs);
+    }
+
+    /* Shadow showcase */
+    .shadow-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: var(--space-8);
+      padding: var(--space-4);
+    }
+    .shadow-specimen {
+      background: var(--color-paper);
+      height: 110px;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: var(--type-body-xs);
+      color: var(--color-stone);
+    }
+    .shadow-sm       { box-shadow: var(--shadow-sm); }
+    .shadow-md-demo  { box-shadow: var(--shadow-md); }
+    .shadow-lg-demo  { box-shadow: var(--shadow-lg); }
+    .shadow-portrait { box-shadow: var(--shadow-portrait); }
+
+    /* ============================================================
+       Components
+       ============================================================ */
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+      padding: var(--space-3) var(--space-6);
+      font-family: var(--font-body);
+      font-size: var(--type-body-sm);
+      font-weight: 500;
+      line-height: 1;
+      border-radius: var(--radius-full);
+      transition: all var(--duration-quick) var(--easing-standard);
+      cursor: pointer;
+      text-align: center;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+    }
+    .btn-lg { padding: var(--space-4) var(--space-8); font-size: 1rem; }
+    .btn-sm { padding: var(--space-2) var(--space-4); font-size: var(--type-body-xs); }
+
+    .btn-primary {
+      background: var(--color-moss);
+      color: var(--color-cream);
+      border: 1px solid var(--color-moss);
+    }
+    .btn-primary:hover {
+      background: var(--color-moss-dark);
+      color: var(--color-cream);
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(60, 90, 58, 0.2);
+    }
+    .btn-secondary {
+      background: transparent;
+      color: var(--color-moss);
+      border: 1px solid var(--color-moss);
+    }
+    .btn-secondary:hover {
+      background: var(--color-moss);
+      color: var(--color-cream);
+    }
+    .btn-ghost {
+      background: transparent;
+      color: var(--color-moss);
+      border: 1px solid transparent;
+    }
+    .btn-ghost:hover {
+      color: var(--color-terracotta);
+    }
+    .btn:disabled, .btn-disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    /* Card */
+    .card {
+      background: var(--color-paper);
+      border-radius: var(--radius-lg);
+      padding: var(--space-6);
+      border: 1px solid rgba(60, 90, 58, 0.08);
+      transition: transform var(--duration-standard) var(--easing-standard),
+                  box-shadow var(--duration-standard) var(--easing-standard);
+    }
+    .card:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-md);
+    }
+    .card-highlighted {
+      background: var(--color-cream-deep);
+      border-color: var(--color-sage);
+    }
+    .card-mark {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--color-cream-deep);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: var(--space-4);
+      font-family: var(--font-display);
+      color: var(--color-terracotta);
+      font-style: italic;
+      font-size: 1.25rem;
+    }
+    .card h3 {
+      font-family: var(--font-display);
+      font-size: 1.125rem;
+      color: var(--color-moss);
+      margin-bottom: var(--space-2);
+    }
+    .card p {
+      font-size: var(--type-body-xs);
+      color: var(--color-charcoal);
+      line-height: 1.55;
+    }
+
+    /* Pillar */
+    .pillar {
+      position: relative;
+      padding-top: var(--space-8);
+      border-top: 1px solid var(--color-moss);
+      max-width: 320px;
+    }
+    .pillar-number {
+      font-family: var(--font-display);
+      font-size: 0.875rem;
+      letter-spacing: 0.1em;
+      color: var(--color-terracotta);
+      margin-bottom: var(--space-5);
+    }
+    .pillar h3 {
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      color: var(--color-charcoal);
+      font-weight: 500;
+      margin-bottom: var(--space-4);
+      max-width: 18ch;
+      line-height: 1.2;
+    }
+    .pillar p {
+      color: var(--color-charcoal);
+      line-height: 1.6;
+      font-size: var(--type-body-md);
+    }
+
+    /* Pull quote */
+    .pullquote {
+      font-family: var(--font-display);
+      font-size: var(--type-display-md);
+      font-style: italic;
+      color: var(--color-moss);
+      line-height: 1.4;
+      max-width: 30ch;
+      padding-left: var(--space-6);
+      border-left: 4px solid var(--color-terracotta);
+    }
+    .pullquote-attr {
+      font-family: var(--font-body);
+      font-size: var(--type-caption);
+      font-style: normal;
+      color: var(--color-stone);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-top: var(--space-4);
+      display: block;
+    }
+
+    /* Founder note */
+    .founder-note {
+      text-align: center;
+      max-width: 60ch;
+      margin: 0 auto;
+    }
+    .founder-note-body {
+      font-family: var(--font-display);
+      font-size: var(--type-display-md);
+      color: var(--color-moss);
+      line-height: 1.4;
+      font-weight: 400;
+    }
+    .founder-note-body em {
+      font-style: italic;
+      color: var(--color-terracotta);
+    }
+    .founder-note-attribution {
+      font-family: var(--font-body);
+      font-size: var(--type-caption);
+      color: var(--color-stone);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-top: var(--space-6);
+    }
+
+    /* FAQ Item */
+    .faq-item {
+      border-top: 1px solid rgba(60, 90, 58, 0.15);
+      padding: var(--space-6) 0;
+    }
+    .faq-item:last-child {
+      border-bottom: 1px solid rgba(60, 90, 58, 0.15);
+    }
+    .faq-item summary {
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: var(--space-6);
+      font-family: var(--font-display);
+      font-size: var(--type-display-sm);
+      color: var(--color-moss);
+      font-weight: 500;
+      line-height: 1.3;
+    }
+    .faq-item summary::-webkit-details-marker { display: none; }
+    .faq-item summary::after {
+      content: '+';
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      color: var(--color-moss);
+      transition: transform var(--duration-standard) var(--easing-standard);
+      flex-shrink: 0;
+    }
+    .faq-item[open] summary::after {
+      transform: rotate(45deg);
+    }
+    .faq-item-body {
+      margin-top: var(--space-4);
+      color: var(--color-charcoal);
+      line-height: 1.65;
+      max-width: 60ch;
+    }
+
+    /* Form fields */
+    .form-field {
+      margin-bottom: var(--space-5);
+    }
+    .form-label {
+      display: block;
+      font-family: var(--font-body);
+      font-size: var(--type-body-xs);
+      font-weight: 500;
+      color: var(--color-charcoal);
+      margin-bottom: var(--space-2);
+    }
+    .form-hint {
+      font-size: 0.75rem;
+      color: var(--color-stone);
+      margin-bottom: var(--space-2);
+      line-height: 1.5;
+    }
+    .form-input {
+      display: block;
+      width: 100%;
+      max-width: 420px;
+      padding: var(--space-3) var(--space-4);
+      font-family: var(--font-body);
+      font-size: var(--type-body-md);
+      color: var(--color-charcoal);
+      background: var(--color-paper);
+      border: 1px solid var(--color-sage);
+      border-radius: var(--radius-md);
+      transition: border-color var(--duration-quick), box-shadow var(--duration-quick);
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: var(--color-moss);
+      box-shadow: 0 0 0 3px rgba(60, 90, 58, 0.12);
+    }
+    .form-input:disabled {
+      background: var(--color-cream-deep);
+      color: var(--color-stone);
+      cursor: not-allowed;
+    }
+    .form-input.error {
+      border-color: var(--color-alert);
+    }
+    .form-error {
+      font-size: var(--type-body-xs);
+      color: var(--color-alert);
+      margin-top: var(--space-2);
+    }
+
+    /* Banner */
+    .banner {
+      padding: var(--space-4) var(--space-6);
+      border-radius: var(--radius-md);
+      border-left: 4px solid;
+      margin-bottom: var(--space-4);
+      font-size: var(--type-body-md);
+    }
+    .banner-info {
+      background: rgba(60, 90, 58, 0.06);
+      border-left-color: var(--color-moss);
+      color: var(--color-charcoal);
+    }
+    .banner-success {
+      background: rgba(94, 142, 90, 0.08);
+      border-left-color: var(--color-success);
+      color: var(--color-charcoal);
+    }
+    .banner-warning {
+      background: rgba(212, 165, 71, 0.1);
+      border-left-color: var(--color-warning);
+      color: var(--color-charcoal);
+    }
+    .banner-alert {
+      background: rgba(184, 74, 57, 0.08);
+      border-left-color: var(--color-alert);
+      color: var(--color-charcoal);
+    }
+
+    /* ============================================================
+       Pattern: section background variants
+       ============================================================ */
+    .section-cream      { background: var(--color-cream); }
+    .section-moss       { background: var(--color-moss); color: var(--color-cream); }
+    .section-cream-deep { background: var(--color-cream-deep); }
+
+    /* Inline pattern preview (smaller than full section) */
+    .pattern-preview {
+      padding: var(--space-8);
+      border-radius: var(--radius-md);
+      margin-bottom: var(--space-2);
+    }
+    .pattern-preview-moss {
+      background: var(--color-moss);
+      color: var(--color-cream);
+    }
+    .pattern-preview-moss h3 { color: var(--color-cream); }
+    .pattern-preview-moss .eyebrow { color: var(--color-terracotta-light); }
+
+    /* Trust strip pattern */
+    .trust-strip {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-4) var(--space-8);
+      font-size: var(--type-body-xs);
+      color: var(--color-stone);
+    }
+    .trust-strip-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .trust-strip-mark {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--color-moss);
+      opacity: 0.6;
+    }
+
+    /* Closing line - the brand signature */
+    .closing-line {
+      font-family: var(--font-display);
+      font-style: italic;
+      font-size: 1.25rem;
+      color: var(--color-terracotta-light);
+      text-align: center;
+      letter-spacing: -0.005em;
+    }
+    .closing-line-on-cream {
+      color: var(--color-moss);
+    }
+
+    /* ============================================================
+       Side nav (in-page navigation)
+       ============================================================ */
+    @media (min-width: 1000px) {
+      .layout {
+        display: grid;
+        grid-template-columns: 220px 1fr;
+        max-width: var(--container-max);
+        margin: 0 auto;
+        gap: var(--space-12);
+        padding-inline: var(--gutter);
+        align-items: start;
+      }
+      .side-nav {
+        position: sticky;
+        top: 70px;
+        padding-top: var(--space-16);
+        padding-bottom: var(--space-16);
+      }
+      .main-content {
+        min-width: 0;
+        padding-top: var(--space-16);
+        padding-bottom: var(--space-16);
+      }
+      .page-hero {
+        padding: var(--space-16) 0 var(--space-8);
+      }
+      .section {
+        padding-inline: 0;
+      }
+    }
+    .side-nav { display: none; }
+    @media (min-width: 1000px) {
+      .side-nav { display: block; }
+    }
+    .side-nav-title {
+      font-family: var(--font-body);
+      font-size: var(--type-caption);
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--color-stone);
+      margin-bottom: var(--space-4);
+    }
+    .side-nav-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+    .side-nav-list a {
+      display: block;
+      font-size: var(--type-body-xs);
+      color: var(--color-charcoal);
+      padding: var(--space-1) 0;
+      border-left: 2px solid transparent;
+      padding-left: var(--space-3);
+      margin-left: -var(--space-3);
+      transition: color var(--duration-quick), border-color var(--duration-quick);
+    }
+    .side-nav-list a:hover {
+      color: var(--color-moss);
+      border-left-color: var(--color-terracotta);
+    }
+    .side-nav-list a.section-divider {
+      margin-top: var(--space-4);
+      font-weight: 500;
+      color: var(--color-moss);
+      letter-spacing: 0.04em;
+      font-size: var(--type-caption);
+      text-transform: uppercase;
+    }
+
+    /* Status pill */
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4em;
+      padding: 0.25em 0.75em;
+      border-radius: var(--radius-full);
+      font-family: var(--font-body);
+      font-size: 0.75rem;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+    }
+    .status-pill::before {
+      content: '';
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+    .status-pill-stable {
+      background: rgba(94, 142, 90, 0.12);
+      color: var(--color-success);
+    }
+    .status-pill-stable::before { background: var(--color-success); }
+    .status-pill-draft {
+      background: rgba(212, 165, 71, 0.15);
+      color: #8B6818;
+    }
+    .status-pill-draft::before { background: var(--color-warning); }
+    .status-pill-planned {
+      background: rgba(60, 90, 58, 0.08);
+      color: var(--color-moss);
+    }
+    .status-pill-planned::before { background: var(--color-stone); }
+
+    /* Skip link */
+    .skip-link {
+      position: absolute;
+      top: -100px;
+      left: 1rem;
+      background: var(--color-moss);
+      color: var(--color-cream);
+      padding: 0.75rem 1.25rem;
+      border-radius: var(--radius-sm);
+      font-weight: 500;
+      z-index: 999;
+      transition: top var(--duration-quick);
+    }
+    .skip-link:focus { top: 1rem; color: var(--color-cream); }
+
+    /* Focus rings */
+    a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visible {
+      outline: 2px solid var(--color-terracotta);
+      outline-offset: 3px;
+      border-radius: 2px;
+    }
+
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <a href="#main" class="skip-link">Skip to content</a>
+
+  <nav class="page-nav">
+    <div class="page-nav-inner">
+      <a href="#" class="page-logo">You Are In Good Company</a>
+      <div class="page-nav-meta">Design System v0</div>
+    </div>
+  </nav>
+
+  <div class="layout">
+
+    <aside class="side-nav" aria-label="On this page">
+      <div class="side-nav-title">On this page</div>
+      <ul class="side-nav-list">
+        <li><a href="#tokens" class="section-divider">Tokens</a></li>
+        <li><a href="#color">Colour</a></li>
+        <li><a href="#typography">Typography</a></li>
+        <li><a href="#spacing">Spacing</a></li>
+        <li><a href="#radii">Radii</a></li>
+        <li><a href="#shadows">Shadows</a></li>
+        <li><a href="#motion">Motion</a></li>
+
+        <li><a href="#components" class="section-divider">Components</a></li>
+        <li><a href="#button">Button</a></li>
+        <li><a href="#eyebrow">Eyebrow</a></li>
+        <li><a href="#card">Card</a></li>
+        <li><a href="#pillar">Pillar</a></li>
+        <li><a href="#pullquote">PullQuote</a></li>
+        <li><a href="#faq-item">FAQItem</a></li>
+        <li><a href="#form-field">FormField</a></li>
+        <li><a href="#banner">Banner</a></li>
+
+        <li><a href="#patterns" class="section-divider">Patterns</a></li>
+        <li><a href="#pattern-section">Section</a></li>
+        <li><a href="#pattern-hero">Hero</a></li>
+        <li><a href="#pattern-trust-strip">TrustStrip</a></li>
+        <li><a href="#pattern-founder-note">FounderNote</a></li>
+        <li><a href="#pattern-closing-line">ClosingLine</a></li>
+      </ul>
+    </aside>
+
+    <main class="main-content" id="main">
+
+      <header class="page-hero">
+        <span class="eyebrow">Design System v0</span>
+        <h1>The visual language, <em>made literal.</em></h1>
+        <p>
+          This page renders every token, every component, and every pattern
+          we have established. Read it in order. Copy from it as you build.
+          If you find a pattern that is not in here, add it.
+        </p>
+      </header>
+
+      <!-- ============================================================
+           TOKENS
+           ============================================================ -->
+
+      <section class="section" id="tokens">
+        <header class="section-header">
+          <span class="eyebrow">Foundations</span>
+          <h2>Tokens.</h2>
+          <p>
+            The atoms of the system. Everything else is built from these.
+            Tokens live in <code>packages/design-tokens</code> and are
+            consumed by Tailwind, the application, and (eventually) Figma.
+          </p>
+        </header>
+
+        <!-- COLOUR -->
+        <div class="subsection" id="color">
+          <h3 class="subsection-title">Colour</h3>
+          <p class="subsection-description">
+            Ten brand tokens plus three functional. Used with discipline.
+            Moss is the primary. Cream is the canvas. Terracotta is the
+            accent. Charcoal is the body text. Everything else is supporting.
+          </p>
+
+          <h4 style="font-family: var(--font-body); font-size: var(--type-caption); font-weight: 500; color: var(--color-stone); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: var(--space-4);">Brand</h4>
+
+          <div class="token-grid-colors">
+
+            <div class="color-token">
+              <div class="color-swatch" style="background: var(--color-moss);"></div>
+              <div class="color-info">
+                <div class="color-name">Moss</div>
+                <div class="color-hex">#3C5A3A</div>
+                <div class="color-usage">Primary brand colour. Headings, CTAs, logo, dark surfaces.</div>
+              </div>
+            </div>
+
+            <div class="color-token">
+              <div class="color-swatch" style="background: var(--color-moss-dark);"></div>
+              <div class="color-info">
+                <div class="color-name">Moss Dark</div>
+                <div class="color-hex">#2D4429</div>
+                <div class="color-usage">Hover state for primary CTAs.</div>
+              </div>
+            </div>
+
+            <div class="color-token">
+              <div class="color-swatch" style="background: var(--color-cream); border-right: 1px solid rgba(60,90,58,0.1);"></div>
+              <div class="color-info">
+                <div class="color-name">Cream</div>
+                <div class="color-hex">#FAF8F3</div>
+                <div class="color-usage">Default page background. The canvas.</div>
+              </div>
+            </div>
+
+            <div class="color-token">
+              <div class="color-swatch" style="background: var(--color-cream-deep);"></div>
+              <div class="color-info">
+                <div class="color-name">Cream Deep</div>
+                <div class="color-hex">#F2EFE4</div>
+                <div class="color-usage">Alternate section background. Trust strip, cards-on-cream, FAQ.</div>
+              </div>
+            </div>
+
+            <div class="color-token">
+              <div class="color-swatch" style="background: var(--color-paper); border: 1px solid rgba(60,90,58,0.08);"></div>
+              <div class="color-info">
+                <div class="color-name">Paper</div>
+                <div class="color-hex">#FFFEFB</div>
+                <div class="color-usage">Card backgrounds on cream sections. Warmer than pure white.</div>
+              </div>
+            </div>
+
+            <div class="color-token">
+              <div class="color-swatch" style="background: var(--color-charcoal);"></div>
+              <div class="color-info">
+                <div class="color-name">Charcoal</div>
+                <div class="color-hex">#2D2D2D</div>
+                <div class="color-usage">Body text. Never pure black.</div>
+              </div>
+            </div>
+
+            <div class="color-token">
+              <div class="color-swatch" style="background: var(--color-terracotta);"></div>
+              <div class="color-info">
+                <div class="color-name">Terracotta</div>
+                <div class="color-hex">#C97B5F</div>
+                <div class="color-usage">Accent. Italic emphases, pull quote borders, key moments.</div>
+              </div>
+            </div>
+
+            <div class="color-token">
+              <div class="color-swatch" style="background: var(--color-terracotta-light);"></div>
+              <div class="color-info">
+                <div class="color-name">Terracotta Light</div>
+                <div class="color-hex">#E5B59E</div>
+                <div class="color-usage">Used on dark backgrounds where pure terracotta would be too dark.</div>
+              </div>
+            </div>
+
+            <div class="color-token">
+              <div class="color-swatch" style="background: var(--color-sage);"></div>
+              <div class="color-info">
+                <div class="color-name">Sage</div>
+                <div class="color-hex">#A3B8A3</div>
+                <div class="color-usage">Supporting. Card borders, dividers, hover states.</div>
+              </div>
+            </div>
+
+            <div class="color-token">
+              <div class="color-swatch" style="background: var(--color-stone);"></div>
+              <div class="color-info">
+                <div class="color-name">Stone</div>
+                <div class="color-hex">#8B8680</div>
+                <div class="color-usage">Quiet voice. Helper text, captions, metadata, eyebrows.</div>
+              </div>
+            </div>
+
+          </div>
+
+          <h4 style="font-family: var(--font-body); font-size: var(--type-caption); font-weight: 500; color: var(--color-stone); letter-spacing: 0.12em; text-transform: uppercase; margin: var(--space-8) 0 var(--space-4);">Functional</h4>
+
+          <div class="token-grid-colors">
+
+            <div class="color-token">
+              <div class="color-swatch" style="background: var(--color-success);"></div>
+              <div class="color-info">
+                <div class="color-name">Success</div>
+                <div class="color-hex">#5E8E5A</div>
+                <div class="color-usage">Confirmation states. Distinct from moss to avoid ambiguity.</div>
+              </div>
+            </div>
+
+            <div class="color-token">
+              <div class="color-swatch" style="background: var(--color-warning);"></div>
+              <div class="color-info">
+                <div class="color-name">Warning</div>
+                <div class="color-hex">#D4A547</div>
+                <div class="color-usage">Gentle prompts and draft banners. Never alarm.</div>
+              </div>
+            </div>
+
+            <div class="color-token">
+              <div class="color-swatch" style="background: var(--color-alert);"></div>
+              <div class="color-info">
+                <div class="color-name">Alert</div>
+                <div class="color-hex">#B84A39</div>
+                <div class="color-usage">Errors, cancellations. Sparingly used.</div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- TYPOGRAPHY -->
+        <div class="subsection" id="typography">
+          <h3 class="subsection-title">Typography</h3>
+          <p class="subsection-description">
+            Fraunces (display) and Inter (body). Fraunces does the heavy lifting at display sizes;
+            its italic variant is reserved for emphasis moments.
+            Inter handles body, UI, and metadata.
+          </p>
+
+          <div class="type-specimen">
+            <div>
+              <div style="font-family: var(--font-display); font-size: var(--type-display-xl); font-weight: 400; color: var(--color-moss); line-height: 1.05; letter-spacing: -0.025em;">
+                Display XL
+              </div>
+            </div>
+            <div class="type-specimen-meta">
+              <strong>display.xl</strong><br>
+              Fraunces 400<br>
+              clamp(2.5rem, 7vw, 5.5rem)<br>
+              Hero headlines
+            </div>
+          </div>
+
+          <div class="type-specimen">
+            <div>
+              <div style="font-family: var(--font-display); font-size: var(--type-display-lg); font-weight: 400; color: var(--color-moss); line-height: 1.1; letter-spacing: -0.02em;">
+                Display LG <em style="color: var(--color-terracotta);">italic emphasis</em>
+              </div>
+            </div>
+            <div class="type-specimen-meta">
+              <strong>display.lg</strong><br>
+              Fraunces 400<br>
+              clamp(2rem, 5vw, 3.5rem)<br>
+              Section headlines
+            </div>
+          </div>
+
+          <div class="type-specimen">
+            <div>
+              <div style="font-family: var(--font-display); font-size: var(--type-display-md); color: var(--color-charcoal); font-weight: 500; line-height: 1.2;">
+                Display MD - subsection
+              </div>
+            </div>
+            <div class="type-specimen-meta">
+              <strong>display.md</strong><br>
+              Fraunces 500<br>
+              clamp(1.5rem, 3vw, 2.125rem)<br>
+              Subsection headings
+            </div>
+          </div>
+
+          <div class="type-specimen">
+            <div>
+              <div style="font-family: var(--font-display); font-size: var(--type-display-sm); color: var(--color-moss); font-weight: 500; line-height: 1.3;">
+                Display SM - card heading
+              </div>
+            </div>
+            <div class="type-specimen-meta">
+              <strong>display.sm</strong><br>
+              Fraunces 500<br>
+              clamp(1.25rem, 2vw, 1.5rem)<br>
+              Card titles, FAQ questions
+            </div>
+          </div>
+
+          <div class="type-specimen">
+            <div>
+              <p style="font-family: var(--font-body); font-size: var(--type-body-lg); color: var(--color-charcoal); line-height: 1.55; max-width: 50ch;">
+                Body LG, for the lead paragraph that introduces a section.
+                A real visit from a real person, every week.
+              </p>
+            </div>
+            <div class="type-specimen-meta">
+              <strong>body.lg</strong><br>
+              Inter 400<br>
+              clamp(1.125rem, 1.7vw, 1.3125rem)<br>
+              Lead paragraphs
+            </div>
+          </div>
+
+          <div class="type-specimen">
+            <div>
+              <p style="font-family: var(--font-body); font-size: var(--type-body-md); color: var(--color-charcoal); line-height: 1.6; max-width: 50ch;">
+                Body MD, for ordinary prose. This is what most paragraphs use.
+                Comfortable to read on mobile and desktop.
+              </p>
+            </div>
+            <div class="type-specimen-meta">
+              <strong>body.md</strong><br>
+              Inter 400<br>
+              1.125rem (18px)<br>
+              Default body text
+            </div>
+          </div>
+
+          <div class="type-specimen">
+            <div>
+              <p style="font-family: var(--font-body); font-size: var(--type-body-sm); color: var(--color-charcoal); line-height: 1.55;">
+                Body SM, for UI strings, forms, and dense layouts.
+              </p>
+            </div>
+            <div class="type-specimen-meta">
+              <strong>body.sm</strong><br>
+              Inter 400<br>
+              1rem (16px)<br>
+              Forms, UI, dense layouts
+            </div>
+          </div>
+
+          <div class="type-specimen">
+            <div>
+              <p style="font-family: var(--font-body); font-size: var(--type-body-xs); color: var(--color-stone); line-height: 1.55;">
+                Body XS, for helper text, metadata, captions, footnotes.
+              </p>
+            </div>
+            <div class="type-specimen-meta">
+              <strong>body.xs</strong><br>
+              Inter 400<br>
+              0.875rem (14px)<br>
+              Helper, metadata, captions
+            </div>
+          </div>
+
+          <div class="type-specimen">
+            <div>
+              <span class="eyebrow">Eyebrow label</span>
+            </div>
+            <div class="type-specimen-meta">
+              <strong>caption</strong><br>
+              Inter 500<br>
+              0.8125rem (13px) uppercase<br>
+              Letter-spacing 0.18em<br>
+              Eyebrows, footer titles
+            </div>
+          </div>
+        </div>
+
+        <!-- SPACING -->
+        <div class="subsection" id="spacing">
+          <h3 class="subsection-title">Spacing</h3>
+          <p class="subsection-description">
+            A 4-pixel base scale. Used everywhere: padding, margin, gap, gutter.
+            Section padding scales with the viewport (using <code>clamp()</code>),
+            so the page never feels cramped on desktop or sparse on mobile.
+          </p>
+
+          <div class="spacing-grid">
+            <div class="spacing-row"><div class="spacing-name">space.1</div><div class="spacing-value">0.25rem / 4px</div><div class="spacing-bar" style="width: 4px;"></div></div>
+            <div class="spacing-row"><div class="spacing-name">space.2</div><div class="spacing-value">0.5rem / 8px</div><div class="spacing-bar" style="width: 8px;"></div></div>
+            <div class="spacing-row"><div class="spacing-name">space.3</div><div class="spacing-value">0.75rem / 12px</div><div class="spacing-bar" style="width: 12px;"></div></div>
+            <div class="spacing-row"><div class="spacing-name">space.4</div><div class="spacing-value">1rem / 16px</div><div class="spacing-bar" style="width: 16px;"></div></div>
+            <div class="spacing-row"><div class="spacing-name">space.6</div><div class="spacing-value">1.5rem / 24px</div><div class="spacing-bar" style="width: 24px;"></div></div>
+            <div class="spacing-row"><div class="spacing-name">space.8</div><div class="spacing-value">2rem / 32px</div><div class="spacing-bar" style="width: 32px;"></div></div>
+            <div class="spacing-row"><div class="spacing-name">space.12</div><div class="spacing-value">3rem / 48px</div><div class="spacing-bar" style="width: 48px;"></div></div>
+            <div class="spacing-row"><div class="spacing-name">space.16</div><div class="spacing-value">4rem / 64px</div><div class="spacing-bar" style="width: 64px;"></div></div>
+            <div class="spacing-row"><div class="spacing-name">space.24</div><div class="spacing-value">6rem / 96px</div><div class="spacing-bar" style="width: 96px;"></div></div>
+            <div class="spacing-row"><div class="spacing-name">space.32</div><div class="spacing-value">8rem / 128px</div><div class="spacing-bar" style="width: 128px;"></div></div>
+          </div>
+        </div>
+
+        <!-- RADII -->
+        <div class="subsection" id="radii">
+          <h3 class="subsection-title">Border radii</h3>
+          <p class="subsection-description">
+            Five radii. <code>radius.full</code> for pills (buttons, tags).
+            <code>radius.lg</code> for cards. <code>radius.md</code> for
+            form inputs, banners, code blocks. <code>radius.sm</code> for tight
+            inline elements. <code>radius.none</code> for full-bleed.
+          </p>
+
+          <div class="radii-grid">
+            <div class="radius-specimen" style="border-radius: var(--radius-none);">radius.none</div>
+            <div class="radius-specimen" style="border-radius: var(--radius-sm);">radius.sm / 4px</div>
+            <div class="radius-specimen" style="border-radius: var(--radius-md);">radius.md / 8px</div>
+            <div class="radius-specimen" style="border-radius: var(--radius-lg);">radius.lg / 16px</div>
+            <div class="radius-specimen" style="border-radius: var(--radius-xl);">radius.xl / 24px</div>
+            <div class="radius-specimen" style="border-radius: var(--radius-full); aspect-ratio: 1;">radius.full</div>
+          </div>
+        </div>
+
+        <!-- SHADOWS -->
+        <div class="subsection" id="shadows">
+          <h3 class="subsection-title">Shadows</h3>
+          <p class="subsection-description">
+            Shadows are tinted with moss to feel warm rather than neutral.
+            Used sparingly: never on every card, only when elevation matters.
+          </p>
+
+          <div class="shadow-grid">
+            <div class="shadow-specimen">shadow.none</div>
+            <div class="shadow-specimen shadow-sm">shadow.sm</div>
+            <div class="shadow-specimen shadow-md-demo">shadow.md</div>
+            <div class="shadow-specimen shadow-lg-demo">shadow.lg</div>
+            <div class="shadow-specimen shadow-portrait" style="grid-column: span 2;">shadow.portrait (used on the hero portrait card)</div>
+          </div>
+        </div>
+
+        <!-- MOTION -->
+        <div class="subsection" id="motion">
+          <h3 class="subsection-title">Motion</h3>
+          <p class="subsection-description">
+            Restrained durations. Standard easing. All animations respect
+            <code>prefers-reduced-motion</code>.
+          </p>
+
+          <div class="code-block">
+<span class="c-comment">/* Durations */</span>
+<span class="c-prop">--duration-instant</span>:   100ms;  <span class="c-comment">/* tooltip open, click feedback */</span>
+<span class="c-prop">--duration-quick</span>:     200ms;  <span class="c-comment">/* hover state, focus ring */</span>
+<span class="c-prop">--duration-standard</span>:  300ms;  <span class="c-comment">/* most transitions */</span>
+<span class="c-prop">--duration-slow</span>:      600ms;  <span class="c-comment">/* drawer, modal open */</span>
+<span class="c-prop">--duration-hero</span>:      800ms;  <span class="c-comment">/* hero load fade-up */</span>
+
+<span class="c-comment">/* Easing */</span>
+<span class="c-prop">--easing-standard</span>:  cubic-bezier(0.4, 0, 0.2, 1);
+<span class="c-prop">--easing-ease</span>:      ease;
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ============================================================
+           COMPONENTS
+           ============================================================ -->
+
+      <section class="section" id="components">
+        <header class="section-header">
+          <span class="eyebrow">Building blocks</span>
+          <h2>Components.</h2>
+          <p>
+            Reusable units. Each has a stable name, a clear purpose, and a
+            documented set of states. Built once, imported everywhere.
+            Figma-aligned naming uses the <code>Component/Variant/State</code> pattern.
+          </p>
+        </header>
+
+        <!-- BUTTON -->
+        <div class="subsection" id="button">
+          <h3 class="subsection-title">Button</h3>
+          <p class="subsection-description">
+            Three variants: Primary (moss), Secondary (outlined moss), Ghost (text only).
+            Three sizes: Small, Default, Large. Pill-shaped throughout.
+            Buttons always carry <code>white-space: nowrap</code> so labels do not break.
+          </p>
+          <div class="status-pill status-pill-stable">Stable</div>
+          <code style="margin-left: var(--space-3); font-family: var(--font-mono); font-size: var(--type-caption); color: var(--color-stone);">Button/Primary, Button/Secondary, Button/Ghost</code>
+
+          <div class="specimen" style="margin-top: var(--space-4);">
+            <span class="specimen-label">Variants</span>
+            <div style="display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: center;">
+              <button class="btn btn-primary">Primary action</button>
+              <button class="btn btn-secondary">Secondary action</button>
+              <button class="btn btn-ghost">Ghost action →</button>
+            </div>
+          </div>
+
+          <div class="specimen">
+            <span class="specimen-label">Sizes</span>
+            <div style="display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: center;">
+              <button class="btn btn-primary btn-sm">Small</button>
+              <button class="btn btn-primary">Default</button>
+              <button class="btn btn-primary btn-lg">Large</button>
+            </div>
+          </div>
+
+          <div class="specimen">
+            <span class="specimen-label">States</span>
+            <div style="display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: center;">
+              <button class="btn btn-primary">Default</button>
+              <button class="btn btn-primary" style="background: var(--color-moss-dark); transform: translateY(-1px); box-shadow: 0 8px 24px rgba(60,90,58,0.2);">Hover (forced)</button>
+              <button class="btn btn-primary" disabled>Disabled</button>
+            </div>
+          </div>
+
+          <div class="code-block">
+<span class="c-tag">&lt;Button</span> <span class="c-attr">variant</span>=<span class="c-value">"primary"</span> <span class="c-attr">size</span>=<span class="c-value">"large"</span><span class="c-tag">&gt;</span>
+  Book a call
+<span class="c-tag">&lt;/Button&gt;</span>
+
+<span class="c-tag">&lt;Button</span> <span class="c-attr">variant</span>=<span class="c-value">"ghost"</span> <span class="c-attr">href</span>=<span class="c-value">"/how-it-works"</span><span class="c-tag">&gt;</span>
+  See how it works →
+<span class="c-tag">&lt;/Button&gt;</span>
+          </div>
+        </div>
+
+        <!-- EYEBROW -->
+        <div class="subsection" id="eyebrow">
+          <h3 class="subsection-title">Eyebrow</h3>
+          <p class="subsection-description">
+            A small uppercase letter-spaced label that sits above headings.
+            The audience signal: tells the reader what kind of content follows.
+            On dark sections it uses terracotta-light instead of stone.
+          </p>
+          <div class="status-pill status-pill-stable">Stable</div>
+          <code style="margin-left: var(--space-3); font-family: var(--font-mono); font-size: var(--type-caption); color: var(--color-stone);">Eyebrow/Default, Eyebrow/OnDark</code>
+
+          <div class="specimen" style="margin-top: var(--space-4);">
+            <span class="specimen-label">Default (on cream)</span>
+            <span class="eyebrow">For families with a parent who lives alone</span>
+          </div>
+
+          <div class="specimen specimen-dark">
+            <span class="specimen-label">On dark (moss background)</span>
+            <span class="eyebrow" style="color: var(--color-terracotta-light);">How it works</span>
+          </div>
+
+          <div class="code-block">
+<span class="c-tag">&lt;Eyebrow&gt;</span>For families with a parent who lives alone<span class="c-tag">&lt;/Eyebrow&gt;</span>
+<span class="c-tag">&lt;Eyebrow</span> <span class="c-attr">variant</span>=<span class="c-value">"onDark"</span><span class="c-tag">&gt;</span>How it works<span class="c-tag">&lt;/Eyebrow&gt;</span>
+          </div>
+        </div>
+
+        <!-- CARD -->
+        <div class="subsection" id="card">
+          <h3 class="subsection-title">Card</h3>
+          <p class="subsection-description">
+            Two variants. Default (paper background, sage border) sits on
+            cream sections. Highlighted (cream-deep, sage border) sits on
+            paper sections. Both lift 4px on hover with a soft moss shadow.
+          </p>
+          <div class="status-pill status-pill-stable">Stable</div>
+          <code style="margin-left: var(--space-3); font-family: var(--font-mono); font-size: var(--type-caption); color: var(--color-stone);">Card/Default, Card/Highlighted</code>
+
+          <div class="specimen" style="margin-top: var(--space-4);">
+            <span class="specimen-label">Default</span>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-4); max-width: 720px;">
+              <div class="card">
+                <div class="card-mark">♥</div>
+                <h3>A cup of tea</h3>
+                <p>The kettle goes on. The biscuit tin comes out. Real conversation.</p>
+              </div>
+              <div class="card">
+                <div class="card-mark">◊</div>
+                <h3>A walk to the shops</h3>
+                <p>A short walk in fresh air. Choosing fruit at the corner shop.</p>
+              </div>
+              <div class="card">
+                <div class="card-mark">♣</div>
+                <h3>An outing</h3>
+                <p>The garden centre on a quiet morning. The cinema on a Wednesday.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="code-block">
+<span class="c-tag">&lt;Card</span> <span class="c-attr">variant</span>=<span class="c-value">"default"</span><span class="c-tag">&gt;</span>
+  <span class="c-tag">&lt;Card.Mark&gt;</span>♥<span class="c-tag">&lt;/Card.Mark&gt;</span>
+  <span class="c-tag">&lt;Card.Title&gt;</span>A cup of tea<span class="c-tag">&lt;/Card.Title&gt;</span>
+  <span class="c-tag">&lt;Card.Body&gt;</span>The kettle goes on. The biscuit tin comes out.<span class="c-tag">&lt;/Card.Body&gt;</span>
+<span class="c-tag">&lt;/Card&gt;</span>
+          </div>
+        </div>
+
+        <!-- PILLAR -->
+        <div class="subsection" id="pillar">
+          <h3 class="subsection-title">Pillar</h3>
+          <p class="subsection-description">
+            A numbered trust-pillar block. Top border in moss, terracotta number annotation above.
+            Used for sets of three or four parallel arguments (e.g. the "Why families trust us" section).
+            No icons. The number is the visual anchor.
+          </p>
+          <div class="status-pill status-pill-stable">Stable</div>
+          <code style="margin-left: var(--space-3); font-family: var(--font-mono); font-size: var(--type-caption); color: var(--color-stone);">Pillar/Default</code>
+
+          <div class="specimen" style="margin-top: var(--space-4);">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--space-8);">
+              <div class="pillar">
+                <div class="pillar-number">01 - The same person every time</div>
+                <h3>One companion. Every visit.</h3>
+                <p>We match your mum or dad with one person who comes back every week.</p>
+              </div>
+              <div class="pillar">
+                <div class="pillar-number">02 - Vetted and trained</div>
+                <h3>Enhanced DBS. Trained. Insured.</h3>
+                <p>Every companion is checked, trained, and insured before their first visit.</p>
+              </div>
+              <div class="pillar">
+                <div class="pillar-number">03 - You see how it went</div>
+                <h3>A short note after every visit.</h3>
+                <p>Within hours of every visit, you receive a warm note from your companion.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="code-block">
+<span class="c-tag">&lt;Pillar</span> <span class="c-attr">number</span>=<span class="c-value">"01"</span> <span class="c-attr">label</span>=<span class="c-value">"The same person every time"</span><span class="c-tag">&gt;</span>
+  <span class="c-tag">&lt;Pillar.Title&gt;</span>One companion. Every visit.<span class="c-tag">&lt;/Pillar.Title&gt;</span>
+  <span class="c-tag">&lt;Pillar.Body&gt;</span>We match your mum or dad with one person who comes back every week.<span class="c-tag">&lt;/Pillar.Body&gt;</span>
+<span class="c-tag">&lt;/Pillar&gt;</span>
+          </div>
+        </div>
+
+        <!-- PULL QUOTE -->
+        <div class="subsection" id="pullquote">
+          <h3 class="subsection-title">PullQuote</h3>
+          <p class="subsection-description">
+            Italic Fraunces in moss, with a terracotta left border.
+            Used for emphasis moments and brand statements that deserve
+            their own typographic weight.
+          </p>
+          <div class="status-pill status-pill-stable">Stable</div>
+          <code style="margin-left: var(--space-3); font-family: var(--font-mono); font-size: var(--type-caption); color: var(--color-stone);">PullQuote/Default</code>
+
+          <div class="specimen" style="margin-top: var(--space-4);">
+            <blockquote class="pullquote">
+              "I read Sarah's note about my mum on the train home from work.
+              It is the highlight of my Wednesday."
+              <span class="pullquote-attr">Helen, Margaret's daughter</span>
+            </blockquote>
+          </div>
+
+          <div class="code-block">
+<span class="c-tag">&lt;PullQuote</span> <span class="c-attr">attribution</span>=<span class="c-value">"Helen, Margaret's daughter"</span><span class="c-tag">&gt;</span>
+  I read Sarah's note about my mum on the train home from work.
+  It is the highlight of my Wednesday.
+<span class="c-tag">&lt;/PullQuote&gt;</span>
+          </div>
+        </div>
+
+        <!-- FAQ ITEM -->
+        <div class="subsection" id="faq-item">
+          <h3 class="subsection-title">FAQItem</h3>
+          <p class="subsection-description">
+            Native HTML <code>&lt;details&gt;</code>/<code>&lt;summary&gt;</code>.
+            The + icon rotates 45 degrees to become an × when opened.
+            Pure CSS, no JavaScript. Keyboard-accessible by default.
+          </p>
+          <div class="status-pill status-pill-stable">Stable</div>
+          <code style="margin-left: var(--space-3); font-family: var(--font-mono); font-size: var(--type-caption); color: var(--color-stone);">FAQItem/Default</code>
+
+          <div class="specimen" style="margin-top: var(--space-4); max-width: 720px;">
+            <details class="faq-item">
+              <summary>Will it always be the same companion?</summary>
+              <div class="faq-item-body">
+                Yes. That is the point. If your companion is unwell or on holiday,
+                we propose a familiar back-up from the same area and tell you in advance.
+              </div>
+            </details>
+            <details class="faq-item" open>
+              <summary>Do you provide personal care?</summary>
+              <div class="faq-item-body">
+                No. We are not a care agency. If your mum or dad needs help with washing,
+                dressing, toileting, or medication, we will recommend a regulated
+                home-care agency we trust.
+              </div>
+            </details>
+            <details class="faq-item">
+              <summary>Can I cancel any time?</summary>
+              <div class="faq-item-body">
+                Yes. Pause or cancel in one click in your account.
+                No phone call. No retention conversation. No guilt.
+              </div>
+            </details>
+          </div>
+
+          <div class="code-block">
+<span class="c-tag">&lt;FAQItem</span> <span class="c-attr">question</span>=<span class="c-value">"Will it always be the same companion?"</span><span class="c-tag">&gt;</span>
+  Yes. That is the point. If your companion is unwell...
+<span class="c-tag">&lt;/FAQItem&gt;</span>
+          </div>
+        </div>
+
+        <!-- FORM FIELD -->
+        <div class="subsection" id="form-field">
+          <h3 class="subsection-title">FormField</h3>
+          <p class="subsection-description">
+            Label above, input below, optional hint between, optional error below.
+            Sage border by default; moss on focus; alert on error.
+            Designed to be obvious and forgiving.
+          </p>
+          <div class="status-pill status-pill-stable">Stable</div>
+          <code style="margin-left: var(--space-3); font-family: var(--font-mono); font-size: var(--type-caption); color: var(--color-stone);">FormField/Default, FormField/Error, FormField/Disabled</code>
+
+          <div class="specimen" style="margin-top: var(--space-4);">
+            <span class="specimen-label">States</span>
+            <div style="max-width: 420px;">
+              <div class="form-field">
+                <label class="form-label">Your name</label>
+                <p class="form-hint">First name and surname.</p>
+                <input class="form-input" type="text" placeholder="Helen Smith">
+              </div>
+              <div class="form-field">
+                <label class="form-label">Your phone number</label>
+                <input class="form-input error" type="tel" value="07700">
+                <p class="form-error">Please enter a complete UK mobile number.</p>
+              </div>
+              <div class="form-field">
+                <label class="form-label">Disabled field</label>
+                <input class="form-input" type="text" disabled value="Not editable">
+              </div>
+            </div>
+          </div>
+
+          <div class="code-block">
+<span class="c-tag">&lt;FormField</span>
+  <span class="c-attr">label</span>=<span class="c-value">"Your phone number"</span>
+  <span class="c-attr">hint</span>=<span class="c-value">"For visit reminders by SMS."</span>
+  <span class="c-attr">error</span>=<span class="c-value">"Please enter a complete UK mobile number."</span>
+<span class="c-tag">&gt;</span>
+  <span class="c-tag">&lt;Input</span> <span class="c-attr">type</span>=<span class="c-value">"tel"</span> <span class="c-attr">placeholder</span>=<span class="c-value">"07700 900000"</span> <span class="c-tag">/&gt;</span>
+<span class="c-tag">&lt;/FormField&gt;</span>
+          </div>
+        </div>
+
+        <!-- BANNER -->
+        <div class="subsection" id="banner">
+          <h3 class="subsection-title">Banner</h3>
+          <p class="subsection-description">
+            A bordered notice. Four variants tied to the functional colour tokens.
+            Used for system messages, draft notices, payment notices, error states.
+            Always carries enough copy to act on; never just an icon.
+          </p>
+          <div class="status-pill status-pill-stable">Stable</div>
+          <code style="margin-left: var(--space-3); font-family: var(--font-mono); font-size: var(--type-caption); color: var(--color-stone);">Banner/Info, Banner/Success, Banner/Warning, Banner/Alert</code>
+
+          <div class="specimen" style="margin-top: var(--space-4);">
+            <div class="banner banner-info">
+              <strong>Heads up.</strong> Your next visit with Sarah is on Wednesday at 2pm. You will receive an SMS reminder the day before.
+            </div>
+            <div class="banner banner-success">
+              <strong>All set.</strong> Your subscription is active. Sarah will visit Margaret every Wednesday at 2pm.
+            </div>
+            <div class="banner banner-warning">
+              <strong>Draft for lawyer review.</strong> This document has not yet been reviewed by external counsel.
+            </div>
+            <div class="banner banner-alert">
+              <strong>Payment failed.</strong> We could not take this week's payment. Please update your card details.
+            </div>
+          </div>
+
+          <div class="code-block">
+<span class="c-tag">&lt;Banner</span> <span class="c-attr">variant</span>=<span class="c-value">"warning"</span><span class="c-tag">&gt;</span>
+  <span class="c-tag">&lt;strong&gt;</span>Draft for lawyer review.<span class="c-tag">&lt;/strong&gt;</span> This document has not yet been reviewed by external counsel.
+<span class="c-tag">&lt;/Banner&gt;</span>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ============================================================
+           PATTERNS
+           ============================================================ -->
+
+      <section class="section" id="patterns">
+        <header class="section-header">
+          <span class="eyebrow">Compositions</span>
+          <h2>Patterns.</h2>
+          <p>
+            How components combine into recognisable page-level moments.
+            Each pattern is named, used in multiple places, and has a
+            documented structure.
+          </p>
+        </header>
+
+        <!-- SECTION PATTERN -->
+        <div class="subsection" id="pattern-section">
+          <h3 class="subsection-title">Section</h3>
+          <p class="subsection-description">
+            The page-level container. Three background variants create the
+            cream / moss / cream-deep rhythm that gives the marketing site
+            its editorial pacing. Section padding scales with the viewport.
+          </p>
+          <div class="status-pill status-pill-stable">Stable</div>
+          <code style="margin-left: var(--space-3); font-family: var(--font-mono); font-size: var(--type-caption); color: var(--color-stone);">Section/Cream, Section/Moss, Section/CreamDeep</code>
+
+          <div class="specimen" style="margin-top: var(--space-4); padding: 0; overflow: hidden;">
+            <span class="specimen-label" style="z-index: 1;">Three variants</span>
+            <div class="pattern-preview" style="background: var(--color-cream);">
+              <span class="eyebrow">On cream</span>
+              <h3 style="font-family: var(--font-display); font-size: 1.5rem; color: var(--color-moss); margin-top: var(--space-2); font-weight: 500;">Default section.</h3>
+            </div>
+            <div class="pattern-preview pattern-preview-moss">
+              <span class="eyebrow">On moss</span>
+              <h3 style="font-family: var(--font-display); font-size: 1.5rem; margin-top: var(--space-2); font-weight: 500;">Dark section. Used once per page maximum.</h3>
+            </div>
+            <div class="pattern-preview" style="background: var(--color-cream-deep);">
+              <span class="eyebrow">On cream deep</span>
+              <h3 style="font-family: var(--font-display); font-size: 1.5rem; color: var(--color-moss); margin-top: var(--space-2); font-weight: 500;">Alternate cream. Creates rhythm.</h3>
+            </div>
+          </div>
+
+          <div class="code-block">
+<span class="c-tag">&lt;Section</span> <span class="c-attr">background</span>=<span class="c-value">"cream"</span><span class="c-tag">&gt;</span>
+  <span class="c-tag">&lt;Container&gt;</span>...<span class="c-tag">&lt;/Container&gt;</span>
+<span class="c-tag">&lt;/Section&gt;</span>
+
+<span class="c-tag">&lt;Section</span> <span class="c-attr">background</span>=<span class="c-value">"moss"</span><span class="c-tag">&gt;</span>
+  <span class="c-comment">// Once per page maximum. The visually strongest beat.</span>
+<span class="c-tag">&lt;/Section&gt;</span>
+          </div>
+        </div>
+
+        <!-- HERO PATTERN -->
+        <div class="subsection" id="pattern-hero">
+          <h3 class="subsection-title">Hero</h3>
+          <p class="subsection-description">
+            Asymmetric two-column on desktop, stacked on mobile.
+            Eyebrow + headline + body + two CTAs + reassurance line on the left.
+            Portrait card with overlapping quote on the right.
+            The italic resolution in the headline is the brand promise.
+          </p>
+          <div class="status-pill status-pill-stable">Stable</div>
+          <code style="margin-left: var(--space-3); font-family: var(--font-mono); font-size: var(--type-caption); color: var(--color-stone);">Hero/WithPortrait, Hero/TextOnly</code>
+
+          <div class="specimen" style="margin-top: var(--space-4); padding: var(--space-12);">
+            <span class="specimen-label">Composition (simplified)</span>
+            <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: var(--space-12); align-items: center;">
+              <div>
+                <span class="eyebrow">For families with a parent who lives alone</span>
+                <h1 style="font-family: var(--font-display); font-size: clamp(1.75rem, 3.5vw, 2.75rem); font-weight: 400; color: var(--color-moss); line-height: 1.05; letter-spacing: -0.025em; margin-top: var(--space-4); max-width: 14ch;">
+                  You can't always be there. You can be sure they're <em style="color: var(--color-terracotta); font-style: italic;">in good company.</em>
+                </h1>
+                <p style="font-size: var(--type-body-md); color: var(--color-charcoal); margin-top: var(--space-4); max-width: 42ch; line-height: 1.55;">
+                  A real visit from a real person, every week. Vetted. Trained. Insured.
+                </p>
+                <div style="display: flex; gap: var(--space-3); margin-top: var(--space-5); flex-wrap: wrap;">
+                  <button class="btn btn-primary">Book a call</button>
+                  <button class="btn btn-ghost">See how it works →</button>
+                </div>
+              </div>
+              <div style="position: relative;">
+                <div style="background: var(--color-paper); padding: var(--space-4); border-radius: var(--radius-lg); transform: rotate(-1deg); box-shadow: var(--shadow-portrait);">
+                  <div style="aspect-ratio: 4/5; background: radial-gradient(circle at 65% 40%, rgba(201, 123, 95, 0.25), transparent 55%), linear-gradient(135deg, var(--color-cream-deep), var(--color-sage)); border-radius: var(--radius-md); display: flex; align-items: flex-end; justify-content: center; padding: var(--space-6);">
+                    <svg viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="width: 80%;">
+                      <ellipse cx="65" cy="80" rx="22" ry="26" fill="#3C5A3A" opacity="0.7"/>
+                      <path d="M 35 240 Q 35 145 65 130 Q 95 145 95 240 Z" fill="#3C5A3A" opacity="0.7"/>
+                      <ellipse cx="135" cy="78" rx="20" ry="24" fill="#C97B5F" opacity="0.65"/>
+                      <path d="M 108 240 Q 108 145 135 132 Q 162 145 162 240 Z" fill="#C97B5F" opacity="0.65"/>
+                      <circle cx="100" cy="175" r="4" fill="#FAF8F3"/>
+                    </svg>
+                  </div>
+                </div>
+                <div style="position: absolute; bottom: -1.25rem; left: -1rem; background: var(--color-terracotta); color: var(--color-cream); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); max-width: 220px; font-family: var(--font-display); font-size: 0.875rem; font-style: italic; transform: rotate(2deg); box-shadow: 0 12px 32px rgba(201,123,95,0.25);">
+                  "I read Sarah's note on the train home."
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TRUST STRIP -->
+        <div class="subsection" id="pattern-trust-strip">
+          <h3 class="subsection-title">TrustStrip</h3>
+          <p class="subsection-description">
+            Horizontal list of brief trust signals.
+            Sits as a band between the hero and the first long-form beat.
+            Each item is prefixed with a small moss dot, never an icon.
+            Wraps onto multiple lines without breaking visual rhythm.
+          </p>
+          <div class="status-pill status-pill-stable">Stable</div>
+          <code style="margin-left: var(--space-3); font-family: var(--font-mono); font-size: var(--type-caption); color: var(--color-stone);">TrustStrip/Default</code>
+
+          <div class="specimen" style="margin-top: var(--space-4); background: var(--color-cream-deep);">
+            <div class="trust-strip">
+              <div class="trust-strip-item">
+                <span class="trust-strip-mark"></span>
+                Enhanced DBS for every companion
+              </div>
+              <div class="trust-strip-item">
+                <span class="trust-strip-mark"></span>
+                Public Liability and PI insured
+              </div>
+              <div class="trust-strip-item">
+                <span class="trust-strip-mark"></span>
+                Named safeguarding lead
+              </div>
+              <div class="trust-strip-item">
+                <span class="trust-strip-mark"></span>
+                South Manchester, Trafford, Stockport, Salford
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FOUNDER NOTE -->
+        <div class="subsection" id="pattern-founder-note">
+          <h3 class="subsection-title">FounderNote</h3>
+          <p class="subsection-description">
+            Centred Fraunces in moss, with terracotta italic emphases for the
+            key turns of the sentence. The brand's most emotionally important moment.
+            Signed with a real human name and role. Max 60 characters per line.
+          </p>
+          <div class="status-pill status-pill-stable">Stable</div>
+          <code style="margin-left: var(--space-3); font-family: var(--font-mono); font-size: var(--type-caption); color: var(--color-stone);">FounderNote/Default</code>
+
+          <div class="specimen" style="margin-top: var(--space-4); padding: var(--space-12);">
+            <div class="founder-note">
+              <p class="founder-note-body">
+                We started this company because we watched our own families navigate the gap
+                between <em>regulated home-care</em> and <em>nothing at all</em>.
+                <em>So we built what was missing.</em>
+              </p>
+              <p class="founder-note-attribution">Bassey Eyo, Founder, Manchester</p>
+            </div>
+          </div>
+
+          <div class="code-block">
+<span class="c-tag">&lt;FounderNote</span> <span class="c-attr">attribution</span>=<span class="c-value">"Bassey Eyo, Founder, Manchester"</span><span class="c-tag">&gt;</span>
+  We started this company because we watched our own families
+  navigate the gap between <span class="c-tag">&lt;em&gt;</span>regulated home-care<span class="c-tag">&lt;/em&gt;</span>
+  and <span class="c-tag">&lt;em&gt;</span>nothing at all<span class="c-tag">&lt;/em&gt;</span>.
+<span class="c-tag">&lt;/FounderNote&gt;</span>
+          </div>
+        </div>
+
+        <!-- CLOSING LINE -->
+        <div class="subsection" id="pattern-closing-line">
+          <h3 class="subsection-title">ClosingLine</h3>
+          <p class="subsection-description">
+            The brand signature. Appears on every public page in the footer.
+            Italic Fraunces. Terracotta-light on moss backgrounds; moss on
+            cream backgrounds. Never anything else.
+          </p>
+          <div class="status-pill status-pill-stable">Stable</div>
+          <code style="margin-left: var(--space-3); font-family: var(--font-mono); font-size: var(--type-caption); color: var(--color-stone);">ClosingLine/OnMoss, ClosingLine/OnCream</code>
+
+          <div class="specimen specimen-dark" style="margin-top: var(--space-4); padding: var(--space-8);">
+            <span class="specimen-label">On moss (footer)</span>
+            <p class="closing-line">You are in good company.</p>
+          </div>
+
+          <div class="specimen" style="padding: var(--space-8);">
+            <span class="specimen-label">On cream</span>
+            <p class="closing-line closing-line-on-cream">You are in good company.</p>
+          </div>
+
+          <div class="code-block">
+<span class="c-tag">&lt;ClosingLine /&gt;</span>  <span class="c-comment">// auto-detects light/dark context</span>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ============================================================
+           FOOTER NOTE
+           ============================================================ -->
+
+      <section class="section" style="padding-bottom: var(--space-32);">
+        <header class="section-header">
+          <span class="eyebrow">A note on this page</span>
+          <h2>Live document.</h2>
+          <p>
+            This page is the source of truth for the visual language.
+            It lives at <code>/styleguide</code> in the application,
+            renders the same tokens that production uses, and updates
+            whenever the tokens or components change.
+          </p>
+          <p>
+            If you spot a pattern in production that is not in here,
+            add it. If you change a token, change it here too.
+            Drift is the enemy of design systems.
+          </p>
+        </header>
+        <p class="closing-line closing-line-on-cream">You are in good company.</p>
+      </section>
+
+    </main>
+  </div>
+
+</body>
+</html>
