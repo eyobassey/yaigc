@@ -22,6 +22,7 @@ export const metadata = {
 const NAV_ITEMS = [
   { href: '/family', label: 'Today', icon: Home },
   { href: '/family/visits', label: 'Visits', icon: Calendar },
+  { href: '/family/recipient', label: 'Household', icon: Heart },
   { href: '/family/companion', label: 'Companion', icon: Heart },
   { href: '/family/subscription', label: 'Subscription', icon: Coins },
   { href: '/family/account', label: 'Account', icon: User },
