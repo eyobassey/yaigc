@@ -340,6 +340,15 @@ model Subscription {
   cancellationReason   String?               @db.Text
   notes                String?               @db.Text
 
+  // Pause/cancel requests submitted by the family via /family/subscription.
+  // The family does not change subscription state directly; they flag an
+  // intent for operator review. Cleared by transitionSubscription when the
+  // matching status transition lands. Both nullable; non-null = open request.
+  pauseRequestedAt      DateTime?
+  pauseRequestedReason  String?  @db.Text
+  cancelRequestedAt     DateTime?
+  cancelRequestedReason String?  @db.Text
+
   family           Family    @relation(fields: [familyId], references: [id])
   recipient        Recipient @relation(fields: [recipientId], references: [id])
   companion        Companion @relation(fields: [companionId], references: [id])

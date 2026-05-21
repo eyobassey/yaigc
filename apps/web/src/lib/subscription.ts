@@ -364,12 +364,20 @@ export async function transitionSubscription(formData: FormData): Promise<void> 
   if (d.to === 'paused') {
     data.pauseStartAt = now;
     data.pauseEndAt = d.pauseEndAt ? new Date(`${d.pauseEndAt}T00:00:00.000Z`) : null;
+    // The family's pause request, if any, is now handled.
+    data.pauseRequestedAt = null;
+    data.pauseRequestedReason = null;
   } else if (d.to === 'active') {
     data.pauseStartAt = null;
     data.pauseEndAt = null;
   } else if (d.to === 'canceled') {
     data.endedAt = now;
     if (d.note) data.cancellationReason = d.note;
+    // Cancelling resolves both kinds of pending request.
+    data.pauseRequestedAt = null;
+    data.pauseRequestedReason = null;
+    data.cancelRequestedAt = null;
+    data.cancelRequestedReason = null;
   }
 
   await prisma.subscription.update({ where: { id: d.subscriptionId }, data });

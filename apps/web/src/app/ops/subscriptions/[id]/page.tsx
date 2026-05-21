@@ -98,6 +98,29 @@ export default async function OpsSubscriptionDetailPage({
         ) : null}
       </header>
 
+      {(sub.pauseRequestedAt || sub.cancelRequestedAt) ? (
+        <div className="mb-6 bg-amber-50 border-l-4 border-amber-400 px-5 py-4 rounded-r">
+          <p className="font-body text-[0.7rem] font-medium uppercase tracking-[0.12em] text-amber-700 mb-1">
+            Family request awaiting follow-up
+          </p>
+          {sub.cancelRequestedAt ? (
+            <p className="text-charcoal text-[0.9375rem] leading-[1.55]">
+              <strong>Cancel</strong> requested {sub.cancelRequestedAt.toISOString().slice(0, 10)}.
+              {sub.cancelRequestedReason ? ` Reason: ${sub.cancelRequestedReason}` : ' No reason given.'}
+            </p>
+          ) : null}
+          {sub.pauseRequestedAt ? (
+            <p className="text-charcoal text-[0.9375rem] leading-[1.55]">
+              <strong>Pause</strong> requested {sub.pauseRequestedAt.toISOString().slice(0, 10)}.
+              {sub.pauseRequestedReason ? ` Reason: ${sub.pauseRequestedReason}` : ' No reason given.'}
+            </p>
+          ) : null}
+          <p className="text-charcoal text-[0.875rem] leading-[1.55] mt-1">
+            Confirming through the Manage panel below clears the request.
+          </p>
+        </div>
+      ) : null}
+
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <div className="flex flex-col gap-6">
           <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">

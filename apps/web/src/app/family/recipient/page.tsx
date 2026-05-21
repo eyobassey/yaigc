@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Heart } from 'lucide-react';
+import { Heart, Pencil } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { requireFamilyMember } from '@/lib/auth-helpers';
 
@@ -39,12 +39,10 @@ export default async function FamilyRecipientPage() {
         </h1>
       </header>
       <p className="text-charcoal text-[0.9375rem] leading-[1.55] mb-6 max-w-[60ch]">
-        Here is what we have on file. To change consents or things-to-know,
-        editing is coming in a follow-up update. For anything else,{' '}
-        <Link href="/contact" className="link">
-          reply to us
-        </Link>{' '}
-        and we will sort it.
+        Here is what we have on file. Click <strong>Edit</strong> on any
+        card to update consents, interests, things to know, or anything
+        else. Address changes go through a phone call when there is an
+        active subscription.
       </p>
 
       <div className="flex flex-col gap-6">
@@ -61,15 +59,24 @@ export default async function FamilyRecipientPage() {
               key={r.id}
               className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6"
             >
-              <header className="mb-4">
-                <h2 className="font-head text-moss text-[clamp(1.25rem,2.5vw,1.5rem)] font-medium leading-[1.2]">
-                  {r.firstName} {r.lastName}
-                </h2>
-                {r.preferredName ? (
-                  <p className="font-head italic text-terracotta text-[1rem] mt-1">
-                    Known as {r.preferredName}
-                  </p>
-                ) : null}
+              <header className="mb-4 flex items-start justify-between gap-3 flex-wrap">
+                <div className="min-w-0">
+                  <h2 className="font-head text-moss text-[clamp(1.25rem,2.5vw,1.5rem)] font-medium leading-[1.2] break-words">
+                    {r.firstName} {r.lastName}
+                  </h2>
+                  {r.preferredName ? (
+                    <p className="font-head italic text-terracotta text-[1rem] mt-1">
+                      Known as {r.preferredName}
+                    </p>
+                  ) : null}
+                </div>
+                <Link
+                  href={`/family/recipient/${r.id}/edit`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-moss/20 text-moss text-[0.8125rem] font-medium hover:bg-moss hover:text-cream transition-colors whitespace-nowrap"
+                >
+                  <Pencil size={14} strokeWidth={1.75} aria-hidden="true" />
+                  Edit
+                </Link>
               </header>
 
               {/* Consents — most-glanceable thing on the card */}

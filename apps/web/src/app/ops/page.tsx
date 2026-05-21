@@ -1,6 +1,6 @@
 import { getSessionUser } from '@/lib/auth-helpers';
 import Link from 'next/link';
-import { Inbox, Calendar, FileText, ShieldAlert, Heart, AlertTriangle, Users, Sparkles } from 'lucide-react';
+import { Inbox, Calendar, FileText, ShieldAlert, Heart, AlertTriangle, Users, Sparkles, MessageSquare } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 
 export const metadata = {
@@ -67,6 +67,13 @@ const TILES = [
     placeholder: 'live',
   },
   {
+    label: 'Pending family requests',
+    href: '/ops/families?filter=requests',
+    icon: MessageSquare,
+    accent: 'text-terracotta',
+    placeholder: 'live',
+  },
+  {
     label: 'DBSs expiring (30d)',
     href: '/ops/companions?filter=dbs-expiring',
     icon: Heart,
@@ -89,6 +96,7 @@ export default async function OpsTodayPage() {
     visitsTodayCount,
     missingReportsCount,
     openCasesCount,
+    pendingRequestsCount,
   ] = await Promise.all([
     prisma.enquiry.count({ where: { status: 'new' } }),
     prisma.family.count({ where: { status: 'prospect' } }),
@@ -104,6 +112,11 @@ export default async function OpsTodayPage() {
     prisma.visit.count({ where: { state: 'completed', report: null } }),
     prisma.safeguardingCase.count({
       where: { status: { in: ['open', 'under_review', 'actioned'] } },
+    }),
+    prisma.subscription.count({
+      where: {
+        OR: [{ pauseRequestedAt: { not: null } }, { cancelRequestedAt: { not: null } }],
+      },
     }),
   ]);
 
@@ -152,6 +165,8 @@ export default async function OpsTodayPage() {
             ? missingReportsCount
             : tile.label === 'Open safeguarding cases'
             ? openCasesCount
+            : tile.label === 'Pending family requests'
+            ? pendingRequestsCount
             : null;
           return (
             <Link
