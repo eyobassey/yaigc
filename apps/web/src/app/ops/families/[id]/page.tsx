@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ChevronLeft, Pencil } from 'lucide-react';
+import { ChevronLeft, Pencil, Plus } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { FamilyStatusPill } from '../page';
 
@@ -102,9 +102,18 @@ export default async function OpsFamilyDetailPage({
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <div className="flex flex-col gap-6">
           <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
-            <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-4">
-              Recipients ({family.recipients.length})
-            </h2>
+            <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+              <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone">
+                Recipients ({family.recipients.length})
+              </h2>
+              <Link
+                href={`/ops/families/${family.id}/recipients/new`}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-moss/20 text-moss text-[0.75rem] font-medium hover:bg-moss hover:text-cream transition-colors whitespace-nowrap"
+              >
+                <Plus size={12} strokeWidth={2} aria-hidden="true" />
+                Add recipient
+              </Link>
+            </div>
             {family.recipients.length === 0 ? (
               <p className="text-stone text-sm">No recipients yet.</p>
             ) : (
@@ -116,6 +125,7 @@ export default async function OpsFamilyDetailPage({
                     r.addressCity,
                     r.addressPostcode,
                   ].filter(Boolean);
+                  const age = ageFromDob(r.dateOfBirth);
                   return (
                     <li key={r.id} className="pt-4 first:pt-0">
                       <div className="flex items-start justify-between gap-3 flex-wrap mb-1">
@@ -170,6 +180,11 @@ export default async function OpsFamilyDetailPage({
                             <dt className="text-stone">Date of birth</dt>
                             <dd className="text-charcoal">
                               {r.dateOfBirth.toISOString().slice(0, 10)}
+                              {age != null ? (
+                                <span className="text-stone ml-2">
+                                  (age {age})
+                                </span>
+                              ) : null}
                             </dd>
                           </>
                         ) : null}
@@ -196,9 +211,18 @@ export default async function OpsFamilyDetailPage({
           </section>
 
           <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
-            <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-4">
-              Members ({family.members.length})
-            </h2>
+            <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+              <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone">
+                Members ({family.members.length})
+              </h2>
+              <Link
+                href={`/ops/families/${family.id}/members/new`}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-moss/20 text-moss text-[0.75rem] font-medium hover:bg-moss hover:text-cream transition-colors whitespace-nowrap"
+              >
+                <Plus size={12} strokeWidth={2} aria-hidden="true" />
+                Add member
+              </Link>
+            </div>
             {family.members.length === 0 ? (
               <p className="text-stone text-sm">No members yet.</p>
             ) : (
@@ -343,6 +367,10 @@ function summarise(targetType: string, metadata: unknown): string {
     if (m.event === 'family_member_updated' && Array.isArray(m.changedFields)) {
       return `Member updated: ${(m.changedFields as string[]).join(', ')}`;
     }
+    if (m.event === 'family_member_added') {
+      return `Member added${m.email ? ` (${m.email})` : ''}`;
+    }
+    if (m.event === 'recipient_added') return 'Recipient added';
     if (m.event === 'consent_change' && Array.isArray(m.changedFields)) {
       const fields = (m.changedFields as string[])
         .map((f) => f.replace(/^consentTo/, ''))
@@ -353,6 +381,20 @@ function summarise(targetType: string, metadata: unknown): string {
     if (typeof m.event === 'string') return String(m.event);
   }
   return `${targetType} updated`;
+}
+
+function ageFromDob(dob: Date | null): number | null {
+  if (!dob) return null;
+  const now = new Date();
+  let age = now.getUTCFullYear() - dob.getUTCFullYear();
+  const monthDelta = now.getUTCMonth() - dob.getUTCMonth();
+  const dayBeforeBirthday =
+    monthDelta < 0 ||
+    (monthDelta === 0 && now.getUTCDate() < dob.getUTCDate());
+  if (dayBeforeBirthday) age -= 1;
+  // Defensive: nonsense DoB (future date) should not display a negative age.
+  if (age < 0 || age > 130) return null;
+  return age;
 }
 
 function ConsentBadge({ label, granted }: { label: string; granted: boolean }) {
