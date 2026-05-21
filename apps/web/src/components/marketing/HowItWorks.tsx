@@ -45,7 +45,7 @@ export function HowItWorks() {
 
         <div className="mt-[clamp(3rem,6vw,5rem)] flex flex-wrap gap-4 items-center">
           <Link
-            href="/contact"
+            href="/#contact"
             className="inline-flex items-center justify-center px-9 py-[1.125rem] rounded-full border border-cream text-cream text-base font-medium hover:bg-cream hover:text-moss transition-colors"
           >
             Start with a call

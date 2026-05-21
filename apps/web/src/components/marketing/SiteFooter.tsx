@@ -8,13 +8,13 @@ export function SiteFooter() {
       <div className="max-w-[1240px] mx-auto px-[clamp(1.25rem,4vw,2.5rem)]">
         <div className="grid gap-12 mb-16 min-[760px]:grid-cols-[1.5fr_1fr_1fr_1fr]">
           <div>
-            <div className="font-head text-[1.625rem] font-medium leading-none flex items-baseline gap-1 whitespace-nowrap mb-6">
-              <span
-                aria-hidden="true"
-                className="inline-block w-2 h-2 rounded-full bg-terracotta-light mr-1.5 -translate-y-0.5"
-              />
-              <span>{brand.fullName}</span>
-            </div>
+            {/* Stacked cream-on-moss wordmark for the moss-green footer */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo/wordmark-cream-on-moss.svg"
+              alt={brand.fullName}
+              className="h-20 w-auto mb-6"
+            />
             <p className="font-head italic text-[1.0625rem] leading-[1.5] max-w-[28ch] opacity-85">
               {siteFooter.tagline}
             </p>

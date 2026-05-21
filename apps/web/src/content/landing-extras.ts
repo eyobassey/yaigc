@@ -62,8 +62,10 @@ export const pricingTeaser = {
   eyebrow: 'Honest pricing',
   title: 'One hourly rate. No hidden fees.',
   lead: 'Pause or cancel any time, in one click. No long contracts. No retention conversations. No guilt.',
-  cta: 'See full pricing',
-  ctaHref: '/pricing',
+  // Pricing page itself doesn't exist until Sprint 1; for now point at the
+  // contact section so the CTA still moves the visitor forward.
+  cta: 'Talk through pricing',
+  ctaHref: '/#contact',
   amount: {
     currency: '£', // pound sign
     figure: '32',
@@ -116,7 +118,7 @@ export const siteFooter = {
       links: [
         { label: 'How it works', href: '/how-it-works' },
         { label: 'Pricing', href: '/pricing' },
-        { label: 'Questions', href: '/faq' },
+        { label: 'Questions', href: '/#faq' },
         { label: 'About', href: '/about' },
       ],
     },

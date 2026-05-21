@@ -35,3 +35,18 @@
     }
   }
 }
+
+@layer components {
+  /* Inline text link inside long-form prose. Subtle underline, brand colours. */
+  .link {
+    color: #3C5A3A; /* moss */
+    text-decoration: underline;
+    text-decoration-color: rgba(60, 90, 58, 0.4);
+    text-underline-offset: 4px;
+    transition: color 0.15s ease, text-decoration-color 0.15s ease;
+  }
+  .link:hover {
+    color: #C97B5F; /* terracotta */
+    text-decoration-color: #C97B5F;
+  }
+}

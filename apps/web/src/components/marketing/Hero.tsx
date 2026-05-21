@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { home } from '@igc/content';
 
 export function Hero() {
@@ -45,7 +46,7 @@ export function Hero() {
 
           <div className="flex flex-wrap gap-4 mt-10">
             <Link
-              href="/contact"
+              href="/#contact"
               className="inline-flex items-center justify-center px-9 py-[1.125rem] rounded-full bg-moss text-cream text-base font-medium hover:bg-moss-dark transition-all duration-200 hover:shadow-lg hover:-translate-y-px"
             >
               {home.hero.primaryCta}
@@ -77,30 +78,16 @@ function HeroPortrait() {
   return (
     <div className="relative">
       <div className="bg-paper rounded-[24px] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.03),0_20px_60px_rgba(60,90,58,0.08)] -rotate-1 hover:rotate-0 transition-transform duration-500 max-w-[420px] mx-auto">
-        <div
-          className="aspect-[4/5] rounded-[8px] relative overflow-hidden flex items-end justify-center p-8"
-          style={{
-            background:
-              'radial-gradient(circle at 65% 40%, rgba(201, 123, 95, 0.25), transparent 55%), linear-gradient(135deg, #F2EFE4 0%, #A3B8A3 130%)',
-          }}
-        >
-          {/* Two-figure silhouette suggestion */}
-          <svg
-            viewBox="0 0 200 240"
-            xmlns="http://www.w3.org/2000/svg"
-            aria-hidden="true"
-            className="w-full h-[70%] opacity-85"
-          >
-            <ellipse cx="65" cy="80" rx="22" ry="26" fill="#3C5A3A" opacity="0.7" />
-            <path d="M 35 240 Q 35 145 65 130 Q 95 145 95 240 Z" fill="#3C5A3A" opacity="0.7" />
-            <ellipse cx="135" cy="78" rx="20" ry="24" fill="#C97B5F" opacity="0.65" />
-            <path
-              d="M 108 240 Q 108 145 135 132 Q 162 145 162 240 Z"
-              fill="#C97B5F"
-              opacity="0.65"
-            />
-            <circle cx="100" cy="175" r="4" fill="#FAF8F3" />
-          </svg>
+        <div className="aspect-square rounded-[8px] relative overflow-hidden bg-sage/20">
+          <Image
+            src="/photos/margaret-and-sarah.jpeg"
+            alt="Two women laughing together over mugs of tea on a sofa."
+            width={392}
+            height={396}
+            priority
+            sizes="(min-width: 1000px) 420px, (min-width: 640px) 60vw, 90vw"
+            className="w-full h-full object-cover"
+          />
         </div>
 
         <div className="flex justify-between items-center mt-4 pt-4 border-t border-moss/10">

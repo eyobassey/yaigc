@@ -41,17 +41,16 @@ const RULES: Rule[] = [
     allowList: [
       /\bnot a care agency\b/i,
       /\bnot a regulated care\b/i,
+      /\bnot a care provider\b/i,
       /\bpersonal care\b/i,
-      // Bare compound covers "home-care", "home-care agency", "home-care
-      // agencies", "home-care provider", etc. Over-permissive in principle
-      // (the rest of the literal isn't re-checked) but acceptable trade-off
-      // until lint is refactored to per-occurrence context matching.
       /\bhome-care\b/i,
       /\bhome care\b/i,
       /\bclinical care\b/i,
       /\bcare role\b/i,
-      /\bcare quality commission\b/i, // CQC, when referenced explicitly
+      /\bcare quality commission\b/i,
       /\bcqc\b/i,
+      /\bcare act\b/i, // statute name (Care Act 2014)
+      /\badult social care\b/i, // statutory term used in /about and /privacy
     ],
   },
   {
