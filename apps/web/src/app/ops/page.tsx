@@ -1,0 +1,117 @@
+import { getSessionUser } from '@/lib/auth-helpers';
+import { Inbox, Calendar, FileText, ShieldAlert, Heart, AlertTriangle } from 'lucide-react';
+
+export const metadata = {
+  title: 'Today',
+};
+
+// Empty-state Today dashboard. The five cards mirror what SDD §10 says the
+// operator should see "each morning":
+//   - new enquiries
+//   - visits today
+//   - post-visit reports missing
+//   - open safeguarding cases
+//   - DBSs expiring within 30 days
+// Each renders zero until the underlying models land (O.3 onward).
+
+const TILES = [
+  {
+    label: 'New enquiries',
+    href: '/ops/enquiries',
+    icon: Inbox,
+    accent: 'text-terracotta',
+    placeholder: 'O.3:Enquiry model',
+  },
+  {
+    label: 'Visits today',
+    href: '/ops/visits',
+    icon: Calendar,
+    accent: 'text-moss',
+    placeholder: 'O.7:Visit model',
+  },
+  {
+    label: 'Missing post-visit reports',
+    href: '/ops/visits?filter=missing-report',
+    icon: FileText,
+    accent: 'text-terracotta',
+    placeholder: 'O.7:PostVisitReport',
+  },
+  {
+    label: 'Open safeguarding cases',
+    href: '/ops/safeguarding',
+    icon: ShieldAlert,
+    accent: 'text-red-700',
+    placeholder: 'O.7:SafeguardingCase',
+  },
+  {
+    label: 'DBSs expiring (30d)',
+    href: '/ops/companions?filter=dbs-expiring',
+    icon: Heart,
+    accent: 'text-stone',
+    placeholder: 'O.6:Companion',
+  },
+];
+
+export default async function OpsTodayPage() {
+  const user = await getSessionUser();
+
+  return (
+    <div>
+      <header className="mb-10">
+        <span className="font-body text-[0.75rem] font-medium uppercase tracking-[0.12em] text-stone mb-2 inline-block">
+          Operator console
+        </span>
+        <h1 className="font-head font-normal text-moss text-[clamp(2rem,4vw,3rem)] leading-[1.1] tracking-[-0.02em]">
+          {greeting()}, {user?.firstName || user?.email?.split('@')[0] || 'operator'}.
+        </h1>
+        <p className="font-head italic text-terracotta text-[clamp(1.125rem,1.75vw,1.375rem)] leading-[1.4] mt-3">
+          A view of today, the way SDD §10 lays it out.
+        </p>
+      </header>
+
+      <div className="mb-12 bg-amber-50 border-l-4 border-amber-400 px-5 py-4 rounded-r">
+        <p className="font-body text-[0.7rem] font-medium uppercase tracking-[0.12em] text-amber-700 mb-1 flex items-center gap-2">
+          <AlertTriangle size={14} strokeWidth={2} aria-hidden="true" />
+          Empty-state console
+        </p>
+        <p className="text-charcoal text-[0.9375rem] leading-[1.55]">
+          The tiles below render zero until the underlying data models land.
+          Each tile labels the stage that brings it to life. Today's commit
+          (Stage O.1) sets up the subdomain, the role gate, and this shell.
+        </p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {TILES.map((tile) => (
+          <a
+            key={tile.label}
+            href={tile.href}
+            className="block bg-paper border border-moss/[0.08] rounded-[12px] p-5 hover:border-moss/20 hover:-translate-y-px transition-all duration-200 group"
+          >
+            <div className="flex items-start justify-between mb-4">
+              <tile.icon size={20} strokeWidth={1.75} aria-hidden="true" className={tile.accent} />
+              <span className="font-body text-[0.65rem] font-medium uppercase tracking-[0.1em] text-stone/60">
+                {tile.placeholder}
+              </span>
+            </div>
+            <div className="font-head text-moss text-[2.5rem] leading-none font-normal mb-2">
+              <span aria-hidden="true">—</span>
+              <span className="sr-only">no data yet</span>
+            </div>
+            <div className="font-body text-charcoal text-[0.9375rem] group-hover:text-moss transition-colors">
+              {tile.label}
+            </div>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function greeting() {
+  const hour = new Date().getUTCHours();
+  if (hour < 5 || hour > 21) return 'Working late';
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+}

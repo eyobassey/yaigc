@@ -33,7 +33,7 @@ model User {
   // YAIGC business fields
   firstName String?
   lastName  String?
-  role      UserRole @default(USER)
+  role      UserRole @default(family_payer)
 
   // Audit
   createdAt DateTime  @default(now())
@@ -92,9 +92,20 @@ model VerificationToken {
 // Enums
 // ----------------------------------------------------------------------------
 
+// User roles per SDD §12.9.1. Lowercase snake_case to match the SDD spec
+// exactly; Prisma generates idiomatic enum members on the TS side
+// (`UserRole.family_payer`).
+//
+// Operator sub-roles enable least-privilege RBAC in the operator console
+// (DR-013 spirit): a finance operator does not need access to safeguarding
+// cases, a read_only operator cannot mutate, etc.
 enum UserRole {
-  USER       // default — family payer or general visitor
-  COMPANION  // visiting companion (Companion Club member)
-  OPERATOR   // internal ops console user
-  ADMIN      // full-access internal user
+  family_payer
+  family_viewer            // [Phase 2] secondary household members
+  companion
+  operator_coordinator     // default operator role: bookings, matches, day-to-day ops
+  operator_safeguarding    // safeguarding lead, case management
+  operator_finance         // payment runs, invoicing, reconciliation
+  operator_admin           // full access (you, Bassey)
+  operator_read_only       // observer access (investor, auditor, advisor)
 }

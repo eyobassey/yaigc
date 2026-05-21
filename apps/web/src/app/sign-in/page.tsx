@@ -61,8 +61,11 @@ export default function SignInPage({
               />
             </label>
 
+            {/* Auth.js v5 reads `redirectTo` from formData. Older Next.js
+                conventions used `callbackUrl` so we accept that via the URL
+                search param and forward it under the new name. */}
             {callbackUrl ? (
-              <input type="hidden" name="callbackUrl" value={callbackUrl} />
+              <input type="hidden" name="redirectTo" value={callbackUrl} />
             ) : null}
 
             <button

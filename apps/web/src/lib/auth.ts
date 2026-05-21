@@ -58,4 +58,44 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
   // Trust X-Forwarded-* headers because the chain is CF -> nginx -> Next.js
   trustHost: true,
+
+  // Share the session across the apex and ops.* (and future app.*) by
+  // scoping the cookie to the eTLD+1 with a leading dot. CSRF stays
+  // host-only via the __Host- prefix (which forbids setting a domain).
+  // In non-production (no NODE_ENV=production), Auth.js's defaults still
+  // apply — these overrides only kick in for the production process.
+  cookies: {
+    sessionToken: {
+      name:
+        process.env.NODE_ENV === 'production'
+          ? '__Secure-authjs.session-token'
+          : 'authjs.session-token',
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+        ...(process.env.NODE_ENV === 'production'
+          ? { domain: '.youareingoodcompany.co.uk' }
+          : {}),
+      },
+    },
+    callbackUrl: {
+      name:
+        process.env.NODE_ENV === 'production'
+          ? '__Secure-authjs.callback-url'
+          : 'authjs.callback-url',
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+        ...(process.env.NODE_ENV === 'production'
+          ? { domain: '.youareingoodcompany.co.uk' }
+          : {}),
+      },
+    },
+    // CSRF cookie keeps the __Host- prefix; that prefix REQUIRES no
+    // domain attribute, so leave it host-only.
+  },
 });
