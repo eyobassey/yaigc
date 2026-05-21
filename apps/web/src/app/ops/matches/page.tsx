@@ -10,6 +10,7 @@ const STATUSES: { value: MatchStatus | 'all'; label: string }[] = [
   { value: 'accepted', label: 'Accepted' },
   { value: 'declined', label: 'Declined' },
   { value: 'withdrawn', label: 'Withdrawn' },
+  { value: 'ended', label: 'Ended' },
   { value: 'all', label: 'All' },
 ];
 
@@ -133,6 +134,7 @@ export function MatchStatusPill({ status }: { status: MatchStatus }) {
     accepted: 'bg-moss/15 text-moss',
     declined: 'bg-charcoal/10 text-charcoal',
     withdrawn: 'bg-stone/15 text-stone',
+    ended: 'bg-charcoal/15 text-charcoal',
   };
   return (
     <span

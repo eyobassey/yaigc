@@ -45,6 +45,7 @@ model User {
   familyMembers    FamilyMember[]
   companion        Companion?
   proposedMatches  Match[]        @relation("MatchProposedBy")
+  endedMatches     Match[]        @relation("MatchEndedBy")
 
   @@index([email])
   @@index([role])
@@ -257,10 +258,20 @@ model Match {
   companionResponseAt DateTime?
   declineReason       String?  @db.Text
 
+  // Un-match (after acceptance). status=ended means a confirmed pairing
+  // was separated. Distinct from declined/withdrawn which are
+  // pre-acceptance outcomes. endReason drives both UI copy and any
+  // downstream effects (safeguarding_concern auto-opens a case in O.7.5).
+  endedAt           DateTime?
+  endReason         MatchEndReason?
+  endNote           String?        @db.Text
+  endedByOperatorId String?
+
   family       Family        @relation(fields: [familyId], references: [id])
   recipient    Recipient?    @relation(fields: [recipientId], references: [id])
   companion    Companion     @relation(fields: [candidateCompanionId], references: [id])
   proposedBy   User          @relation("MatchProposedBy", fields: [proposedByOperatorId], references: [id])
+  endedBy      User?         @relation("MatchEndedBy", fields: [endedByOperatorId], references: [id])
   subscription Subscription?
 
   createdAt DateTime @default(now())
@@ -276,6 +287,17 @@ enum MatchStatus {
   accepted
   declined
   withdrawn
+  ended
+}
+
+enum MatchEndReason {
+  not_a_fit
+  scheduling_conflict
+  recipient_circumstances_changed
+  recipient_passed_away
+  companion_circumstances_changed
+  safeguarding_concern
+  other
 }
 
 // ----------------------------------------------------------------------------

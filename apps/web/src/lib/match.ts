@@ -16,6 +16,14 @@ import {
   matchConfirmedToCompanionText,
   matchConfirmedToCompanionSubject,
 } from '@/lib/email/match-confirmed';
+import {
+  matchEndedToFamilyHtml,
+  matchEndedToFamilyText,
+  matchEndedToFamilySubject,
+  matchEndedToCompanionHtml,
+  matchEndedToCompanionText,
+  matchEndedToCompanionSubject,
+} from '@/lib/email/match-ended';
 
 // -------------------------------------------------------------------------
 // PROPOSE A MATCH
@@ -204,6 +212,265 @@ export async function transitionMatch(formData: FormData): Promise<void> {
   revalidatePath('/ops/matches');
   revalidatePath(`/ops/matches/${d.matchId}`);
   revalidatePath(`/ops/families/${before.familyId}`);
+}
+
+// -------------------------------------------------------------------------
+// END (un-match) an accepted Match. status: accepted -> ended.
+// Cascade-cancels any non-canceled Subscription tied to this match.
+// -------------------------------------------------------------------------
+
+const END_REASONS = [
+  'not_a_fit',
+  'scheduling_conflict',
+  'recipient_circumstances_changed',
+  'recipient_passed_away',
+  'companion_circumstances_changed',
+  'safeguarding_concern',
+  'other',
+] as const;
+
+const EndSchema = z
+  .object({
+    matchId: z.string().min(1),
+    endReason: z.enum(END_REASONS),
+    endNote: z.string().max(2000).optional(),
+  })
+  .refine((d) => d.endReason !== 'other' || (d.endNote && d.endNote.length >= 5), {
+    message: 'A note is required when the reason is "other".',
+    path: ['endNote'],
+  });
+
+export type EndMatchState = {
+  ok: boolean;
+  errors?: Record<string, string>;
+  values?: Record<string, string | undefined>;
+};
+
+export async function endMatch(
+  _prev: EndMatchState,
+  formData: FormData,
+): Promise<EndMatchState> {
+  const operator = await getSessionUser();
+  if (!operator) return { ok: false, errors: { _form: 'Not signed in.' } };
+
+  const raw = {
+    matchId: String(formData.get('matchId') ?? ''),
+    endReason: String(formData.get('endReason') ?? ''),
+    endNote: String(formData.get('endNote') ?? '').trim() || undefined,
+  };
+
+  const parsed = EndSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      errors: Object.fromEntries(
+        parsed.error.issues.flatMap((i) => {
+          const k = i.path[0];
+          return typeof k === 'string' ? [[k, i.message]] : [];
+        }),
+      ),
+      values: raw,
+    };
+  }
+  const d = parsed.data;
+
+  const before = await prisma.match.findUnique({
+    where: { id: d.matchId },
+    include: { subscription: { select: { id: true, status: true } } },
+  });
+  if (!before || before.status !== 'accepted') {
+    return { ok: false, errors: { _form: 'Only accepted matches can be ended.' }, values: raw };
+  }
+
+  const now = new Date();
+  let cascadedSubscriptionId: string | null = null;
+
+  // Atomic: end the match and cascade-cancel any non-canceled subscription
+  // in one transaction so nothing is left in an inconsistent state.
+  await prisma.$transaction(async (tx) => {
+    await tx.match.update({
+      where: { id: d.matchId },
+      data: {
+        status: 'ended',
+        endedAt: now,
+        endReason: d.endReason,
+        endNote: d.endNote ?? null,
+        endedByOperatorId: operator.id,
+      },
+    });
+
+    if (before.subscription && before.subscription.status !== 'canceled') {
+      await tx.subscription.update({
+        where: { id: before.subscription.id },
+        data: {
+          status: 'canceled',
+          endedAt: now,
+          cancellationReason: `Match ended: ${d.endReason}`,
+        },
+      });
+      cascadedSubscriptionId = before.subscription.id;
+    }
+  });
+
+  await audit({
+    actorType: 'user',
+    actorId: operator.id,
+    actorRole: operator.role,
+    actionType: 'state_change',
+    targetType: 'Match',
+    targetId: d.matchId,
+    beforeState: { status: 'accepted' },
+    afterState: { status: 'ended' },
+    metadata: {
+      event: 'match_ended',
+      endReason: d.endReason,
+      ...(d.endNote ? { note: d.endNote } : {}),
+      ...(cascadedSubscriptionId ? { cascadedSubscriptionId } : {}),
+      // Hook for Stage O.7.5: surface safeguarding reasons explicitly so a
+      // listener / cron job can spin up a SafeguardingCase.
+      ...(d.endReason === 'safeguarding_concern' ? { safeguardingHook: true } : {}),
+    },
+  });
+
+  if (cascadedSubscriptionId) {
+    await audit({
+      actorType: 'system',
+      actorId: null,
+      actionType: 'state_change',
+      targetType: 'Subscription',
+      targetId: cascadedSubscriptionId,
+      beforeState: { status: before.subscription?.status },
+      afterState: { status: 'canceled' },
+      metadata: { event: 'subscription_canceled_by_match_end', matchId: d.matchId },
+    });
+  }
+
+  await sendMatchEndedEmails(d.matchId, Boolean(cascadedSubscriptionId));
+
+  revalidatePath('/ops');
+  revalidatePath('/ops/matches');
+  revalidatePath(`/ops/matches/${d.matchId}`);
+  revalidatePath(`/ops/families/${before.familyId}`);
+  if (cascadedSubscriptionId) {
+    revalidatePath(`/ops/subscriptions/${cascadedSubscriptionId}`);
+  }
+  redirect(`/ops/matches/${d.matchId}`);
+}
+
+// -------------------------------------------------------------------------
+// EMAIL: on Match.ended, notify family + companion
+// -------------------------------------------------------------------------
+
+async function sendMatchEndedEmails(
+  matchId: string,
+  subscriptionCancelled: boolean,
+): Promise<void> {
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    include: {
+      family: {
+        select: {
+          billingName: true,
+          members: {
+            where: { deletedAt: null },
+            include: { user: { select: { email: true } } },
+          },
+        },
+      },
+      recipient: { select: { firstName: true, preferredName: true } },
+      companion: {
+        select: {
+          firstName: true,
+          lastName: true,
+          user: { select: { email: true } },
+        },
+      },
+    },
+  });
+  if (!match || !match.recipient || !match.endReason) return;
+
+  const transport = createTransport({
+    host: process.env.SMTP_HOST!,
+    port: Number(process.env.SMTP_PORT ?? 587),
+    auth: { user: process.env.SMTP_USER!, pass: process.env.SMTP_PASSWORD! },
+  });
+  const from = `${brand.fullName} <${process.env.EMAIL_SENDER}>`;
+
+  const familyEmails = Array.from(
+    new Set(
+      match.family.members
+        .map((m) => m.user.email)
+        .filter((e): e is string => Boolean(e)),
+    ),
+  );
+  const familyInput = {
+    recipientFirstName: match.recipient.firstName,
+    recipientPreferredName: match.recipient.preferredName,
+    companionFirstName: match.companion.firstName,
+    companionLastName: match.companion.lastName,
+    endReason: match.endReason,
+    subscriptionCancelled,
+  };
+  for (const to of familyEmails) {
+    try {
+      await transport.sendMail({
+        to,
+        from,
+        subject: matchEndedToFamilySubject(),
+        text: matchEndedToFamilyText(familyInput),
+        html: matchEndedToFamilyHtml(familyInput),
+      });
+      await audit({
+        actorType: 'system',
+        actorId: null,
+        actionType: 'state_change',
+        targetType: 'Match',
+        targetId: matchId,
+        metadata: { event: 'match_ended_email_sent', audience: 'family', to },
+      });
+    } catch (err) {
+      console.error('[match] ended email to family failed', { to, matchId, err });
+    }
+  }
+
+  const companionEmail = match.companion.user.email;
+  if (companionEmail) {
+    const companionInput = {
+      companionFirstName: match.companion.firstName,
+      familyBillingName: match.family.billingName,
+      recipientFirstName: match.recipient.firstName,
+      recipientPreferredName: match.recipient.preferredName,
+      endReason: match.endReason,
+      subscriptionCancelled,
+    };
+    try {
+      await transport.sendMail({
+        to: companionEmail,
+        from,
+        subject: matchEndedToCompanionSubject(),
+        text: matchEndedToCompanionText(companionInput),
+        html: matchEndedToCompanionHtml(companionInput),
+      });
+      await audit({
+        actorType: 'system',
+        actorId: null,
+        actionType: 'state_change',
+        targetType: 'Match',
+        targetId: matchId,
+        metadata: {
+          event: 'match_ended_email_sent',
+          audience: 'companion',
+          to: companionEmail,
+        },
+      });
+    } catch (err) {
+      console.error('[match] ended email to companion failed', {
+        to: companionEmail,
+        matchId,
+        err,
+      });
+    }
+  }
 }
 
 // -------------------------------------------------------------------------

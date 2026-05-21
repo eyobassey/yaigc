@@ -37,6 +37,7 @@ export default async function OpsMatchDetailPage({
       },
       proposedBy: { select: { id: true, email: true, firstName: true, lastName: true } },
       subscription: { select: { id: true } },
+      endedBy: { select: { id: true, email: true, firstName: true, lastName: true } },
     },
   });
   if (!match) notFound();
@@ -156,39 +157,82 @@ export default async function OpsMatchDetailPage({
               </p>
             </section>
           ) : null}
+
+          {match.status === 'ended' && match.endReason ? (
+            <section className="bg-charcoal/5 border-l-4 border-charcoal/30 px-5 py-4 rounded-r">
+              <h2 className="font-body text-[0.7rem] font-medium uppercase tracking-[0.1em] text-charcoal mb-2">
+                Match ended
+              </h2>
+              <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-[0.875rem]">
+                <dt className="text-stone">Reason</dt>
+                <dd className="text-charcoal">{match.endReason.replace(/_/g, ' ')}</dd>
+                {match.endedAt ? (
+                  <>
+                    <dt className="text-stone">When</dt>
+                    <dd className="text-charcoal font-mono text-[0.8125rem]">
+                      {match.endedAt.toISOString().replace('T', ' ').slice(0, 19)}
+                    </dd>
+                  </>
+                ) : null}
+                {match.endNote ? (
+                  <>
+                    <dt className="text-stone">Internal note</dt>
+                    <dd className="text-charcoal whitespace-pre-wrap break-words">{match.endNote}</dd>
+                  </>
+                ) : null}
+              </dl>
+            </section>
+          ) : null}
         </div>
 
         <aside className="flex flex-col gap-6">
           {match.status === 'accepted' ? (
-            match.subscription ? (
-              <section className="bg-moss/5 border border-moss/15 rounded-[12px] p-5 sm:p-6">
-                <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-moss mb-2">
-                  Subscription created
-                </h2>
-                <Link
-                  href={`/ops/subscriptions/${match.subscription.id}`}
-                  className="link text-[0.875rem] inline-flex items-center gap-1"
-                >
-                  Open subscription
-                  <ChevronRight size={14} strokeWidth={1.75} aria-hidden="true" />
-                </Link>
-              </section>
-            ) : (
+            <>
+              {match.subscription ? (
+                <section className="bg-moss/5 border border-moss/15 rounded-[12px] p-5 sm:p-6">
+                  <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-moss mb-2">
+                    Subscription created
+                  </h2>
+                  <Link
+                    href={`/ops/subscriptions/${match.subscription.id}`}
+                    className="link text-[0.875rem] inline-flex items-center gap-1"
+                  >
+                    Open subscription
+                    <ChevronRight size={14} strokeWidth={1.75} aria-hidden="true" />
+                  </Link>
+                </section>
+              ) : (
+                <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
+                  <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-2">
+                    Next step
+                  </h2>
+                  <p className="text-charcoal text-[0.875rem] mb-3">
+                    Both sides accepted. Create the recurring subscription.
+                  </p>
+                  <Link
+                    href={`/ops/families/${match.family.id}/subscriptions/new?match=${match.id}`}
+                    className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-moss text-cream text-[0.875rem] font-medium hover:bg-moss-dark transition-colors"
+                  >
+                    Create subscription
+                  </Link>
+                </section>
+              )}
+
               <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
                 <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-2">
-                  Next step
+                  End this match
                 </h2>
                 <p className="text-charcoal text-[0.875rem] mb-3">
-                  Both sides accepted. Create the recurring subscription.
+                  Use this when the confirmed pairing has to be separated. Emails go to both sides; any active subscription is cancelled with it.
                 </p>
                 <Link
-                  href={`/ops/families/${match.family.id}/subscriptions/new?match=${match.id}`}
-                  className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-moss text-cream text-[0.875rem] font-medium hover:bg-moss-dark transition-colors"
+                  href={`/ops/matches/${match.id}/end`}
+                  className="inline-flex items-center justify-center px-4 py-2 rounded-md border border-terracotta/40 text-terracotta text-[0.8125rem] font-medium hover:bg-terracotta hover:text-cream transition-colors"
                 >
-                  Create subscription
+                  End this match
                 </Link>
               </section>
-            )
+            </>
           ) : null}
 
           <TransitionPanel matchId={match.id} currentStatus={match.status} />
@@ -259,6 +303,18 @@ function summarise(
       const a = after as Record<string, unknown>;
       const note = typeof m.note === 'string' ? `. Note: ${m.note}` : '';
       return `Status: ${b.status} → ${a.status}${note}`;
+    }
+    if (m.event === 'match_ended') {
+      const reason = typeof m.endReason === 'string' ? m.endReason : 'unknown';
+      const cascade = m.cascadedSubscriptionId ? ' (subscription cancelled)' : '';
+      const note = typeof m.note === 'string' ? `. Note: ${m.note}` : '';
+      return `Ended - ${reason}${cascade}${note}`;
+    }
+    if (m.event === 'match_confirmation_email_sent') {
+      return `Confirmation email sent to ${m.audience} (${m.to})`;
+    }
+    if (m.event === 'match_ended_email_sent') {
+      return `Ended-email sent to ${m.audience} (${m.to})`;
     }
     if (typeof m.event === 'string') return String(m.event);
   }
