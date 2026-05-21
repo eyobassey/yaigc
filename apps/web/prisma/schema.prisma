@@ -43,6 +43,7 @@ model User {
   accounts        Account[]
   sessions        Session[]
   familyMembers   FamilyMember[]
+  companion       Companion?
 
   @@index([email])
   @@index([role])
@@ -222,6 +223,130 @@ enum FamilyMemberRelationship {
   sibling
   grandchild
   other
+}
+
+// ----------------------------------------------------------------------------
+// Companion context (SDD §12.3) — the supply side of the marketplace.
+//
+// CompanionApplication holds an inbound application from /companions/join
+// and the operator pipeline (received -> in_triage -> phone_screen ->
+// interview -> vetting -> complete | declined | withdrawn).
+//
+// Approval at status=complete creates the Companion row and links the
+// application to it. Companion is the active record that the operator
+// console, the booking engine, and (later) the companion portal consume.
+//
+// Deferred to later stages:
+//   - CompanionReference (Stage O.6.1) — two referees per application
+//   - TrainingModule + TrainingCompletion (Stage O.6.2)
+//   - DBS encryption at rest (Stage O.6.2) — currently TEXT, app layer
+//     gates access by operator role
+//   - Stripe Connect onboarding (Stage O.7+)
+//   - Availability calendar (Phase 2)
+// ----------------------------------------------------------------------------
+
+model CompanionApplication {
+  id     String                     @id @default(cuid())
+  status CompanionApplicationStatus @default(received)
+
+  firstName String
+  lastName  String
+  email     String
+  phone     String
+  postcode  String
+
+  availabilitySummary String @db.Text
+  whyJoinReason       String @db.Text
+  aboutYou            String @db.Text
+
+  rightToWork            Boolean
+  backgroundCheckConsent Boolean
+
+  // Operator pipeline metadata
+  triageNotes          String? @db.Text
+  declineReason        String? @db.Text
+  assignedToOperatorId String?
+
+  companion Companion?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([email])
+}
+
+model Companion {
+  id            String              @id @default(cuid())
+  userId        String              @unique
+  applicationId String              @unique
+  status        CompanionStatus     @default(onboarding)
+
+  firstName String  // public-facing
+  lastName  String  // operator-only
+  photoUrl  String?
+  bio       String? @db.Text
+  borough   CompanionBorough
+  interests String? @db.Text
+
+  availability         Json?
+  maxConcurrentMatches Int  @default(4)
+
+  // Compliance documents. dbsCertificateNumber stored as TEXT for now;
+  // app-layer access gating only. DB-layer encryption is Stage O.6.2.
+  dbsCertificateNumber String?
+  dbsIssuedAt          DateTime? @db.Date
+  dbsRenewalDueAt      DateTime? @db.Date
+  insuranceProvider    String?
+  insuranceExpiresAt   DateTime? @db.Date
+
+  // Payments. Stripe Connect onboarding is deferred to Stage O.7+.
+  stripeConnectedAccountId String?
+  engagementType           CompanionEngagementType @default(worker)
+  hourlyRate               Decimal                 @default(12.00) @db.Decimal(10, 2)
+
+  user        User                 @relation(fields: [userId], references: [id])
+  application CompanionApplication @relation(fields: [applicationId], references: [id])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([status])
+  @@index([borough, status])
+  @@index([dbsRenewalDueAt])
+}
+
+enum CompanionApplicationStatus {
+  received
+  in_triage
+  phone_screen
+  interview
+  vetting
+  complete
+  declined
+  withdrawn
+}
+
+enum CompanionStatus {
+  onboarding
+  active
+  suspended
+  archived
+}
+
+enum CompanionBorough {
+  south_manchester
+  trafford
+  stockport
+  salford
+}
+
+enum CompanionEngagementType {
+  self_employed
+  worker
+  employed
 }
 
 // ----------------------------------------------------------------------------

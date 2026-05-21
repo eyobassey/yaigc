@@ -32,6 +32,13 @@ const TILES = [
     placeholder: 'live',
   },
   {
+    label: 'New companion applications',
+    href: '/ops/companions',
+    icon: Heart,
+    accent: 'text-terracotta',
+    placeholder: 'live',
+  },
+  {
     label: 'Visits today',
     href: '/ops/visits',
     icon: Calendar,
@@ -67,9 +74,14 @@ export default async function OpsTodayPage() {
   // Counts that already have backing data go straight to the DB. Tiles
   // whose models do not exist yet keep the em-dash placeholder until
   // their stage lands.
-  const [newEnquiriesCount, prospectFamiliesCount] = await Promise.all([
+  const [
+    newEnquiriesCount,
+    prospectFamiliesCount,
+    newApplicationsCount,
+  ] = await Promise.all([
     prisma.enquiry.count({ where: { status: 'new' } }),
     prisma.family.count({ where: { status: 'prospect' } }),
+    prisma.companionApplication.count({ where: { status: 'received' } }),
   ]);
 
   return (
@@ -107,6 +119,8 @@ export default async function OpsTodayPage() {
             ? newEnquiriesCount
             : tile.label === 'Prospect families'
             ? prospectFamiliesCount
+            : tile.label === 'New companion applications'
+            ? newApplicationsCount
             : null;
           return (
             <Link

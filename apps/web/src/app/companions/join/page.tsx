@@ -38,7 +38,7 @@ function JoinHero() {
           </p>
           <div className="flex flex-wrap gap-4 mt-10">
             <a
-              href={`mailto:${brand.supportEmail}?subject=Companion application`}
+              href="/companions/join/apply"
               className="inline-flex items-center justify-center px-9 py-[1.125rem] rounded-full bg-moss text-cream text-base font-medium hover:bg-moss-dark transition-all duration-200 hover:shadow-lg hover:-translate-y-px"
             >
               {joinCompanionClub.hero.primaryCta}
