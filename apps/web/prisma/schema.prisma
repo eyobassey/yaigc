@@ -256,6 +256,7 @@ model CompanionApplication {
   postcode  String
 
   availabilitySummary String @db.Text
+  availabilitySlots   Json?
   whyJoinReason       String @db.Text
   aboutYou            String @db.Text
 

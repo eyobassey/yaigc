@@ -748,7 +748,7 @@ export const joinCompanionClub = {
   process: {
     title: 'How the process works',
     steps: [
-      'Apply online (eight minutes).',
+      'Apply online (three minutes).',
       'Phone screen with our team (thirty minutes).',
       'In-person interview in a café in your area (forty-five minutes).',
       'Enhanced DBS, two references, three training modules (two to three weeks).',

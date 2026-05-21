@@ -29,7 +29,7 @@ export default function CompanionApplyPage() {
             Tell us about you.
           </h1>
           <p className="font-head italic text-terracotta text-[clamp(1.25rem,2vw,1.5rem)] leading-[1.4] mt-4">
-            About eight minutes.
+            About three minutes.
           </p>
           <p className="text-charcoal text-lg leading-[1.65] mt-6 max-w-[44ch]">
             We read every application. We respond to every one. Yes, no, or

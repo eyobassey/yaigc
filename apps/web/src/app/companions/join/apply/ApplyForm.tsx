@@ -5,6 +5,7 @@ import {
   submitCompanionApplication,
   type ApplicationState,
 } from '@/lib/companion';
+import { DAYS, PERIODS } from '@/lib/availability';
 
 const initial: ApplicationState = { ok: false };
 
@@ -68,14 +69,25 @@ export function ApplyForm() {
       </Section>
 
       <Section title="When you are free">
+        <p className="text-stone text-[0.875rem] leading-[1.55] -mt-1">
+          Pick every slot that usually works for you. Most companions tick
+          two or three. You can change this any time.
+        </p>
+
+        {state.errors?.availability ? (
+          <p className="text-terracotta text-[0.8125rem]">
+            {state.errors.availability}
+          </p>
+        ) : null}
+
+        <AvailabilityGrid />
+
         <TextArea
-          name="availabilitySummary"
-          label="Availability"
-          required
-          rows={3}
-          defaultValue={state.values?.availabilitySummary}
-          error={state.errors?.availabilitySummary}
-          hint='A short summary. "Tuesday and Thursday mornings, Saturdays" is plenty.'
+          name="availabilityCaveats"
+          label="Anything else (optional)"
+          rows={2}
+          defaultValue={state.values?.availabilityCaveats}
+          hint='Caveats, exceptions, school holidays. "Not bank holidays" or "Wednesday evenings only every other week" is fine.'
         />
       </Section>
 
@@ -144,6 +156,62 @@ function Section({
       </legend>
       {children}
     </fieldset>
+  );
+}
+
+function AvailabilityGrid() {
+  return (
+    <div className="bg-cream rounded-lg border border-moss/15 overflow-hidden">
+      {/* Desktop: column header row. Hidden below sm because mobile uses
+          per-day stacks where the period label sits next to each box. */}
+      <div className="hidden sm:grid grid-cols-[max-content_repeat(3,1fr)] gap-x-3 px-4 py-3 border-b border-moss/10 bg-cream-deep">
+        <span aria-hidden="true" />
+        {PERIODS.map((p) => (
+          <div key={p.key} className="text-charcoal">
+            <div className="font-body text-[0.7rem] font-medium uppercase tracking-[0.08em] text-stone">
+              {p.label}
+            </div>
+            <div className="text-stone text-[0.75rem]">{p.range}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* One row per day. On sm+ this is a 4-column grid; below sm it
+          stacks the day name above the three checkboxes. */}
+      <ul className="divide-y divide-moss/10">
+        {DAYS.map((d) => (
+          <li
+            key={d.key}
+            className="grid grid-cols-3 sm:grid-cols-[max-content_repeat(3,1fr)] gap-x-3 gap-y-2 px-4 py-3"
+          >
+            <div className="col-span-3 sm:col-span-1 font-head text-moss text-[0.9375rem] font-medium">
+              {d.label}
+            </div>
+            {PERIODS.map((p) => {
+              const id = `slot-${d.key}-${p.key}`;
+              return (
+                <label
+                  key={p.key}
+                  htmlFor={id}
+                  className="flex items-center gap-2 cursor-pointer text-charcoal text-[0.875rem]"
+                >
+                  <input
+                    id={id}
+                    type="checkbox"
+                    name={`slot_${d.key}_${p.key}`}
+                    className="w-4 h-4 rounded border-moss/30 text-moss focus:ring-moss/30 flex-shrink-0"
+                  />
+                  <span className="sm:hidden">{p.label}</span>
+                  <span className="hidden sm:inline sr-only">
+                    {d.label} {p.label}
+                  </span>
+                </label>
+              );
+            })}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

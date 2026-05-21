@@ -18,6 +18,11 @@ import {
   companionApplicationReceivedText,
   companionApplicationReceivedSubject,
 } from '@/lib/email/companion-application-received';
+import {
+  parseAvailabilityFormData,
+  summariseAvailability,
+  hasAnyAvailability,
+} from '@/lib/availability';
 
 // -------------------------------------------------------------------------
 // PUBLIC: submit a companion application
@@ -29,7 +34,6 @@ const ApplicationSchema = z.object({
   email: z.string().email('Enter a valid email address.').max(160),
   phone: z.string().min(7, 'Enter a phone number.').max(40),
   postcode: z.string().min(2, 'Enter a postcode.').max(20),
-  availabilitySummary: z.string().min(5, 'Tell us roughly when you are free.').max(2000),
   whyJoinReason: z.string().min(20, 'A few sentences please.').max(4000),
   aboutYou: z.string().min(20, 'A few sentences please.').max(4000),
   rightToWork: z
@@ -62,7 +66,6 @@ export async function submitCompanionApplication(
     email: get('email').toLowerCase(),
     phone: get('phone'),
     postcode: get('postcode').toUpperCase(),
-    availabilitySummary: get('availabilitySummary'),
     whyJoinReason: get('whyJoinReason'),
     aboutYou: get('aboutYou'),
     rightToWork: (formData.get('rightToWork') as string) || 'off',
@@ -70,20 +73,35 @@ export async function submitCompanionApplication(
       (formData.get('backgroundCheckConsent') as string) || 'off',
   };
 
+  // Parse the picker checkboxes into structured slots, then derive an
+  // operator-readable summary.
+  const slots = parseAvailabilityFormData(formData);
   const parsed = ApplicationSchema.safeParse(raw);
-  if (!parsed.success) {
+  const availabilityOk = hasAnyAvailability(slots);
+
+  if (!parsed.success || !availabilityOk) {
+    const errors: Record<string, string> = {};
+    if (!parsed.success) {
+      for (const i of parsed.error.issues) {
+        const k = i.path[0];
+        if (typeof k === 'string' && !(k in errors)) errors[k] = i.message;
+      }
+    }
+    if (!availabilityOk) {
+      errors.availability = 'Pick at least one time slot.';
+    }
     return {
       ok: false,
-      errors: Object.fromEntries(
-        parsed.error.issues.flatMap((i) => {
-          const k = i.path[0];
-          return typeof k === 'string' ? [[k, i.message]] : [];
-        }),
-      ),
-      values: raw as unknown as Record<string, string>,
+      errors,
+      values: { ...raw, availabilityCaveats: slots.caveats ?? '' } as Record<
+        string,
+        string
+      >,
     };
   }
   const d = parsed.data;
+
+  const availabilitySummary = summariseAvailability(slots);
 
   const application = await prisma.companionApplication.create({
     data: {
@@ -92,7 +110,8 @@ export async function submitCompanionApplication(
       email: d.email,
       phone: d.phone,
       postcode: d.postcode,
-      availabilitySummary: d.availabilitySummary,
+      availabilitySummary,
+      availabilitySlots: slots,
       whyJoinReason: d.whyJoinReason,
       aboutYou: d.aboutYou,
       rightToWork: true,

@@ -2,6 +2,13 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ChevronLeft, ChevronRight, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
+import {
+  DAYS,
+  PERIODS,
+  type AvailabilitySlots,
+  type PeriodKey,
+  type DayKey,
+} from '@/lib/availability';
 import { ApplicationStatusPill } from '../page';
 import { TransitionPanel } from './TransitionPanel';
 import { TriageNotesForm } from './TriageNotesForm';
@@ -151,9 +158,10 @@ export default async function CompanionApplicationDetailPage({
             <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-3">
               When they are free
             </h2>
-            <p className="text-charcoal leading-[1.65] whitespace-pre-wrap break-words">
+            <p className="text-charcoal leading-[1.65] whitespace-pre-wrap break-words mb-4">
               {application.availabilitySummary}
             </p>
+            <AvailabilityGrid slots={application.availabilitySlots} />
           </section>
 
           <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
@@ -227,6 +235,66 @@ export default async function CompanionApplicationDetailPage({
           </section>
         </aside>
       </div>
+    </div>
+  );
+}
+
+function AvailabilityGrid({ slots }: { slots: unknown }) {
+  if (!slots || typeof slots !== 'object') return null;
+  const s = slots as AvailabilitySlots;
+
+  return (
+    <div className="border border-moss/10 rounded-md overflow-hidden text-[0.8125rem]">
+      <div className="grid grid-cols-[max-content_repeat(3,1fr)] items-center bg-cream-deep px-3 py-1.5 gap-x-3">
+        <span aria-hidden="true" />
+        {PERIODS.map((p) => (
+          <div
+            key={p.key}
+            className="font-body text-[0.65rem] uppercase tracking-[0.06em] text-stone text-center"
+          >
+            {p.label.slice(0, 3)}
+          </div>
+        ))}
+      </div>
+      <ul className="divide-y divide-moss/[0.06] bg-cream">
+        {DAYS.map((d) => {
+          const picks = (s[d.key as DayKey] ?? []) as PeriodKey[];
+          return (
+            <li
+              key={d.key}
+              className="grid grid-cols-[max-content_repeat(3,1fr)] items-center px-3 py-1.5 gap-x-3"
+            >
+              <span className="font-body text-[0.75rem] text-stone uppercase tracking-[0.06em] w-8">
+                {d.short}
+              </span>
+              {PERIODS.map((p) => {
+                const on = picks.includes(p.key);
+                return (
+                  <span
+                    key={p.key}
+                    className="flex justify-center"
+                    aria-label={`${d.label} ${p.label}: ${on ? 'yes' : 'no'}`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`inline-block w-4 h-4 rounded-sm border ${
+                        on
+                          ? 'bg-moss border-moss'
+                          : 'bg-cream border-moss/15'
+                      }`}
+                    />
+                  </span>
+                );
+              })}
+            </li>
+          );
+        })}
+      </ul>
+      {typeof s.caveats === 'string' && s.caveats ? (
+        <div className="px-3 py-2 bg-cream-deep border-t border-moss/10 text-stone text-[0.8125rem]">
+          Note: {s.caveats}
+        </div>
+      ) : null}
     </div>
   );
 }
