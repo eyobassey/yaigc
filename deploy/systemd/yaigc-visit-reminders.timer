@@ -1,6 +1,6 @@
 [Unit]
 Description=YAIGC visit reminders (hourly)
-Documentation=Stage O.4.2
+# See deploy/systemd/ in the YAIGC repo for context (Stage O.4.2).
 
 [Timer]
 # Fire at the top of every hour. The route window is now+23h..now+25h

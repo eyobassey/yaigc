@@ -1,6 +1,6 @@
 [Unit]
 Description=YAIGC: send 24h reminders for upcoming visits
-Documentation=Stage O.4.2 (see git history)
+# See deploy/systemd/ in the YAIGC repo for context (Stage O.4.2).
 Wants=network-online.target
 After=network-online.target
 
