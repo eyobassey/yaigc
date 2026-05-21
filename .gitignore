@@ -38,3 +38,7 @@ coverage/
 # Misc
 .cache/
 .turbo/
+
+# User-uploaded files (post-visit report photos). Auth-gated via
+# /api/visit-photos/[id]; never tracked in git.
+/uploads/
