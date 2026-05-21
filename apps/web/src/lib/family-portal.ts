@@ -216,6 +216,101 @@ export async function editFamilyRecipient(
 }
 
 // -------------------------------------------------------------------------
+// EDIT OWN ACCOUNT (FamilyMember + User name fields)
+// -------------------------------------------------------------------------
+
+const RELATIONSHIPS = [
+  'daughter',
+  'son',
+  'partner',
+  'spouse',
+  'sibling',
+  'grandchild',
+  'other',
+] as const;
+
+const EditAccountSchema = z.object({
+  firstName: z.string().trim().min(1).max(80),
+  lastName: z.string().trim().min(1).max(80),
+  relationshipToRecipient: z.enum(RELATIONSHIPS).optional().or(z.literal('').transform(() => undefined)),
+});
+
+export type EditAccountState = {
+  ok: boolean;
+  errors?: Record<string, string>;
+  values?: Record<string, string | undefined>;
+};
+
+export async function editFamilyAccount(
+  _prev: EditAccountState,
+  formData: FormData,
+): Promise<EditAccountState> {
+  const { user, member, family } = await requireFamilyPayer('/family/account');
+
+  const raw = {
+    firstName: String(formData.get('firstName') ?? '').trim(),
+    lastName: String(formData.get('lastName') ?? '').trim(),
+    relationshipToRecipient:
+      String(formData.get('relationshipToRecipient') ?? '').trim() || undefined,
+  };
+
+  const parsed = EditAccountSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      errors: Object.fromEntries(
+        parsed.error.issues.flatMap((i) => {
+          const k = i.path[0];
+          return typeof k === 'string' ? [[k, i.message]] : [];
+        }),
+      ),
+      values: raw,
+    };
+  }
+  const d = parsed.data;
+
+  const changed: string[] = [];
+  if (d.firstName !== (user.firstName ?? '')) changed.push('firstName');
+  if (d.lastName !== (user.lastName ?? '')) changed.push('lastName');
+  if ((d.relationshipToRecipient ?? null) !== (member.relationshipToRecipient ?? null)) {
+    changed.push('relationshipToRecipient');
+  }
+  if (changed.length === 0) {
+    redirect('/family/account');
+  }
+
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: user.id },
+      data: { firstName: d.firstName, lastName: d.lastName },
+    }),
+    prisma.familyMember.update({
+      where: { id: member.id },
+      data: { relationshipToRecipient: d.relationshipToRecipient ?? null },
+    }),
+  ]);
+
+  await audit({
+    actorType: 'user',
+    actorId: user.id,
+    actorRole: user.role,
+    actionType: 'update',
+    targetType: 'FamilyMember',
+    targetId: member.id,
+    metadata: {
+      event: 'family_member_updated',
+      changedFields: changed,
+      via: 'family_portal',
+    },
+  });
+
+  revalidatePath('/family');
+  revalidatePath('/family/account');
+  revalidatePath(`/ops/families/${family.id}`);
+  redirect('/family/account');
+}
+
+// -------------------------------------------------------------------------
 // REQUEST PAUSE / CANCEL
 // -------------------------------------------------------------------------
 

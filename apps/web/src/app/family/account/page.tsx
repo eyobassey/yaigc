@@ -1,10 +1,15 @@
 import { User } from 'lucide-react';
 import { requireFamilyMember } from '@/lib/auth-helpers';
+import { AccountForm } from './AccountForm';
 
 export const metadata = { title: 'Account' };
 
-export default async function FamilyAccountPlaceholder() {
-  const { user, family } = await requireFamilyMember('/family/account');
+export default async function FamilyAccountPage() {
+  const { user, member, family } = await requireFamilyMember('/family/account');
+
+  // Payer can edit; viewers (Phase 2) get a read-only view.
+  const isPayer = member.role === 'payer';
+
   return (
     <div className="max-w-[640px]">
       <header className="mb-6 flex items-center gap-3">
@@ -13,22 +18,29 @@ export default async function FamilyAccountPlaceholder() {
           Account
         </h1>
       </header>
-      <p className="text-charcoal text-[0.9375rem] leading-[1.55] mb-6">
-        Full account editing comes in a follow-up update. For now, here is
-        what we have on file.
-      </p>
-      <dl className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-[0.9375rem]">
-        <dt className="text-stone">Account</dt>
+
+      <dl className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-3 text-[0.9375rem] mb-6">
+        <dt className="text-stone">Household</dt>
         <dd className="text-charcoal break-words">{family.billingName}</dd>
         <dt className="text-stone">Email</dt>
         <dd className="text-charcoal break-all">{user.email}</dd>
-        {user.firstName || user.lastName ? (
-          <>
-            <dt className="text-stone">Name</dt>
-            <dd className="text-charcoal">{`${user.firstName ?? ''} ${user.lastName ?? ''}`.trim()}</dd>
-          </>
-        ) : null}
+        <dt className="text-stone">Role</dt>
+        <dd className="text-charcoal capitalize">{member.role}</dd>
       </dl>
+
+      {isPayer ? (
+        <AccountForm
+          firstName={user.firstName ?? ''}
+          lastName={user.lastName ?? ''}
+          relationshipToRecipient={member.relationshipToRecipient ?? ''}
+        />
+      ) : (
+        <p className="text-stone text-[0.9375rem] leading-[1.55]">
+          Editing on the household account is reserved for the payer. If
+          you need to change your details, ask them to do it or reach us
+          directly.
+        </p>
+      )}
     </div>
   );
 }
