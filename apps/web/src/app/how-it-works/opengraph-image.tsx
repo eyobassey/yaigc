@@ -1,13 +1,13 @@
-import { brand } from '@igc/content';
 import { renderOgImage, OG_SIZE, OG_CONTENT_TYPE } from '@/lib/og';
 
-export const alt = `${brand.fullName} — ${brand.tagline}`;
+export const alt = 'How it works — four steps to start.';
 export const size = OG_SIZE;
 export const contentType = OG_CONTENT_TYPE;
 
 export default async function Image() {
   return renderOgImage({
-    headline: "You can't always be there.",
-    accent: "You can be sure they're in good company.",
+    eyebrow: 'How it works',
+    headline: 'Companionship, organised the way it should be.',
+    accent: 'Four steps. Twenty minutes to start.',
   });
 }

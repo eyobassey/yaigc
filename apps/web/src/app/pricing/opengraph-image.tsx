@@ -1,13 +1,14 @@
-import { brand } from '@igc/content';
 import { renderOgImage, OG_SIZE, OG_CONTENT_TYPE } from '@/lib/og';
 
-export const alt = `${brand.fullName} — ${brand.tagline}`;
+export const alt = 'Pricing — one hourly rate, no hidden fees.';
 export const size = OG_SIZE;
 export const contentType = OG_CONTENT_TYPE;
 
 export default async function Image() {
   return renderOgImage({
-    headline: "You can't always be there.",
-    accent: "You can be sure they're in good company.",
+    eyebrow: 'Pricing',
+    headline: 'Honest pricing.',
+    accent: 'One hourly rate. £32 per hour.',
+    footnote: 'Pause or cancel any time.',
   });
 }
