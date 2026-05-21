@@ -2,11 +2,18 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
+import { createTransport } from 'nodemailer';
 import { z } from 'zod';
 import type { FamilyMemberRelationship } from '@prisma/client';
+import { brand } from '@igc/content';
 import { prisma } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
 import { getSessionUser } from '@/lib/auth-helpers';
+import {
+  familyWelcomeHtml,
+  familyWelcomeText,
+  familyWelcomeSubject,
+} from '@/lib/email/family-welcome';
 
 const ConvertEnquirySchema = z.object({
   enquiryId: z.string().min(1),
@@ -220,10 +227,96 @@ export async function convertEnquiryToFamily(
     metadata: { event: 'enquiry_converted', familyId: result.family.id },
   });
 
+  // Welcome email to the payer. Best-effort: if Brevo is down we still
+  // succeed (the Family exists in the DB; the operator can resend
+  // manually or call). Audit-logged whether it sent or not.
+  await sendFamilyWelcomeEmail({
+    payerEmail: enquiry.email,
+    payerFirstName: d.payerFirstName,
+    billingName: d.billingName,
+    recipientFirstName: d.recipientFirstName,
+    recipientLastName: d.recipientLastName,
+    recipientPreferredName: d.recipientPreferredName ?? null,
+    relationshipToRecipient: d.relationshipToRecipient,
+    familyId: result.family.id,
+  });
+
   revalidatePath('/ops');
   revalidatePath('/ops/enquiries');
   revalidatePath(`/ops/enquiries/${enquiry.id}`);
   revalidatePath('/ops/families');
+  revalidatePath(`/ops/families/${result.family.id}`);
 
   redirect(`/ops/families/${result.family.id}`);
+}
+
+async function sendFamilyWelcomeEmail(params: {
+  payerEmail: string;
+  payerFirstName: string;
+  billingName: string;
+  recipientFirstName: string;
+  recipientLastName: string;
+  recipientPreferredName: string | null;
+  relationshipToRecipient: string;
+  familyId: string;
+}): Promise<void> {
+  try {
+    const transport = createTransport({
+      host: process.env.SMTP_HOST!,
+      port: Number(process.env.SMTP_PORT ?? 587),
+      auth: {
+        user: process.env.SMTP_USER!,
+        pass: process.env.SMTP_PASSWORD!,
+      },
+    });
+
+    const payload = {
+      payerFirstName: params.payerFirstName,
+      payerEmail: params.payerEmail,
+      billingName: params.billingName,
+      recipientFirstName: params.recipientFirstName,
+      recipientLastName: params.recipientLastName,
+      recipientPreferredName: params.recipientPreferredName,
+      relationshipToRecipient: params.relationshipToRecipient,
+    };
+
+    const result = await transport.sendMail({
+      to: params.payerEmail,
+      from: `${brand.fullName} <${process.env.EMAIL_SENDER}>`,
+      subject: familyWelcomeSubject(),
+      text: familyWelcomeText(payload),
+      html: familyWelcomeHtml(payload),
+    });
+
+    const failed = result.rejected.concat(result.pending).filter(Boolean);
+    if (failed.length) {
+      console.error(
+        '[family] welcome email rejected for',
+        failed.join(', '),
+        'family',
+        params.familyId,
+      );
+      return;
+    }
+
+    await audit({
+      actorType: 'system',
+      actorId: null,
+      actionType: 'state_change',
+      targetType: 'Family',
+      targetId: params.familyId,
+      metadata: {
+        event: 'welcome_email_sent',
+        to: params.payerEmail,
+      },
+    });
+  } catch (err) {
+    console.error(
+      '[family] welcome email failed for',
+      params.payerEmail,
+      'family',
+      params.familyId,
+      err instanceof Error ? err.message : String(err),
+    );
+  }
 }

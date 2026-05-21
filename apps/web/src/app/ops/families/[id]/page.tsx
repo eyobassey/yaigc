@@ -253,6 +253,9 @@ function summarise(targetType: string, metadata: unknown): string {
     if (m.event === 'recipient_created') return 'Recipient added';
     if (m.event === 'family_member_created') return 'Family member added';
     if (m.event === 'enquiry_converted') return `Converted from enquiry`;
+    if (m.event === 'welcome_email_sent') {
+      return `Welcome email sent to ${m.to ?? 'payer'}`;
+    }
     if (typeof m.event === 'string') return String(m.event);
   }
   return `${targetType} updated`;
