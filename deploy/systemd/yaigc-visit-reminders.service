@@ -1,0 +1,16 @@
+[Unit]
+Description=YAIGC: send 24h reminders for upcoming visits
+Documentation=Stage O.4.2 (see git history)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=username
+EnvironmentFile=/home/username/secrets/yaigc-production.env
+ExecStart=/usr/bin/curl --fail --silent --show-error --max-time 60 -X POST \
+  -H "Authorization: Bearer ${CRON_TOKEN}" \
+  "https://youareingoodcompany.co.uk/api/cron/visit-reminders"
+# Idempotent — safe to retry if it failed
+Restart=on-failure
+RestartSec=30

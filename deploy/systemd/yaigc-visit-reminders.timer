@@ -1,0 +1,15 @@
+[Unit]
+Description=YAIGC visit reminders (hourly)
+Documentation=Stage O.4.2
+
+[Timer]
+# Fire at the top of every hour. The route window is now+23h..now+25h
+# so an hourly cadence with idempotency via Visit.reminderSentAt covers
+# every visit exactly once even if a run is missed.
+OnCalendar=hourly
+# If the system was down at fire time, run on next boot.
+Persistent=true
+Unit=yaigc-visit-reminders.service
+
+[Install]
+WantedBy=timers.target

@@ -393,6 +393,7 @@ model Visit {
   cancellationActor        CancellationActor?
 
   stateChangedAt           DateTime   @default(now())
+  reminderSentAt           DateTime?  // 24h-before reminder; null until the cron fires
 
   subscription      Subscription       @relation(fields: [subscriptionId], references: [id])
   family            Family             @relation(fields: [familyId], references: [id])
