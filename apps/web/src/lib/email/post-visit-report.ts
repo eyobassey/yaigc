@@ -35,10 +35,23 @@ export interface PostVisitReportToFamilyInput {
   whatHappened: string;
   howWereThey: string;
   howWereTheyNote: string | null;
+  /** CIDs of photo attachments to embed inline. Empty array = no photos. */
+  photoCids: string[];
 }
 
 function blocks(input: PostVisitReportToFamilyInput): EmailBlocks {
   const name = input.recipientPreferredName || input.recipientFirstName;
+  // Inline photo gallery added directly into a data row so we keep one
+  // template + one render path. Each cid:photo-N is wired by nodemailer
+  // when it builds the multipart message.
+  const photoHtml = input.photoCids.length
+    ? input.photoCids
+        .map(
+          (cid) =>
+            `<img src="cid:${cid}" alt="Photo from the visit" style="display:inline-block; max-width:240px; width:48%; height:auto; margin:4px 2px; border-radius:6px; border:1px solid rgba(60,90,58,0.15);" />`,
+        )
+        .join('')
+    : null;
   return {
     preheader: `How ${name} got on with ${input.companionFirstName} today.`,
     titleTag: `How ${name} got on  ·  ${brand.fullName}`,
@@ -58,6 +71,7 @@ function blocks(input: PostVisitReportToFamilyInput): EmailBlocks {
         ? [{ label: 'A little more', value: input.howWereTheyNote }]
         : []),
       { label: 'What happened', value: input.whatHappened },
+      ...(photoHtml ? [{ label: 'Photos', value: photoHtml }] : []),
     ],
     nextSteps: [
       'The next visit in your recurring rhythm is unchanged.',

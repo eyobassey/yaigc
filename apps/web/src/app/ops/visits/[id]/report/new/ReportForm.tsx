@@ -106,6 +106,55 @@ export function ReportForm({
       </Section>
 
       <Section
+        title="Photos (optional)"
+        description="Up to 4 JPEG or PNG photos, max 5MB each. Goes in the family email inline."
+      >
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor="photos"
+            className="font-body text-[0.75rem] font-medium uppercase tracking-[0.08em] text-stone"
+          >
+            Photos
+          </label>
+          <input
+            id="photos"
+            type="file"
+            name="photos"
+            accept="image/jpeg,image/png"
+            multiple
+            className="text-charcoal text-[0.875rem] file:mr-3 file:rounded-md file:border file:border-moss/20 file:bg-cream file:px-3 file:py-1.5 file:text-[0.8125rem] file:text-moss hover:file:bg-moss hover:file:text-cream file:transition-colors file:cursor-pointer"
+          />
+          {state.errors?.photos ? (
+            <p className="text-terracotta text-[0.8125rem]">{state.errors.photos}</p>
+          ) : null}
+        </div>
+        <label
+          htmlFor="recipientConsentForPhotos"
+          className="flex items-start gap-3 cursor-pointer text-charcoal text-[0.9375rem] leading-[1.5]"
+        >
+          <input
+            id="recipientConsentForPhotos"
+            type="checkbox"
+            name="recipientConsentForPhotos"
+            className="mt-0.5 w-4 h-4 rounded border-moss/30 text-moss focus:ring-moss/30 flex-shrink-0"
+          />
+          <span className="flex flex-col gap-0.5">
+            <span>
+              I confirm the recipient consented to these photos being shared with the family.
+            </span>
+            <span className="text-stone text-[0.8125rem]">
+              Required when at least one photo is attached. Distinct from the recipient's general report-sharing consent.
+            </span>
+          </span>
+        </label>
+        {state.errors?.recipientConsentForPhotos ? (
+          <p className="text-terracotta text-[0.8125rem]">
+            {state.errors.recipientConsentForPhotos}
+          </p>
+        ) : null}
+      </Section>
+
+      <Section
         title="Things to flag (internal only)"
         description="Anything we should follow up on. Does NOT go to the family. If you write here, the safeguarding team picks it up."
       >

@@ -54,6 +54,7 @@ export default async function OpsVisitDetailPage({
       report: {
         include: {
           submittedBy: { select: { firstName: true, lastName: true, email: true } },
+          photos: { orderBy: { uploadedAt: 'asc' } },
         },
       },
     },
@@ -275,6 +276,33 @@ export default async function OpsVisitDetailPage({
                   {visit.report.whatHappened}
                 </p>
               </div>
+              {visit.report.photos.length > 0 ? (
+                <div className="mt-4 pt-4 border-t border-moss/10">
+                  <div className="font-body text-[0.7rem] font-medium uppercase tracking-[0.08em] text-stone mb-2">
+                    Photos ({visit.report.photos.length})
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {visit.report.photos.map((photo) => (
+                      <a
+                        key={photo.id}
+                        href={`/api/visit-photos/${photo.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block w-[120px] h-[120px] rounded-md overflow-hidden border border-moss/15 hover:border-moss/30 transition-colors"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={`/api/visit-photos/${photo.id}`}
+                          alt="Photo from the visit"
+                          width="120"
+                          height="120"
+                          className="w-full h-full object-cover"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               {visit.report.thingsToFlag ? (
                 <div className="mt-4 pt-4 border-t border-terracotta/20 bg-terracotta/5 -mx-5 sm:-mx-6 px-5 sm:px-6 -mb-5 sm:-mb-6 pb-5 sm:pb-6 rounded-b-[12px]">
                   <div className="font-body text-[0.7rem] font-medium uppercase tracking-[0.08em] text-terracotta mb-1">
@@ -362,6 +390,9 @@ function summarise(metadata: unknown, before: unknown, after: unknown): string {
       return m.safeguardingHook
         ? 'Report submitted (safeguarding flag)'
         : 'Report submitted';
+    }
+    if (m.event === 'visit_started_email_sent') {
+      return `Started-email sent to family (${m.to})`;
     }
     if (m.event === 'post_visit_report_family_email_sent') {
       return `Report email sent to family (${m.to})`;

@@ -434,15 +434,38 @@ model PostVisitReport {
   submittedByOperatorId String?
   deliveredToFamilyAt   DateTime?
 
-  visit       Visit     @relation(fields: [visitId], references: [id])
-  companion   Companion @relation(fields: [companionId], references: [id])
-  submittedBy User?     @relation("ReportSubmittedBy", fields: [submittedByOperatorId], references: [id])
+  visit       Visit                  @relation(fields: [visitId], references: [id])
+  companion   Companion              @relation(fields: [companionId], references: [id])
+  submittedBy User?                  @relation("ReportSubmittedBy", fields: [submittedByOperatorId], references: [id])
+  photos      PostVisitReportPhoto[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([companionId, submittedAt(sort: Desc)])
   @@index([submittedAt(sort: Desc)])
+}
+
+// PostVisitReportPhoto (SDD §12.4.4) — photos that go alongside a
+// post-visit report. Per-photo recipientConsentConfirmed is required by
+// law (recipient must consent to images of themselves being shared).
+// Files live on disk under /home/username/igc-platform/uploads/post-visit-reports/
+// <reportId>/. The filename is server-generated; the original client
+// filename is discarded.
+model PostVisitReportPhoto {
+  id                        String   @id @default(cuid())
+  postVisitReportId         String
+  filename                  String
+  contentType               String
+  sizeBytes                 Int
+  recipientConsentConfirmed Boolean  @default(false)
+  uploadedAt                DateTime @default(now())
+
+  report PostVisitReport @relation(fields: [postVisitReportId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([postVisitReportId])
 }
 
 enum WellbeingRating {

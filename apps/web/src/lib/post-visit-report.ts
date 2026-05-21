@@ -13,6 +13,14 @@ import {
   postVisitReportToFamilyText,
   postVisitReportToFamilySubject,
 } from '@/lib/email/post-visit-report';
+import {
+  savePhoto,
+  deletePhotoFile,
+  readPhotoBytes,
+  MAX_PHOTOS_PER_REPORT,
+  PhotoValidationError,
+  type SavedPhoto,
+} from '@/lib/visit-photo-storage';
 
 const WELLBEING_VALUES = [
   'cheerful',
@@ -80,6 +88,31 @@ export async function submitPostVisitReport(
   }
   const d = parsed.data;
 
+  // Photos: zero or more. recipientConsentForPhotos is required when at
+  // least one photo is attached - separate from the report-sharing
+  // consent on the recipient (that one is about whether the family sees
+  // anything; this one is about the recipient agreeing to photos of
+  // themselves).
+  const rawPhotos = formData.getAll('photos').filter((p): p is File => p instanceof File && p.size > 0);
+  const photoConsent = formData.get('recipientConsentForPhotos') === 'on';
+  if (rawPhotos.length > MAX_PHOTOS_PER_REPORT) {
+    return {
+      ok: false,
+      errors: { photos: `Max ${MAX_PHOTOS_PER_REPORT} photos per report.` },
+      values: raw,
+    };
+  }
+  if (rawPhotos.length > 0 && !photoConsent) {
+    return {
+      ok: false,
+      errors: {
+        recipientConsentForPhotos:
+          'Confirm the recipient consented to these photos being shared with the family.',
+      },
+      values: raw,
+    };
+  }
+
   const before = await prisma.visit.findUnique({
     where: { id: d.visitId },
     select: {
@@ -127,6 +160,43 @@ export async function submitPostVisitReport(
     return r;
   });
 
+  // Photos: written to disk first, then recorded in DB. If a write
+  // fails we rollback by deleting any files already written. The DB
+  // rows are inserted in a transaction.
+  const savedFiles: SavedPhoto[] = [];
+  try {
+    for (const file of rawPhotos) {
+      const saved = await savePhoto(report.id, file);
+      savedFiles.push(saved);
+    }
+    if (savedFiles.length > 0) {
+      await prisma.$transaction(
+        savedFiles.map((s) =>
+          prisma.postVisitReportPhoto.create({
+            data: {
+              postVisitReportId: report.id,
+              filename: s.filename,
+              contentType: s.contentType,
+              sizeBytes: s.sizeBytes,
+              recipientConsentConfirmed: true,
+            },
+          }),
+        ),
+      );
+    }
+  } catch (err) {
+    // Cleanup on disk - the DB rows for the report itself stay, but
+    // the partially-uploaded photos are removed. Operator can retry
+    // upload via a future edit-report flow.
+    for (const s of savedFiles) {
+      await deletePhotoFile(report.id, s.filename);
+    }
+    if (err instanceof PhotoValidationError) {
+      return { ok: false, errors: { photos: err.message }, values: raw };
+    }
+    console.error('[report] photo persistence failed', { reportId: report.id, err });
+  }
+
   await audit({
     actorType: 'user',
     actorId: operator.id,
@@ -173,6 +243,7 @@ async function sendFamilySummaryEmail(reportId: string): Promise<void> {
   const report = await prisma.postVisitReport.findUnique({
     where: { id: reportId },
     include: {
+      photos: true,
       visit: {
         include: {
           family: {
@@ -220,6 +291,24 @@ async function sendFamilySummaryEmail(reportId: string): Promise<void> {
   });
   const from = `${brand.fullName} <${process.env.EMAIL_SENDER}>`;
 
+  // Read photo bytes once + build the cid list. The HTML will reference
+  // each photo via cid:photo-N which nodemailer wires to the attachment.
+  const photoAttachments: { filename: string; content: Buffer; cid: string; contentType: string }[] = [];
+  for (let i = 0; i < report.photos.length; i++) {
+    const p = report.photos[i]!;
+    try {
+      const content = await readPhotoBytes(report.id, p.filename);
+      photoAttachments.push({
+        filename: p.filename,
+        content,
+        cid: `photo-${i + 1}`,
+        contentType: p.contentType,
+      });
+    } catch (err) {
+      console.error('[report] photo read failed', { reportId, filename: p.filename, err });
+    }
+  }
+
   const input = {
     scheduledStartAt: report.visit.scheduledStartAt,
     actualDurationMinutes: report.actualDurationMinutes,
@@ -229,6 +318,7 @@ async function sendFamilySummaryEmail(reportId: string): Promise<void> {
     whatHappened: report.whatHappened,
     howWereThey: report.howWereThey,
     howWereTheyNote: report.howWereTheyNote,
+    photoCids: photoAttachments.map((a) => a.cid),
   };
 
   const familyEmails = Array.from(
@@ -248,6 +338,12 @@ async function sendFamilySummaryEmail(reportId: string): Promise<void> {
         subject: postVisitReportToFamilySubject(input),
         text: postVisitReportToFamilyText(input),
         html: postVisitReportToFamilyHtml(input),
+        attachments: photoAttachments.map((a) => ({
+          filename: a.filename,
+          content: a.content,
+          cid: a.cid,
+          contentType: a.contentType,
+        })),
       });
       anyDelivered = true;
       await audit({

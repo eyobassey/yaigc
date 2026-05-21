@@ -34,6 +34,11 @@ import {
   visitRescheduledToCompanionText,
   visitRescheduledToCompanionSubject,
 } from '@/lib/email/visit-rescheduled';
+import {
+  visitStartedToFamilyHtml,
+  visitStartedToFamilyText,
+  visitStartedToFamilySubject,
+} from '@/lib/email/visit-started';
 
 // -------------------------------------------------------------------------
 // GENERATE the next Visit for a Subscription.
@@ -488,6 +493,9 @@ export async function transitionVisit(formData: FormData): Promise<void> {
   if (isCancel) {
     await sendVisitCancelledEmails(d.visitId);
   }
+  if (d.to === 'in_progress') {
+    await sendVisitStartedEmail(d.visitId);
+  }
 
   revalidatePath('/ops');
   revalidatePath('/ops/visits');
@@ -612,6 +620,61 @@ async function sendVisitBookedEmails(visitId: string): Promise<void> {
       });
     } catch (err) {
       console.error('[visit] booked email to companion failed', { to: companionEmail, visitId, err });
+    }
+  }
+}
+
+async function sendVisitStartedEmail(visitId: string): Promise<void> {
+  const visit = await prisma.visit.findUnique({
+    where: { id: visitId },
+    include: {
+      family: {
+        select: {
+          members: {
+            where: { deletedAt: null },
+            include: { user: { select: { email: true } } },
+          },
+        },
+      },
+      recipient: { select: { firstName: true, preferredName: true } },
+      companion: { select: { firstName: true } },
+    },
+  });
+  if (!visit) return;
+
+  const transport = buildTransport();
+  const from = `${brand.fullName} <${process.env.EMAIL_SENDER}>`;
+
+  const input = {
+    recipientFirstName: visit.recipient.firstName,
+    recipientPreferredName: visit.recipient.preferredName,
+    companionFirstName: visit.companion.firstName,
+  };
+
+  const familyEmails = Array.from(
+    new Set(
+      visit.family.members.map((m) => m.user.email).filter((e): e is string => Boolean(e)),
+    ),
+  );
+  for (const to of familyEmails) {
+    try {
+      await transport.sendMail({
+        to,
+        from,
+        subject: visitStartedToFamilySubject(input),
+        text: visitStartedToFamilyText(input),
+        html: visitStartedToFamilyHtml(input),
+      });
+      await audit({
+        actorType: 'system',
+        actorId: null,
+        actionType: 'state_change',
+        targetType: 'Visit',
+        targetId: visitId,
+        metadata: { event: 'visit_started_email_sent', audience: 'family', to },
+      });
+    } catch (err) {
+      console.error('[visit] started email to family failed', { to, visitId, err });
     }
   }
 }
