@@ -162,7 +162,7 @@ function ApplyCTA() {
         <h2 className="font-head font-normal text-moss text-[clamp(2rem,5vw,3.5rem)] leading-[1.1] tracking-[-0.02em] mb-6">
           Ready to apply?
           <br />
-          <em className="italic text-terracotta">Eight minutes.</em>
+          <em className="italic text-terracotta">Three minutes.</em>
         </h2>
         <p className="text-charcoal text-lg leading-[1.6] max-w-[44ch] mx-auto mb-10">
           Tell us a little about you and we will pick up the phone within a few days.
