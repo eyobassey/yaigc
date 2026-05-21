@@ -148,10 +148,14 @@ function summariseEntry(
   if (metadata && typeof metadata === 'object') {
     const m = metadata as Record<string, unknown>;
     if (m.event === 'contact_form_submitted') return 'Submitted via /contact';
+    if (m.event === 'confirmation_email_sent') {
+      return `Confirmation email sent to ${m.to ?? 'submitter'}`;
+    }
     if (m.event === 'status_change' && before && after) {
       const b = before as Record<string, unknown>;
       const a = after as Record<string, unknown>;
-      return `Status: ${b.status} → ${a.status}`;
+      const transition = `Status: ${b.status} → ${a.status}`;
+      return m.note ? `${transition}. Note: ${m.note}` : transition;
     }
     if (m.event) return String(m.event);
   }

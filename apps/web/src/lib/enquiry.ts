@@ -1,9 +1,16 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { createTransport } from 'nodemailer';
 import { z } from 'zod';
+import { brand } from '@igc/content';
 import { prisma } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
+import {
+  enquiryReceivedHtml,
+  enquiryReceivedText,
+  enquiryReceivedSubject,
+} from '@/lib/email/enquiry-received';
 
 /**
  * Public contact-form schema. Postcode is loose: we accept anything that
@@ -108,5 +115,74 @@ export async function submitContactForm(
     metadata: { event: 'contact_form_submitted' },
   });
 
+  // Confirmation email to the submitter. Best-effort: if Brevo SMTP is
+  // unreachable we still consider the submission a success because the
+  // Enquiry row + audit entry are already persisted. The operator can
+  // follow up by phone using the captured contact info.
+  await sendEnquiryConfirmation({
+    name: data.name.trim(),
+    email: data.email.trim().toLowerCase(),
+    phone: data.phone?.trim() || null,
+    postcode: data.postcode?.trim().toUpperCase() || null,
+    message: data.message.trim(),
+    enquiryId: enquiry.id,
+  });
+
   redirect(`/contact/thanks?id=${enquiry.id}`);
+}
+
+async function sendEnquiryConfirmation(params: {
+  name: string;
+  email: string;
+  phone: string | null;
+  postcode: string | null;
+  message: string;
+  enquiryId: string;
+}): Promise<void> {
+  try {
+    const transport = createTransport({
+      host: process.env.SMTP_HOST!,
+      port: Number(process.env.SMTP_PORT ?? 587),
+      auth: {
+        user: process.env.SMTP_USER!,
+        pass: process.env.SMTP_PASSWORD!,
+      },
+    });
+
+    const result = await transport.sendMail({
+      to: params.email,
+      from: `${brand.fullName} <${process.env.EMAIL_SENDER}>`,
+      subject: enquiryReceivedSubject(),
+      text: enquiryReceivedText(params),
+      html: enquiryReceivedHtml(params),
+    });
+
+    const failed = result.rejected.concat(result.pending).filter(Boolean);
+    if (failed.length) {
+      console.error(
+        '[enquiry] confirmation email rejected for',
+        failed.join(', '),
+        'enquiry',
+        params.enquiryId,
+      );
+      return;
+    }
+
+    await audit({
+      actorType: 'system',
+      actorId: null,
+      actionType: 'state_change',
+      targetType: 'Enquiry',
+      targetId: params.enquiryId,
+      metadata: { event: 'confirmation_email_sent', to: params.email },
+    });
+  } catch (err) {
+    console.error(
+      '[enquiry] confirmation email failed for',
+      params.email,
+      'enquiry',
+      params.enquiryId,
+      err instanceof Error ? err.message : String(err),
+    );
+  }
 }
