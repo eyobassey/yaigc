@@ -13,7 +13,7 @@ import {
 } from '@/components/marketing/LongForm';
 
 export const metadata: Metadata = {
-  title: `Accessibility  ·  ${brand.fullName}`,
+  title: 'Accessibility',
   description: 'A website that works for everyone.',
   robots: { index: false, follow: true },
 };

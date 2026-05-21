@@ -15,7 +15,7 @@ import {
 } from '@/components/marketing/LongForm';
 
 export const metadata: Metadata = {
-  title: `Privacy  ·  ${brand.fullName}`,
+  title: 'Privacy',
   description: 'How we look after your personal data.',
   robots: { index: false, follow: true },
 };

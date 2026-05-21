@@ -16,7 +16,7 @@ import {
 } from '@/components/marketing/LongForm';
 
 export const metadata: Metadata = {
-  title: `Terms of service  ·  ${brand.fullName}`,
+  title: 'Terms of service',
   description: 'The agreement between us, in plain English.',
   robots: { index: false, follow: true },
 };

@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
-import { brand, safeguarding } from '@igc/content';
+import { safeguarding } from '@igc/content';
 import { PageShell } from '@/components/marketing/PageShell';
 import { FinalCTA } from '@/components/marketing/FinalCTA';
 
 export const metadata: Metadata = {
-  title: `Safeguarding  ·  ${brand.fullName}`,
+  title: 'Safeguarding',
   description: safeguarding.hero.body,
 };
 

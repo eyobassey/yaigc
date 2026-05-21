@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { brand, pricing } from '@igc/content';
+import { pricing } from '@igc/content';
 import { PageShell } from '@/components/marketing/PageShell';
 import { FinalCTA } from '@/components/marketing/FinalCTA';
 
 export const metadata: Metadata = {
-  title: `Pricing  ·  ${brand.fullName}`,
+  title: 'Pricing',
   description: pricing.hero.body,
 };
 

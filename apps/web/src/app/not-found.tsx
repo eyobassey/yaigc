@@ -9,7 +9,7 @@ import { brand } from '@igc/content';
  */
 
 export const metadata = {
-  title: 'Not found  ·  You Are In Good Company',
+  title: 'Not found',
   robots: { index: false, follow: false },
 };
 

@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
-import { brand, howItWorks } from '@igc/content';
+import { howItWorks } from '@igc/content';
 import { PageShell } from '@/components/marketing/PageShell';
 import { FinalCTA } from '@/components/marketing/FinalCTA';
 
 export const metadata: Metadata = {
-  title: `How it works  ·  ${brand.fullName}`,
+  title: 'How it works',
   description: howItWorks.hero.body,
 };
 

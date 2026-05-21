@@ -4,7 +4,7 @@ import { brand } from '@igc/content';
 import { PageShell } from '@/components/marketing/PageShell';
 
 export const metadata: Metadata = {
-  title: `About  ·  ${brand.fullName}`,
+  title: 'About',
   description: 'A real company, started for a real reason.',
 };
 

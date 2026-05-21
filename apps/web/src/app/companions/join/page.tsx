@@ -4,7 +4,7 @@ import { brand, joinCompanionClub } from '@igc/content';
 import { PageShell } from '@/components/marketing/PageShell';
 
 export const metadata: Metadata = {
-  title: `Join ${brand.companionSubBrand}  ·  ${brand.fullName}`,
+  title: `Join ${brand.companionSubBrand}`,
   description: joinCompanionClub.hero.body,
 };
 
