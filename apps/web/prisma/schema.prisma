@@ -115,6 +115,15 @@ model Family {
   billingName        String
   intakeNotes        String?       @db.Text
 
+  // Billing address (SDD §12.2.1 "billingAddress (embedded type) — for
+  // invoicing, distinct from recipient address"). Flattened columns
+  // rather than a composite type for query simplicity.
+  billingAddressLine1 String?
+  billingAddressLine2 String?
+  billingCity         String?
+  billingPostcode     String?
+  billingCountry      String  @default("GB")
+
   joinedAt           DateTime      @default(now())
   cancelledAt        DateTime?
   cancellationReason String?       @db.Text
@@ -165,6 +174,23 @@ model Recipient {
   healthNotes         String?   @db.Text
   dietary             String?   @db.Text
   religiousObservance String?   @db.Text
+
+  // Visit address (SDD §12.2.3 "address (embedded type) — Full address.
+  // Visible only to assigned companion and operators."). Currently no
+  // DB-level RBAC; the application layer is the gate.
+  addressLine1   String?
+  addressLine2   String?
+  addressCity    String?
+  addressPostcode String?
+  addressCountry String  @default("GB")
+
+  // Consents (SDD §12.2.3). Booleans are the queryable current state.
+  // The audit log captures every flip with the operator who made it,
+  // the timestamp, and an evidence note in metadata — that is the
+  // GDPR-grade record, not these flags.
+  consentToVisits        Boolean @default(false)
+  consentToPhotos        Boolean @default(false)
+  consentToReportSharing Boolean @default(true)
 
   family Family @relation(fields: [familyId], references: [id])
 
