@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { Home, Inbox, Users, Heart, Calendar, ShieldAlert, Coins, FileSearch, LogOut } from 'lucide-react';
+import { Home, Inbox, Users, Heart, Calendar, ShieldAlert, Coins, FileSearch, LogOut, Sparkles } from 'lucide-react';
 import { brand } from '@igc/content';
 import { signOut } from '@/lib/auth';
 import { requireOperator } from '@/lib/auth-helpers';
@@ -25,6 +25,7 @@ const NAV_ITEMS = [
   { href: '/ops/enquiries', label: 'Enquiries', icon: Inbox },
   { href: '/ops/families', label: 'Families', icon: Users },
   { href: '/ops/companions', label: 'Companions', icon: Heart },
+  { href: '/ops/matches', label: 'Matches', icon: Sparkles },
   { href: '/ops/visits', label: 'Visits', icon: Calendar, status: 'planned' as const },
   { href: '/ops/safeguarding', label: 'Safeguarding', icon: ShieldAlert, status: 'planned' as const },
   { href: '/ops/payments', label: 'Payments', icon: Coins, status: 'planned' as const },

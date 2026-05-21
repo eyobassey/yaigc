@@ -1,6 +1,6 @@
 import { getSessionUser } from '@/lib/auth-helpers';
 import Link from 'next/link';
-import { Inbox, Calendar, FileText, ShieldAlert, Heart, AlertTriangle, Users } from 'lucide-react';
+import { Inbox, Calendar, FileText, ShieldAlert, Heart, AlertTriangle, Users, Sparkles } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 
 export const metadata = {
@@ -35,6 +35,13 @@ const TILES = [
     label: 'New companion applications',
     href: '/ops/companions',
     icon: Heart,
+    accent: 'text-terracotta',
+    placeholder: 'live',
+  },
+  {
+    label: 'Open matches',
+    href: '/ops/matches',
+    icon: Sparkles,
     accent: 'text-terracotta',
     placeholder: 'live',
   },
@@ -78,10 +85,12 @@ export default async function OpsTodayPage() {
     newEnquiriesCount,
     prospectFamiliesCount,
     newApplicationsCount,
+    openMatchesCount,
   ] = await Promise.all([
     prisma.enquiry.count({ where: { status: 'new' } }),
     prisma.family.count({ where: { status: 'prospect' } }),
     prisma.companionApplication.count({ where: { status: 'received' } }),
+    prisma.match.count({ where: { status: 'proposed' } }),
   ]);
 
   return (
@@ -121,6 +130,8 @@ export default async function OpsTodayPage() {
             ? prospectFamiliesCount
             : tile.label === 'New companion applications'
             ? newApplicationsCount
+            : tile.label === 'Open matches'
+            ? openMatchesCount
             : null;
           return (
             <Link

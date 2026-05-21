@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ChevronLeft, Pencil, Plus } from 'lucide-react';
+import { ChevronLeft, Pencil, Plus, Sparkles } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { FamilyStatusPill } from '../page';
+import { MatchStatusPill } from '../../matches/page';
 
 export const metadata = {
   title: 'Family',
@@ -30,6 +31,14 @@ export default async function OpsFamilyDetailPage({
         },
       },
       recipients: true,
+      matches: {
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+        include: {
+          companion: { select: { firstName: true, lastName: true, borough: true } },
+          recipient: { select: { firstName: true, lastName: true } },
+        },
+      },
     },
   });
   if (!family) notFound();
@@ -206,6 +215,58 @@ export default async function OpsFamilyDetailPage({
                     </li>
                   );
                 })}
+              </ul>
+            )}
+          </section>
+
+          <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
+            <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+              <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone inline-flex items-center gap-2">
+                <Sparkles size={14} strokeWidth={1.75} className="text-moss" aria-hidden="true" />
+                Matches ({family.matches.length})
+              </h2>
+              {family.recipients.length > 0 ? (
+                <Link
+                  href={`/ops/families/${family.id}/matches/new`}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-moss/20 text-moss text-[0.75rem] font-medium hover:bg-moss hover:text-cream transition-colors whitespace-nowrap"
+                >
+                  <Plus size={12} strokeWidth={2} aria-hidden="true" />
+                  Propose a match
+                </Link>
+              ) : null}
+            </div>
+            {family.matches.length === 0 ? (
+              <p className="text-stone text-sm">No matches proposed yet.</p>
+            ) : (
+              <ul className="divide-y divide-moss/[0.06]">
+                {family.matches.map((m) => (
+                  <li key={m.id}>
+                    <Link
+                      href={`/ops/matches/${m.id}`}
+                      className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0 hover:opacity-80 transition-opacity"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <MatchStatusPill status={m.status} />
+                          <time
+                            dateTime={m.createdAt.toISOString()}
+                            className="text-stone text-[0.7rem] font-mono"
+                          >
+                            {m.createdAt.toISOString().slice(0, 10)}
+                          </time>
+                        </div>
+                        <div className="font-head text-moss text-[0.9375rem] font-medium break-words">
+                          {m.companion.firstName} {m.companion.lastName}
+                          {m.recipient ? (
+                            <span className="text-stone font-body font-normal text-[0.8125rem]">
+                              {' '}for {m.recipient.firstName}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </Link>
+                  </li>
+                ))}
               </ul>
             )}
           </section>

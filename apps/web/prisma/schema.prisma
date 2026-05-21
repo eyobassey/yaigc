@@ -40,10 +40,11 @@ model User {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  accounts        Account[]
-  sessions        Session[]
-  familyMembers   FamilyMember[]
-  companion       Companion?
+  accounts         Account[]
+  sessions         Session[]
+  familyMembers    FamilyMember[]
+  companion        Companion?
+  proposedMatches  Match[]        @relation("MatchProposedBy")
 
   @@index([email])
   @@index([role])
@@ -131,6 +132,7 @@ model Family {
 
   members    FamilyMember[]
   recipients Recipient[]
+  matches    Match[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -193,7 +195,8 @@ model Recipient {
   consentToPhotos        Boolean @default(false)
   consentToReportSharing Boolean @default(true)
 
-  family Family @relation(fields: [familyId], references: [id])
+  family  Family  @relation(fields: [familyId], references: [id])
+  matches Match[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -223,6 +226,53 @@ enum FamilyMemberRelationship {
   sibling
   grandchild
   other
+}
+
+// ----------------------------------------------------------------------------
+// Match (SDD §12.4.5) — the operator-proposed connection between a Family's
+// Recipient and a Companion. Per DR-002, all matching is operator-led in v1
+// (no self-serve algorithmic matching).
+//
+// Lifecycle:
+//   proposed -> accepted (both sides confirmed via phone, captured by operator)
+//             -> declined (with reason)
+//             -> withdrawn (operator pulled before either side responded)
+//
+// Once accepted, the operator goes on to create a Subscription (Stage O.7.2)
+// which generates the recurring Visits the family pays for.
+// ----------------------------------------------------------------------------
+
+model Match {
+  id                   String      @id @default(cuid())
+  familyId             String
+  recipientId          String?     // null when the family has exactly one recipient
+  candidateCompanionId String
+  proposedByOperatorId String
+  status               MatchStatus @default(proposed)
+  rationale            String      @db.Text
+
+  familyResponseAt    DateTime?
+  companionResponseAt DateTime?
+  declineReason       String?  @db.Text
+
+  family     Family     @relation(fields: [familyId], references: [id])
+  recipient  Recipient? @relation(fields: [recipientId], references: [id])
+  companion  Companion  @relation(fields: [candidateCompanionId], references: [id])
+  proposedBy User       @relation("MatchProposedBy", fields: [proposedByOperatorId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([familyId, status])
+  @@index([candidateCompanionId, status])
+  @@index([status, createdAt(sort: Desc)])
+}
+
+enum MatchStatus {
+  proposed
+  accepted
+  declined
+  withdrawn
 }
 
 // ----------------------------------------------------------------------------
@@ -309,6 +359,7 @@ model Companion {
 
   user        User                 @relation(fields: [userId], references: [id])
   application CompanionApplication @relation(fields: [applicationId], references: [id])
+  matches     Match[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
