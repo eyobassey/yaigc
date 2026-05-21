@@ -56,11 +56,14 @@ export function Nav() {
             aria-label={`${brand.fullName}, home`}
             className="flex items-center min-w-0 flex-shrink"
           >
-            {/* SVG wordmark — viewBox 369x62, scales by height, width auto. */}
+            {/* SVG wordmark — viewBox 369x62, scales by height, width auto.
+                alt="" because the enclosing <Link> already carries the
+                accessible name via aria-label, so re-announcing the brand
+                name would just create double-speak for screen-reader users. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/logo/wordmark-moss-on-cream.svg"
-              alt={brand.fullName}
+              alt=""
               className="h-7 sm:h-8 w-auto"
             />
           </Link>
