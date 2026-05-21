@@ -258,7 +258,7 @@ function ReadyToTalk() {
         </p>
         <div className="mt-10 flex flex-wrap gap-4 justify-center">
           <Link
-            href="/#contact"
+            href="/contact"
             className="inline-flex items-center justify-center px-9 py-[1.125rem] rounded-full bg-cream text-moss text-base font-medium hover:bg-cream-deep transition-colors"
           >
             Book a call

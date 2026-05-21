@@ -21,7 +21,7 @@ export const metadata = {
 
 const NAV_ITEMS = [
   { href: '/ops', label: 'Today', icon: Home },
-  { href: '/ops/enquiries', label: 'Enquiries', icon: Inbox, status: 'planned' as const },
+  { href: '/ops/enquiries', label: 'Enquiries', icon: Inbox },
   { href: '/ops/families', label: 'Families', icon: Users, status: 'planned' as const },
   { href: '/ops/companions', label: 'Companions', icon: Heart, status: 'planned' as const },
   { href: '/ops/visits', label: 'Visits', icon: Calendar, status: 'planned' as const },

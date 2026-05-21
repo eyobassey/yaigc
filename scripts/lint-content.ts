@@ -81,6 +81,11 @@ const RULES: Rule[] = [
     name: 'client',
     pattern: /\bclient\b/i,
     reason: 'We have families, recipients, and companions.',
+    allowList: [
+      /@prisma\/client/i, // npm package; not customer-facing
+      /Client Component/i, // React/Next.js technical term in comments
+      /\bclient-side\b/i, // technical term, never customer-facing
+    ],
   },
   {
     name: 'service user',

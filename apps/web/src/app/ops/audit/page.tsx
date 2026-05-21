@@ -81,7 +81,7 @@ export default async function OpsAuditPage({
                       <div className="flex flex-col gap-0.5">
                         <Pill kind={entry.actorType}>{entry.actorType}</Pill>
                         <span className="text-stone text-[0.75rem] font-mono break-all">
-                          {entry.actorId ?? <em className="not-italic text-stone/60">—</em>}
+                          {entry.actorId ?? <em className="not-italic text-stone/60">-</em>}
                         </span>
                       </div>
                     </Td>
@@ -92,7 +92,7 @@ export default async function OpsAuditPage({
                       <div className="flex flex-col gap-0.5">
                         <span className="text-moss font-medium">{entry.targetType}</span>
                         <span className="text-stone text-[0.75rem] font-mono break-all">
-                          {entry.targetId ?? <em className="not-italic text-stone/60">—</em>}
+                          {entry.targetId ?? <em className="not-italic text-stone/60">-</em>}
                         </span>
                       </div>
                     </Td>
@@ -102,7 +102,7 @@ export default async function OpsAuditPage({
                           {JSON.stringify(entry.metadata)}
                         </code>
                       ) : (
-                        <em className="not-italic text-stone/60">—</em>
+                        <em className="not-italic text-stone/60">-</em>
                       )}
                     </Td>
                   </tr>

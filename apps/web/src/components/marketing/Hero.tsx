@@ -47,7 +47,7 @@ export function Hero() {
 
           <div className="flex flex-wrap gap-4 mt-10">
             <Link
-              href="/#contact"
+              href="/contact"
               className="inline-flex items-center justify-center px-9 py-[1.125rem] rounded-full bg-moss text-cream text-base font-medium hover:bg-moss-dark transition-all duration-200 hover:shadow-lg hover:-translate-y-px"
             >
               {home.hero.primaryCta}

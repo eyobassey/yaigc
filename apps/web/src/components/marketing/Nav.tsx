@@ -98,7 +98,7 @@ export function Nav() {
 
             {/* CTA hidden on the smallest viewports — the drawer carries it. */}
             <Link
-              href="/#contact"
+              href="/contact"
               className="hidden sm:inline-flex items-center justify-center px-4 py-2.5 sm:px-6 sm:py-3 rounded-full bg-moss text-cream text-sm sm:text-[0.95rem] font-medium hover:bg-moss-dark transition-all duration-200 hover:shadow-lg hover:-translate-y-px whitespace-nowrap"
             >
               {nav.cta.primary}
@@ -188,7 +188,7 @@ export function Nav() {
               <span>{brand.supportPhone}</span>
             </a>
             <Link
-              href="/#contact"
+              href="/contact"
               className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-moss text-cream text-[0.95rem] font-medium hover:bg-moss-dark transition-colors"
               onClick={() => setMenuOpen(false)}
             >

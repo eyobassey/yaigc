@@ -1,5 +1,7 @@
 import { getSessionUser } from '@/lib/auth-helpers';
+import Link from 'next/link';
 import { Inbox, Calendar, FileText, ShieldAlert, Heart, AlertTriangle } from 'lucide-react';
+import { prisma } from '@/lib/prisma';
 
 export const metadata = {
   title: 'Today',
@@ -20,7 +22,7 @@ const TILES = [
     href: '/ops/enquiries',
     icon: Inbox,
     accent: 'text-terracotta',
-    placeholder: 'O.3:Enquiry model',
+    placeholder: 'live',
   },
   {
     label: 'Visits today',
@@ -55,6 +57,13 @@ const TILES = [
 export default async function OpsTodayPage() {
   const user = await getSessionUser();
 
+  // Counts that already have backing data go straight to the DB. Tiles
+  // whose models do not exist yet keep the em-dash placeholder until
+  // their stage lands.
+  const newEnquiriesCount = await prisma.enquiry.count({
+    where: { status: 'new' },
+  });
+
   return (
     <div>
       <header className="mb-10">
@@ -82,27 +91,37 @@ export default async function OpsTodayPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {TILES.map((tile) => (
-          <a
-            key={tile.label}
-            href={tile.href}
-            className="block bg-paper border border-moss/[0.08] rounded-[12px] p-5 hover:border-moss/20 hover:-translate-y-px transition-all duration-200 group"
-          >
-            <div className="flex items-start justify-between mb-4">
-              <tile.icon size={20} strokeWidth={1.75} aria-hidden="true" className={tile.accent} />
-              <span className="font-body text-[0.65rem] font-medium uppercase tracking-[0.1em] text-stone/60">
-                {tile.placeholder}
-              </span>
-            </div>
-            <div className="font-head text-moss text-[2.5rem] leading-none font-normal mb-2">
-              <span aria-hidden="true">—</span>
-              <span className="sr-only">no data yet</span>
-            </div>
-            <div className="font-body text-charcoal text-[0.9375rem] group-hover:text-moss transition-colors">
-              {tile.label}
-            </div>
-          </a>
-        ))}
+        {TILES.map((tile) => {
+          const isLive = tile.placeholder === 'live';
+          const value = isLive && tile.label === 'New enquiries' ? newEnquiriesCount : null;
+          return (
+            <Link
+              key={tile.label}
+              href={tile.href}
+              className="block bg-paper border border-moss/[0.08] rounded-[12px] p-5 hover:border-moss/20 hover:-translate-y-px transition-all duration-200 group"
+            >
+              <div className="flex items-start justify-between mb-4">
+                <tile.icon size={20} strokeWidth={1.75} aria-hidden="true" className={tile.accent} />
+                <span className="font-body text-[0.65rem] font-medium uppercase tracking-[0.1em] text-stone/60">
+                  {tile.placeholder}
+                </span>
+              </div>
+              <div className="font-head text-moss text-[2.5rem] leading-none font-normal mb-2">
+                {value !== null ? (
+                  value
+                ) : (
+                  <>
+                    <span aria-hidden="true">{'-'}</span>
+                    <span className="sr-only">no data yet</span>
+                  </>
+                )}
+              </div>
+              <div className="font-body text-charcoal text-[0.9375rem] group-hover:text-moss transition-colors">
+                {tile.label}
+              </div>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );

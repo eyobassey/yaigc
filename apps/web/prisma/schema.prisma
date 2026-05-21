@@ -89,6 +89,49 @@ model VerificationToken {
 }
 
 // ----------------------------------------------------------------------------
+// Marketing context (SDD §12.10) — inbound enquiries from the public site.
+// A new Enquiry is created by any of:
+//   - the /contact form (source = contact_form)
+//   - the /companions/join form (source = companion_application)
+//   - a waitlist form for out-of-area visitors (source = waitlist) [Phase 2]
+// The operator triages from /ops/enquiries. When an Enquiry becomes a paying
+// customer, convertedToFamilyId is set and status moves to "converted".
+// ----------------------------------------------------------------------------
+
+model Enquiry {
+  id                    String          @id @default(cuid())
+  source                EnquirySource
+  name                  String
+  email                 String
+  phone                 String?
+  postcode              String?
+  message               String          @db.Text
+  status                EnquiryStatus   @default(new)
+  assignedToOperatorId  String?
+  consentMarketing      Boolean         @default(false)
+  convertedToFamilyId   String?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([source, createdAt(sort: Desc)])
+  @@index([email])
+}
+
+enum EnquirySource {
+  contact_form
+  waitlist
+  companion_application
+}
+
+enum EnquiryStatus {
+  new
+  triaged
+  converted
+  closed
+}
+
+// ----------------------------------------------------------------------------
 // Audit context (SDD §12.7) — append-only log of every sensitive action.
 // Append-only is enforced at the DB layer by triggers; see migration
 // 20260521..._add_audit_log_entry. Per DR-008, this lives in the same
