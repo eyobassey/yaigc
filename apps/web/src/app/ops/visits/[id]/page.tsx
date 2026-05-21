@@ -1,10 +1,12 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Pencil } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { formatUkDateTime, formatUkTime } from '@/lib/visit-schedule';
 import { VisitStatePill } from '../page';
 import { TransitionPanel } from './TransitionPanel';
+
+const EDITABLE_STATES = new Set(['scheduled', 'confirmed']);
 
 export const metadata = { title: 'Visit' };
 
@@ -70,21 +72,32 @@ export default async function OpsVisitDetailPage({
         All visits
       </Link>
 
-      <header className="mb-6">
-        <div className="flex items-center gap-2 flex-wrap mb-2">
-          <VisitStatePill state={visit.state} />
-          <time
-            dateTime={visit.scheduledStartAt.toISOString()}
-            className="text-stone text-[0.8125rem] font-mono"
-          >
-            {formatUkDateTime(visit.scheduledStartAt)}
-          </time>
+      <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-2">
+            <VisitStatePill state={visit.state} />
+            <time
+              dateTime={visit.scheduledStartAt.toISOString()}
+              className="text-stone text-[0.8125rem] font-mono"
+            >
+              {formatUkDateTime(visit.scheduledStartAt)}
+            </time>
+          </div>
+          <h1 className="font-head font-normal text-moss text-[clamp(1.75rem,3vw,2.25rem)] leading-[1.1]">
+            {visit.companion.firstName} {visit.companion.lastName}
+            <span className="text-stone font-body font-normal mx-2 text-[1.25rem]">·</span>
+            {visit.recipient.preferredName || visit.recipient.firstName}
+          </h1>
         </div>
-        <h1 className="font-head font-normal text-moss text-[clamp(1.75rem,3vw,2.25rem)] leading-[1.1]">
-          {visit.companion.firstName} {visit.companion.lastName}
-          <span className="text-stone font-body font-normal mx-2 text-[1.25rem]">·</span>
-          {visit.recipient.preferredName || visit.recipient.firstName}
-        </h1>
+        {EDITABLE_STATES.has(visit.state) ? (
+          <Link
+            href={`/ops/visits/${visit.id}/edit`}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-moss/20 text-moss text-[0.8125rem] font-medium hover:bg-moss hover:text-cream transition-colors whitespace-nowrap"
+          >
+            <Pencil size={14} strokeWidth={1.75} aria-hidden="true" />
+            Edit visit
+          </Link>
+        ) : null}
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
@@ -256,6 +269,12 @@ function summarise(metadata: unknown, before: unknown, after: unknown): string {
   if (metadata && typeof metadata === 'object') {
     const m = metadata as Record<string, unknown>;
     if (m.event === 'visit_generated') return 'Visit generated';
+    if (m.event === 'visit_updated' && Array.isArray(m.changedFields)) {
+      return `Visit updated: ${(m.changedFields as string[]).join(', ')}`;
+    }
+    if (m.event === 'visit_rescheduled_email_sent') {
+      return `Rescheduled-email sent to ${m.audience} (${m.to})`;
+    }
     if (m.event === 'visit_state_change' && before && after) {
       const b = before as Record<string, unknown>;
       const a = after as Record<string, unknown>;

@@ -184,6 +184,139 @@ export async function createSubscription(
 }
 
 // -------------------------------------------------------------------------
+// EDIT the recurring schedule (frequency / day / time / duration / rate /
+// notes). Restricted to active or paused subscriptions. Does NOT touch
+// existing future visits - operator can cancel/regenerate as needed.
+// -------------------------------------------------------------------------
+
+const EditSchema = z.object({
+  subscriptionId: z.string().min(1),
+  frequency: z.enum(['weekly', 'biweekly', 'monthly']),
+  dayOfWeek: z.enum(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']),
+  startTime: z.string().regex(TIME_RE, 'Use 24-hour HH:MM.'),
+  durationMinutes: z.coerce.number().int().min(30).max(480),
+  hourlyRate: z.coerce.number().min(8).max(60),
+  notes: z.string().max(2000).optional(),
+});
+
+export type EditSubscriptionState = {
+  ok: boolean;
+  errors?: Record<string, string>;
+  values?: Record<string, string | undefined>;
+};
+
+export async function editSubscription(
+  _prev: EditSubscriptionState,
+  formData: FormData,
+): Promise<EditSubscriptionState> {
+  const operator = await getSessionUser();
+  if (!operator) return { ok: false, errors: { _form: 'Not signed in.' } };
+
+  const raw = {
+    subscriptionId: String(formData.get('subscriptionId') ?? ''),
+    frequency: String(formData.get('frequency') ?? ''),
+    dayOfWeek: String(formData.get('dayOfWeek') ?? ''),
+    startTime: String(formData.get('startTime') ?? '').trim(),
+    durationMinutes: String(formData.get('durationMinutes') ?? ''),
+    hourlyRate: String(formData.get('hourlyRate') ?? ''),
+    notes: String(formData.get('notes') ?? '').trim() || undefined,
+  };
+
+  const parsed = EditSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      errors: Object.fromEntries(
+        parsed.error.issues.flatMap((i) => {
+          const k = i.path[0];
+          return typeof k === 'string' ? [[k, i.message]] : [];
+        }),
+      ),
+      values: raw,
+    };
+  }
+  const d = parsed.data;
+
+  const before = await prisma.subscription.findUnique({
+    where: { id: d.subscriptionId },
+    select: {
+      status: true,
+      familyId: true,
+      frequency: true,
+      dayOfWeek: true,
+      startTime: true,
+      durationMinutes: true,
+      hourlyRate: true,
+      notes: true,
+    },
+  });
+  if (!before) return { ok: false, errors: { _form: 'Subscription not found.' }, values: raw };
+  if (before.status !== 'active' && before.status !== 'paused') {
+    return {
+      ok: false,
+      errors: { _form: `Cannot edit a ${before.status} subscription.` },
+      values: raw,
+    };
+  }
+
+  const beforeRate = Number(before.hourlyRate.toString());
+  const changed: string[] = [];
+  if (d.frequency !== before.frequency) changed.push('frequency');
+  if (d.dayOfWeek !== before.dayOfWeek) changed.push('dayOfWeek');
+  if (d.startTime !== before.startTime) changed.push('startTime');
+  if (d.durationMinutes !== before.durationMinutes) changed.push('durationMinutes');
+  if (Math.abs(d.hourlyRate - beforeRate) > 0.0001) changed.push('hourlyRate');
+  if ((d.notes ?? null) !== (before.notes ?? null)) changed.push('notes');
+
+  if (changed.length === 0) {
+    redirect(`/ops/subscriptions/${d.subscriptionId}`);
+  }
+
+  await prisma.subscription.update({
+    where: { id: d.subscriptionId },
+    data: {
+      frequency: d.frequency,
+      dayOfWeek: d.dayOfWeek,
+      startTime: d.startTime,
+      durationMinutes: d.durationMinutes,
+      hourlyRate: new Prisma.Decimal(d.hourlyRate.toFixed(2)),
+      notes: d.notes ?? null,
+    },
+  });
+
+  await audit({
+    actorType: 'user',
+    actorId: operator.id,
+    actorRole: operator.role,
+    actionType: 'update',
+    targetType: 'Subscription',
+    targetId: d.subscriptionId,
+    beforeState: {
+      frequency: before.frequency,
+      dayOfWeek: before.dayOfWeek,
+      startTime: before.startTime,
+      durationMinutes: before.durationMinutes,
+      hourlyRate: before.hourlyRate.toString(),
+      notes: before.notes,
+    },
+    afterState: {
+      frequency: d.frequency,
+      dayOfWeek: d.dayOfWeek,
+      startTime: d.startTime,
+      durationMinutes: d.durationMinutes,
+      hourlyRate: d.hourlyRate.toFixed(2),
+      notes: d.notes ?? null,
+    },
+    metadata: { event: 'subscription_updated', changedFields: changed },
+  });
+
+  revalidatePath('/ops');
+  revalidatePath(`/ops/subscriptions/${d.subscriptionId}`);
+  revalidatePath(`/ops/families/${before.familyId}`);
+  redirect(`/ops/subscriptions/${d.subscriptionId}`);
+}
+
+// -------------------------------------------------------------------------
 // PAUSE / RESUME / CANCEL
 // -------------------------------------------------------------------------
 

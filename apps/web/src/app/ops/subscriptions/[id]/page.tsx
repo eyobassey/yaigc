@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Calendar, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Plus, Pencil } from 'lucide-react';
 import type { SubscriptionStatus } from '@prisma/client';
+
+const EDITABLE_SUBSCRIPTION_STATES = new Set(['active', 'paused']);
 import { prisma } from '@/lib/prisma';
 import { summariseSubscription, DAY_LABELS, FREQUENCY_LABELS } from '@/lib/subscription-format';
 import { formatUkDateTime } from '@/lib/visit-schedule';
@@ -57,32 +59,43 @@ export default async function OpsSubscriptionDetailPage({
         Back to family
       </Link>
 
-      <header className="mb-6">
-        <div className="flex items-center gap-2 flex-wrap mb-2">
-          <SubscriptionStatusPill status={sub.status} />
-          <time
-            dateTime={sub.startedAt.toISOString()}
-            className="text-stone text-[0.8125rem] font-mono"
-          >
-            started {sub.startedAt.toISOString().slice(0, 10)}
-          </time>
-          {sub.endedAt ? (
+      <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-2">
+            <SubscriptionStatusPill status={sub.status} />
             <time
-              dateTime={sub.endedAt.toISOString()}
+              dateTime={sub.startedAt.toISOString()}
               className="text-stone text-[0.8125rem] font-mono"
             >
-              ended {sub.endedAt.toISOString().slice(0, 10)}
+              started {sub.startedAt.toISOString().slice(0, 10)}
             </time>
-          ) : null}
+            {sub.endedAt ? (
+              <time
+                dateTime={sub.endedAt.toISOString()}
+                className="text-stone text-[0.8125rem] font-mono"
+              >
+                ended {sub.endedAt.toISOString().slice(0, 10)}
+              </time>
+            ) : null}
+          </div>
+          <h1 className="font-head font-normal text-moss text-[clamp(1.75rem,3vw,2.25rem)] leading-[1.1]">
+            {sub.family.billingName}
+            <span className="text-stone font-body font-normal mx-2 text-[1.25rem]">·</span>
+            {sub.companion.firstName} {sub.companion.lastName}
+          </h1>
+          <p className="text-charcoal text-[0.9375rem] mt-2">
+            {summariseSubscription(sub)}
+          </p>
         </div>
-        <h1 className="font-head font-normal text-moss text-[clamp(1.75rem,3vw,2.25rem)] leading-[1.1]">
-          {sub.family.billingName}
-          <span className="text-stone font-body font-normal mx-2 text-[1.25rem]">·</span>
-          {sub.companion.firstName} {sub.companion.lastName}
-        </h1>
-        <p className="text-charcoal text-[0.9375rem] mt-2">
-          {summariseSubscription(sub)}
-        </p>
+        {EDITABLE_SUBSCRIPTION_STATES.has(sub.status) ? (
+          <Link
+            href={`/ops/subscriptions/${sub.id}/edit`}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-moss/20 text-moss text-[0.8125rem] font-medium hover:bg-moss hover:text-cream transition-colors whitespace-nowrap"
+          >
+            <Pencil size={14} strokeWidth={1.75} aria-hidden="true" />
+            Edit schedule
+          </Link>
+        ) : null}
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
@@ -305,6 +318,9 @@ function summarise(metadata: unknown, before: unknown, after: unknown): string {
   if (metadata && typeof metadata === 'object') {
     const m = metadata as Record<string, unknown>;
     if (m.event === 'subscription_created') return 'Subscription created';
+    if (m.event === 'subscription_updated' && Array.isArray(m.changedFields)) {
+      return `Subscription updated: ${(m.changedFields as string[]).join(', ')}`;
+    }
     if (m.event === 'subscription_status_change' && before && after) {
       const b = before as Record<string, unknown>;
       const a = after as Record<string, unknown>;

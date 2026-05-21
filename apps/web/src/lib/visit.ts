@@ -9,7 +9,7 @@ import { brand } from '@igc/content';
 import { prisma } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
 import { getSessionUser } from '@/lib/auth-helpers';
-import { nextVisitStart, TERMINAL_VISIT_STATES } from '@/lib/visit-schedule';
+import { nextVisitStart, TERMINAL_VISIT_STATES, ukWallClockToUtc } from '@/lib/visit-schedule';
 import {
   visitBookedToFamilyHtml,
   visitBookedToFamilyText,
@@ -26,6 +26,14 @@ import {
   visitCancelledToCompanionText,
   visitCancelledToCompanionSubject,
 } from '@/lib/email/visit-cancelled';
+import {
+  visitRescheduledToFamilyHtml,
+  visitRescheduledToFamilyText,
+  visitRescheduledToFamilySubject,
+  visitRescheduledToCompanionHtml,
+  visitRescheduledToCompanionText,
+  visitRescheduledToCompanionSubject,
+} from '@/lib/email/visit-rescheduled';
 
 // -------------------------------------------------------------------------
 // GENERATE the next Visit for a Subscription.
@@ -128,6 +136,238 @@ export async function generateNextVisit(formData: FormData): Promise<void> {
     actor: 'user',
     actorId: operator.id,
   });
+}
+
+// -------------------------------------------------------------------------
+// EDIT a Visit (date / time / duration / agreed activity / safety flags).
+// Restricted to scheduled or confirmed state. If the scheduled time
+// changes, a "rescheduled" email goes to both sides.
+// -------------------------------------------------------------------------
+
+const EditVisitSchema = z.object({
+  visitId: z.string().min(1),
+  scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD.'),
+  scheduledTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use 24-hour HH:MM.'),
+  scheduledDurationMinutes: z.coerce.number().int().min(30).max(480),
+  agreedActivity: z.string().max(2000).optional(),
+  safetyFlags: z.string().max(2000).optional(),
+});
+
+export type EditVisitState = {
+  ok: boolean;
+  errors?: Record<string, string>;
+  values?: Record<string, string | undefined>;
+};
+
+export async function editVisit(
+  _prev: EditVisitState,
+  formData: FormData,
+): Promise<EditVisitState> {
+  const operator = await getSessionUser();
+  if (!operator) return { ok: false, errors: { _form: 'Not signed in.' } };
+
+  const raw = {
+    visitId: String(formData.get('visitId') ?? ''),
+    scheduledDate: String(formData.get('scheduledDate') ?? '').trim(),
+    scheduledTime: String(formData.get('scheduledTime') ?? '').trim(),
+    scheduledDurationMinutes: String(formData.get('scheduledDurationMinutes') ?? ''),
+    agreedActivity: String(formData.get('agreedActivity') ?? '').trim() || undefined,
+    safetyFlags: String(formData.get('safetyFlags') ?? '').trim() || undefined,
+  };
+
+  const parsed = EditVisitSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      errors: Object.fromEntries(
+        parsed.error.issues.flatMap((i) => {
+          const k = i.path[0];
+          return typeof k === 'string' ? [[k, i.message]] : [];
+        }),
+      ),
+      values: raw,
+    };
+  }
+  const d = parsed.data;
+
+  const before = await prisma.visit.findUnique({
+    where: { id: d.visitId },
+    select: {
+      state: true,
+      familyId: true,
+      subscriptionId: true,
+      scheduledStartAt: true,
+      scheduledDurationMinutes: true,
+      agreedActivity: true,
+      safetyFlags: true,
+    },
+  });
+  if (!before) return { ok: false, errors: { _form: 'Visit not found.' }, values: raw };
+  if (before.state !== 'scheduled' && before.state !== 'confirmed') {
+    return {
+      ok: false,
+      errors: { _form: `Cannot edit a visit in state ${before.state}.` },
+      values: raw,
+    };
+  }
+
+  const [y, mo, dy] = d.scheduledDate.split('-').map(Number);
+  const [hh, mm] = d.scheduledTime.split(':').map(Number);
+  if (!y || !mo || !dy || hh == null || mm == null) {
+    return { ok: false, errors: { _form: 'Invalid date or time.' }, values: raw };
+  }
+  const newStartAt = ukWallClockToUtc(y, mo - 1, dy, hh, mm);
+
+  const changed: string[] = [];
+  if (newStartAt.getTime() !== before.scheduledStartAt.getTime()) changed.push('scheduledStartAt');
+  if (d.scheduledDurationMinutes !== before.scheduledDurationMinutes) changed.push('scheduledDurationMinutes');
+  if ((d.agreedActivity ?? null) !== (before.agreedActivity ?? null)) changed.push('agreedActivity');
+  if ((d.safetyFlags ?? null) !== (before.safetyFlags ?? null)) changed.push('safetyFlags');
+
+  if (changed.length === 0) {
+    redirect(`/ops/visits/${d.visitId}`);
+  }
+
+  await prisma.visit.update({
+    where: { id: d.visitId },
+    data: {
+      scheduledStartAt: newStartAt,
+      scheduledDurationMinutes: d.scheduledDurationMinutes,
+      agreedActivity: d.agreedActivity ?? null,
+      safetyFlags: d.safetyFlags ?? null,
+    },
+  });
+
+  await audit({
+    actorType: 'user',
+    actorId: operator.id,
+    actorRole: operator.role,
+    actionType: 'update',
+    targetType: 'Visit',
+    targetId: d.visitId,
+    beforeState: {
+      scheduledStartAt: before.scheduledStartAt.toISOString(),
+      scheduledDurationMinutes: before.scheduledDurationMinutes,
+      agreedActivity: before.agreedActivity,
+      safetyFlags: before.safetyFlags,
+    },
+    afterState: {
+      scheduledStartAt: newStartAt.toISOString(),
+      scheduledDurationMinutes: d.scheduledDurationMinutes,
+      agreedActivity: d.agreedActivity ?? null,
+      safetyFlags: d.safetyFlags ?? null,
+    },
+    metadata: { event: 'visit_updated', changedFields: changed },
+  });
+
+  // Only fire the rescheduled email when the time-on-the-calendar
+  // actually changed. Notes-only edits stay quiet.
+  if (
+    changed.includes('scheduledStartAt') ||
+    changed.includes('scheduledDurationMinutes')
+  ) {
+    await sendVisitRescheduledEmails(d.visitId, before.scheduledStartAt);
+  }
+
+  revalidatePath('/ops');
+  revalidatePath('/ops/visits');
+  revalidatePath(`/ops/visits/${d.visitId}`);
+  revalidatePath(`/ops/subscriptions/${before.subscriptionId}`);
+  revalidatePath(`/ops/families/${before.familyId}`);
+  redirect(`/ops/visits/${d.visitId}`);
+}
+
+async function sendVisitRescheduledEmails(
+  visitId: string,
+  previousStartAt: Date,
+): Promise<void> {
+  const visit = await prisma.visit.findUnique({
+    where: { id: visitId },
+    include: {
+      family: {
+        select: {
+          billingName: true,
+          members: {
+            where: { deletedAt: null },
+            include: { user: { select: { email: true } } },
+          },
+        },
+      },
+      recipient: { select: { firstName: true, preferredName: true } },
+      companion: {
+        select: { firstName: true, lastName: true, user: { select: { email: true } } },
+      },
+    },
+  });
+  if (!visit) return;
+
+  const transport = buildTransport();
+  const from = `${brand.fullName} <${process.env.EMAIL_SENDER}>`;
+
+  const shared = {
+    previousStartAt,
+    scheduledStartAt: visit.scheduledStartAt,
+    scheduledDurationMinutes: visit.scheduledDurationMinutes,
+    recipientFirstName: visit.recipient.firstName,
+    recipientPreferredName: visit.recipient.preferredName,
+    companionFirstName: visit.companion.firstName,
+    companionLastName: visit.companion.lastName,
+    familyBillingName: visit.family.billingName,
+  };
+
+  const familyEmails = Array.from(
+    new Set(
+      visit.family.members.map((m) => m.user.email).filter((e): e is string => Boolean(e)),
+    ),
+  );
+  for (const to of familyEmails) {
+    try {
+      await transport.sendMail({
+        to,
+        from,
+        subject: visitRescheduledToFamilySubject(shared),
+        text: visitRescheduledToFamilyText(shared),
+        html: visitRescheduledToFamilyHtml(shared),
+      });
+      await audit({
+        actorType: 'system',
+        actorId: null,
+        actionType: 'state_change',
+        targetType: 'Visit',
+        targetId: visitId,
+        metadata: { event: 'visit_rescheduled_email_sent', audience: 'family', to },
+      });
+    } catch (err) {
+      console.error('[visit] rescheduled email to family failed', { to, visitId, err });
+    }
+  }
+
+  const companionEmail = visit.companion.user.email;
+  if (companionEmail) {
+    try {
+      await transport.sendMail({
+        to: companionEmail,
+        from,
+        subject: visitRescheduledToCompanionSubject(shared),
+        text: visitRescheduledToCompanionText(shared),
+        html: visitRescheduledToCompanionHtml(shared),
+      });
+      await audit({
+        actorType: 'system',
+        actorId: null,
+        actionType: 'state_change',
+        targetType: 'Visit',
+        targetId: visitId,
+        metadata: { event: 'visit_rescheduled_email_sent', audience: 'companion', to: companionEmail },
+      });
+    } catch (err) {
+      console.error('[visit] rescheduled email to companion failed', {
+        to: companionEmail,
+        visitId,
+        err,
+      });
+    }
+  }
 }
 
 // -------------------------------------------------------------------------

@@ -56,7 +56,7 @@ function ukOffsetMinutes(atUtc: Date): number {
  * once. The 02:00-03:00 spring-forward gap is ambiguous; we accept the
  * naive answer there (visits at 2am are not a realistic case).
  */
-function ukWallClockToUtc(
+export function ukWallClockToUtc(
   year: number,
   monthIdx: number,
   day: number,
