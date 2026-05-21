@@ -231,6 +231,18 @@ export async function submitPostVisitReport(
 
   await sendFamilySummaryEmail(report.id);
 
+  // O.7.5 hook: any non-empty thingsToFlag opens a SafeguardingCase.
+  // Lazy import so the cyclic dep between report and safeguarding does
+  // not break tree-shaking.
+  if (d.thingsToFlag) {
+    try {
+      const { openCaseFromReport } = await import('@/lib/safeguarding');
+      await openCaseFromReport(report.id);
+    } catch (err) {
+      console.error('[report] safeguarding hook failed', { reportId: report.id, err });
+    }
+  }
+
   revalidatePath('/ops');
   revalidatePath('/ops/visits');
   revalidatePath(`/ops/visits/${d.visitId}`);

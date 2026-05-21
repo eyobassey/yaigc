@@ -44,9 +44,13 @@ model User {
   sessions          Session[]
   familyMembers     FamilyMember[]
   companion         Companion?
-  proposedMatches   Match[]            @relation("MatchProposedBy")
-  endedMatches      Match[]            @relation("MatchEndedBy")
-  submittedReports  PostVisitReport[]  @relation("ReportSubmittedBy")
+  proposedMatches   Match[]                  @relation("MatchProposedBy")
+  endedMatches      Match[]                  @relation("MatchEndedBy")
+  submittedReports  PostVisitReport[]        @relation("ReportSubmittedBy")
+  openedCases       SafeguardingCase[]       @relation("CaseOpenedBy")
+  closedCases       SafeguardingCase[]       @relation("CaseClosedBy")
+  assignedCases     SafeguardingCase[]       @relation("CaseAssignedTo")
+  caseNotes         SafeguardingCaseNote[]
 
   @@index([email])
   @@index([role])
@@ -199,10 +203,11 @@ model Recipient {
   consentToPhotos        Boolean @default(false)
   consentToReportSharing Boolean @default(true)
 
-  family        Family         @relation(fields: [familyId], references: [id])
-  matches       Match[]
-  subscriptions Subscription[]
-  visits        Visit[]
+  family            Family             @relation(fields: [familyId], references: [id])
+  matches           Match[]
+  subscriptions     Subscription[]
+  visits            Visit[]
+  safeguardingCases SafeguardingCase[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -270,12 +275,13 @@ model Match {
   endNote           String?        @db.Text
   endedByOperatorId String?
 
-  family       Family        @relation(fields: [familyId], references: [id])
-  recipient    Recipient?    @relation(fields: [recipientId], references: [id])
-  companion    Companion     @relation(fields: [candidateCompanionId], references: [id])
-  proposedBy   User          @relation("MatchProposedBy", fields: [proposedByOperatorId], references: [id])
-  endedBy      User?         @relation("MatchEndedBy", fields: [endedByOperatorId], references: [id])
-  subscription Subscription?
+  family           Family            @relation(fields: [familyId], references: [id])
+  recipient        Recipient?        @relation(fields: [recipientId], references: [id])
+  companion        Companion         @relation(fields: [candidateCompanionId], references: [id])
+  proposedBy       User              @relation("MatchProposedBy", fields: [proposedByOperatorId], references: [id])
+  endedBy          User?             @relation("MatchEndedBy", fields: [endedByOperatorId], references: [id])
+  subscription     Subscription?
+  safeguardingCase SafeguardingCase?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -388,11 +394,12 @@ model Visit {
 
   stateChangedAt           DateTime   @default(now())
 
-  subscription Subscription     @relation(fields: [subscriptionId], references: [id])
-  family       Family           @relation(fields: [familyId], references: [id])
-  recipient    Recipient        @relation(fields: [recipientId], references: [id])
-  companion    Companion        @relation(fields: [companionId], references: [id])
-  report       PostVisitReport?
+  subscription      Subscription       @relation(fields: [subscriptionId], references: [id])
+  family            Family             @relation(fields: [familyId], references: [id])
+  recipient         Recipient          @relation(fields: [recipientId], references: [id])
+  companion         Companion          @relation(fields: [companionId], references: [id])
+  report            PostVisitReport?
+  safeguardingCases SafeguardingCase[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -434,10 +441,11 @@ model PostVisitReport {
   submittedByOperatorId String?
   deliveredToFamilyAt   DateTime?
 
-  visit       Visit                  @relation(fields: [visitId], references: [id])
-  companion   Companion              @relation(fields: [companionId], references: [id])
-  submittedBy User?                  @relation("ReportSubmittedBy", fields: [submittedByOperatorId], references: [id])
-  photos      PostVisitReportPhoto[]
+  visit            Visit                  @relation(fields: [visitId], references: [id])
+  companion        Companion              @relation(fields: [companionId], references: [id])
+  submittedBy      User?                  @relation("ReportSubmittedBy", fields: [submittedByOperatorId], references: [id])
+  photos           PostVisitReportPhoto[]
+  safeguardingCase SafeguardingCase?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -474,6 +482,96 @@ enum WellbeingRating {
   tired
   unwell
   distressed
+  other
+}
+
+// ----------------------------------------------------------------------------
+// SafeguardingCase (SDD §12.6) — the operator-facing workflow for concerns
+// flagged on the platform. Cases auto-open from two triggers:
+//   1. PostVisitReport with non-empty thingsToFlag (severity defaults to
+//      medium) - one case per report (relatedReportId @unique)
+//   2. Match ended with reason=safeguarding_concern (severity defaults to
+//      high) - one case per match (relatedMatchId @unique)
+// Operators can also open cases manually.
+//
+// Case workflow: open -> under_review -> actioned -> closed. Closure
+// requires both a category and a note. Assignment defaults to no-one;
+// any operator can pick a case up.
+//
+// Notes (SafeguardingCaseNote) form a linear thread under the case. They
+// are operator-only - never surfaced to the family or companion.
+// ----------------------------------------------------------------------------
+
+model SafeguardingCase {
+  id                    String                       @id @default(cuid())
+  status                SafeguardingStatus           @default(open)
+  severity              SafeguardingSeverity         @default(medium)
+  summary               String                       @db.Text
+
+  subjectRecipientId    String?
+  relatedVisitId        String?
+  relatedReportId       String?                      @unique
+  relatedMatchId        String?                      @unique
+
+  openedAt              DateTime                     @default(now())
+  openedByOperatorId    String?                      // null when system-opened
+  assignedToOperatorId  String?
+  closedAt              DateTime?
+  closedByOperatorId    String?
+  closureCategory       SafeguardingClosureCategory?
+  closureNote           String?                      @db.Text
+
+  subjectRecipient Recipient?             @relation(fields: [subjectRecipientId], references: [id])
+  relatedVisit     Visit?                 @relation(fields: [relatedVisitId], references: [id])
+  relatedReport    PostVisitReport?       @relation(fields: [relatedReportId], references: [id])
+  relatedMatch     Match?                 @relation(fields: [relatedMatchId], references: [id])
+  openedBy         User?                  @relation("CaseOpenedBy", fields: [openedByOperatorId], references: [id])
+  closedBy         User?                  @relation("CaseClosedBy", fields: [closedByOperatorId], references: [id])
+  assignedTo       User?                  @relation("CaseAssignedTo", fields: [assignedToOperatorId], references: [id])
+  notes            SafeguardingCaseNote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, openedAt(sort: Desc)])
+  @@index([assignedToOperatorId, status])
+  @@index([subjectRecipientId, openedAt(sort: Desc)])
+  @@index([severity, status])
+}
+
+model SafeguardingCaseNote {
+  id               String   @id @default(cuid())
+  caseId           String
+  authorOperatorId String?
+  body             String   @db.Text
+  createdAt        DateTime @default(now())
+
+  case   SafeguardingCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  author User?            @relation(fields: [authorOperatorId], references: [id])
+
+  @@index([caseId, createdAt])
+}
+
+enum SafeguardingStatus {
+  open
+  under_review
+  actioned
+  closed
+}
+
+enum SafeguardingSeverity {
+  low
+  medium
+  high
+  critical
+}
+
+enum SafeguardingClosureCategory {
+  no_action_needed
+  followed_up_with_family
+  followed_up_with_companion
+  companion_removed
+  external_referral
   other
 }
 

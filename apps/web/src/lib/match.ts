@@ -347,6 +347,17 @@ export async function endMatch(
 
   await sendMatchEndedEmails(d.matchId, Boolean(cascadedSubscriptionId));
 
+  // O.7.5 hook: safeguarding_concern reason opens a SafeguardingCase.
+  // Lazy import to break the cycle.
+  if (d.endReason === 'safeguarding_concern') {
+    try {
+      const { openCaseFromMatchEnd } = await import('@/lib/safeguarding');
+      await openCaseFromMatchEnd(d.matchId);
+    } catch (err) {
+      console.error('[match] safeguarding hook failed', { matchId: d.matchId, err });
+    }
+  }
+
   revalidatePath('/ops');
   revalidatePath('/ops/matches');
   revalidatePath(`/ops/matches/${d.matchId}`);

@@ -64,7 +64,7 @@ const TILES = [
     href: '/ops/safeguarding',
     icon: ShieldAlert,
     accent: 'text-red-700',
-    placeholder: 'O.7:SafeguardingCase',
+    placeholder: 'live',
   },
   {
     label: 'DBSs expiring (30d)',
@@ -88,6 +88,7 @@ export default async function OpsTodayPage() {
     openMatchesCount,
     visitsTodayCount,
     missingReportsCount,
+    openCasesCount,
   ] = await Promise.all([
     prisma.enquiry.count({ where: { status: 'new' } }),
     prisma.family.count({ where: { status: 'prospect' } }),
@@ -102,6 +103,9 @@ export default async function OpsTodayPage() {
       });
     })(),
     prisma.visit.count({ where: { state: 'completed', report: null } }),
+    prisma.safeguardingCase.count({
+      where: { status: { in: ['open', 'under_review', 'actioned'] } },
+    }),
   ]);
 
   return (
@@ -147,6 +151,8 @@ export default async function OpsTodayPage() {
             ? visitsTodayCount
             : tile.label === 'Missing post-visit reports'
             ? missingReportsCount
+            : tile.label === 'Open safeguarding cases'
+            ? openCasesCount
             : null;
           return (
             <Link
