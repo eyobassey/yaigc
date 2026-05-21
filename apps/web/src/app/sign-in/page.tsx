@@ -64,10 +64,14 @@ export default function SignInPage({
 
             {/* Auth.js v5 reads `redirectTo` from formData. Older Next.js
                 conventions used `callbackUrl` so we accept that via the URL
-                search param and forward it under the new name. */}
-            {callbackUrl ? (
-              <input type="hidden" name="redirectTo" value={callbackUrl} />
-            ) : null}
+                search param and forward it under the new name. Default
+                fallback is /me, which itself routes to the right portal
+                (/ops, /family, /companion) based on the user's role. */}
+            <input
+              type="hidden"
+              name="redirectTo"
+              value={callbackUrl ?? '/me'}
+            />
 
             <Button type="submit" className="!px-6 !py-3.5">
               Email me a sign-in link

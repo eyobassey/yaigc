@@ -1,8 +1,15 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { auth, signOut } from '@/lib/auth';
+import { signOut } from '@/lib/auth';
+import { getSessionUser, defaultLandingForRole } from '@/lib/auth-helpers';
 import { PageShell } from '@/components/marketing/PageShell';
 import { Button } from '@/components/ui/Button';
+
+// /me is the post-sign-in router. Magic-link sign-ins land here when no
+// explicit callbackUrl was given, and we forward them to the portal that
+// matches their role. The page only renders directly for users whose role
+// has no portal yet (rare: a brand-new account before an operator has
+// promoted them).
 
 export const metadata: Metadata = {
   title: 'Your account',
@@ -11,12 +18,15 @@ export const metadata: Metadata = {
 };
 
 export default async function MePage() {
-  const session = await auth();
-  if (!session?.user) {
+  const user = await getSessionUser();
+  if (!user) {
     redirect('/sign-in?callbackUrl=/me');
   }
 
-  const user = session.user;
+  const landing = defaultLandingForRole(user.role);
+  if (landing !== '/me') {
+    redirect(landing);
+  }
 
   return (
     <PageShell>
@@ -29,20 +39,19 @@ export default async function MePage() {
             You are signed in.
           </h1>
           <p className="font-head italic text-terracotta text-[clamp(1.25rem,2vw,1.5rem)] leading-[1.4] mt-4">
-            A smoke-test page until the real account surfaces land.
+            We have not set up your part of the app yet.
+          </p>
+          <p className="text-charcoal text-lg leading-[1.6] mt-6 max-w-[48ch]">
+            Sit tight - we will reach out as soon as everything is ready.
+            Meanwhile if you think you should be seeing something, please
+            get in touch.
           </p>
 
           <dl className="mt-10 bg-paper border border-moss/[0.08] rounded-[20px] p-[clamp(1.75rem,3vw,2.25rem)] grid grid-cols-1 min-[500px]:grid-cols-[max-content_1fr] gap-x-8 gap-y-3 text-[1rem]">
             <dt className="font-medium text-stone">Email</dt>
             <dd className="text-charcoal break-all">{user.email}</dd>
-            {user.name ? (
-              <>
-                <dt className="font-medium text-stone">Name</dt>
-                <dd className="text-charcoal">{user.name}</dd>
-              </>
-            ) : null}
-            <dt className="font-medium text-stone">User ID</dt>
-            <dd className="text-charcoal font-mono text-[0.875rem] break-all">{user.id}</dd>
+            <dt className="font-medium text-stone">Role</dt>
+            <dd className="text-charcoal font-mono text-[0.875rem]">{user.role}</dd>
           </dl>
 
           <form

@@ -28,6 +28,12 @@ const PASSTHROUGH_PREFIXES = [
   '/_next',
   '/sign-in',
   '/no-access',
+  // /family lives on the apex but a stray ops.* visit to a /family URL
+  // should not be rewritten to /ops - the FamilyLayout server guard will
+  // bounce a non-family visitor on its own. Putting it in the passthrough
+  // means the role check lands in a deterministic place rather than
+  // double-redirecting.
+  '/family',
   // Static brand asset folders served from /public. Without these the
   // sign-in page (which renders the marketing PageShell, which renders the
   // nav, which loads /logo/wordmark-horizontal-moss-on-cream.svg) ends up
