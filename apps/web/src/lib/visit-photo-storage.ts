@@ -1,20 +1,28 @@
-// Server-only helpers for reading/writing post-visit report photos on
-// disk. Files live outside the Next.js public/ tree at
-// /home/username/igc-platform/uploads/post-visit-reports/<reportId>/. The API
-// route at /api/visit-photos/[id] auth-checks the operator session
-// before streaming the bytes back.
+// Server-only helpers for reading/writing post-visit report photos to
+// S3 (s3://igc-app-files-prod). Files are stored under
+// post-visit-reports/<reportId>/<filename> matching the prior on-disk
+// layout. Bucket is private; objects are never publicly readable. The
+// API route at /api/visit-photos/[id] auth-checks the operator session
+// and streams bytes back.
+//
+// AWS credentials picked up from AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
+// in the env file (PM2 passes them through via --env-file=).
 
-import { mkdir, writeFile, readFile, unlink } from 'node:fs/promises';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+  NoSuchKey,
+} from '@aws-sdk/client-s3';
 import { randomBytes } from 'node:crypto';
-import path from 'node:path';
 
-const UPLOADS_ROOT = path.resolve(
-  process.cwd(),
-  '..',
-  '..',
-  'uploads',
-  'post-visit-reports',
-);
+const BUCKET = process.env.S3_BUCKET || 'igc-app-files-prod';
+const REGION =
+  process.env.S3_REGION || process.env.AWS_DEFAULT_REGION || 'eu-west-2';
+const KEY_PREFIX = 'post-visit-reports';
+
+const s3 = new S3Client({ region: REGION });
 
 const ALLOWED_TYPES: Record<string, string> = {
   'image/jpeg': '.jpg',
@@ -30,18 +38,25 @@ export interface SavedPhoto {
   filename: string;
   contentType: string;
   sizeBytes: number;
-  absPath: string;
 }
 
-/**
- * Validate + persist a single uploaded File to the report's directory.
- * Throws PhotoValidationError for any client-fixable problem.
- */
+function keyFor(reportId: string, filename: string): string {
+  // Defensive: cuid format on reportId, server-generated filename
+  // format on the file. Both feed directly into the S3 key so
+  // tightening these prevents anything weird ending up in the bucket.
+  if (!/^[a-z0-9]{20,40}$/i.test(reportId)) {
+    throw new Error('Invalid report id.');
+  }
+  if (!/^[a-z0-9]+\.(jpg|png)$/i.test(filename)) {
+    throw new Error('Invalid filename.');
+  }
+  return `${KEY_PREFIX}/${reportId}/${filename}`;
+}
+
 export async function savePhoto(
   reportId: string,
   file: File,
 ): Promise<SavedPhoto> {
-  // Defensive: cuid format - no path traversal.
   if (!/^[a-z0-9]{20,40}$/i.test(reportId)) {
     throw new PhotoValidationError('Invalid report id.');
   }
@@ -60,42 +75,63 @@ export async function savePhoto(
     );
   }
 
-  const dir = path.join(UPLOADS_ROOT, reportId);
-  await mkdir(dir, { recursive: true, mode: 0o750 });
-
   const filename = `${randomBytes(12).toString('hex')}${ext}`;
-  const absPath = path.join(dir, filename);
-
+  const key = keyFor(reportId, filename);
   const buffer = Buffer.from(await file.arrayBuffer());
-  await writeFile(absPath, buffer, { mode: 0o640 });
 
-  return { filename, contentType: file.type, sizeBytes: file.size, absPath };
-}
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: BUCKET,
+      Key: key,
+      Body: buffer,
+      ContentType: file.type,
+      // Defensive: we never want these objects publicly readable.
+      // ACLs are off on the bucket so this is redundant with the
+      // bucket policy, but explicit is fine.
+      ACL: 'private',
+    }),
+  );
 
-export function photoPath(reportId: string, filename: string): string {
-  if (!/^[a-z0-9]{20,40}$/i.test(reportId)) {
-    throw new Error('Invalid report id.');
-  }
-  if (!/^[a-z0-9]+\.(jpg|png)$/i.test(filename)) {
-    throw new Error('Invalid filename.');
-  }
-  return path.join(UPLOADS_ROOT, reportId, filename);
+  return { filename, contentType: file.type, sizeBytes: file.size };
 }
 
 export async function readPhotoBytes(
   reportId: string,
   filename: string,
 ): Promise<Buffer> {
-  return readFile(photoPath(reportId, filename));
+  const key = keyFor(reportId, filename);
+  try {
+    const r = await s3.send(
+      new GetObjectCommand({ Bucket: BUCKET, Key: key }),
+    );
+    if (!r.Body) throw new Error('S3 returned empty body.');
+    // Body is a Readable stream in Node. Buffer it - photos are <=5MB
+    // and we are auth-streaming through Next.js, not piping to client
+    // directly, so the simple Buffer path is fine.
+    const chunks: Buffer[] = [];
+    for await (const chunk of r.Body as AsyncIterable<Uint8Array>) {
+      chunks.push(Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
+  } catch (err) {
+    if (err instanceof NoSuchKey) {
+      throw new Error(`Photo not found: ${key}`);
+    }
+    throw err;
+  }
 }
 
 export async function deletePhotoFile(
   reportId: string,
   filename: string,
 ): Promise<void> {
+  const key = keyFor(reportId, filename);
   try {
-    await unlink(photoPath(reportId, filename));
+    await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+    // S3 DeleteObject returns 204 even for non-existent keys, so a
+    // real error here is something other than "not found" - log and
+    // continue rather than crashing the form action.
+    console.error('[s3] delete failed', { key, err });
   }
 }
