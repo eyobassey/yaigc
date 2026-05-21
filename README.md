@@ -12,9 +12,11 @@ site, family portal, companion portal, and operator console. One application,
 one database, organised internally as a modular monolith with eight bounded
 contexts.
 
-**Status**: pre-Sprint-0. This README and the `packages/content/` starter are
-the only artefacts so far. See [Where things are](#where-things-are) below for
-the honest list.
+**Status**: marketing site + auth backbone live in production at
+[youareingoodcompany.co.uk](https://youareingoodcompany.co.uk). Sprint 1 pages
+shipped, magic-link sign-in working end-to-end, Postgres + Prisma schema v0
+applied. See [Where things are](#where-things-are) below for the honest list
+of what is built versus what is queued.
 
 ---
 
@@ -441,31 +443,80 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 
 ### Built and working
 
-> Updated as each item lands. Nothing is built yet beyond this README and the
-> `packages/content/` starter (en-GB.ts + lint rule). Tick each box only when
-> the thing actually works on staging, not when the PR is open.
+> Tick each box only when the thing actually works in production, not when
+> the PR is open. Last updated 2026-05-21.
 
-- [ ] Repository, CI/CD, SSH-deploy pipeline to the IONOS box
-- [ ] Local development environment (Docker)
-- [ ] Design tokens (`packages/design-tokens`) with full brand palette
-- [x] Content strings (`packages/content`) with brand voice guard
-- [ ] Self-hosted Fraunces and Inter fonts
-- [ ] `/styleguide` route rendering all tokens
-- [ ] Prisma schema v0 (User, Family, FamilyMember, Recipient, Companion, Visit, AuditLogEntry, Session)
+**Infrastructure**
+
+- [x] Repository (GitHub: `eyobassey/yaigc`, private; SSH push from box)
+- [x] IONOS London VPS with Postgres 16 (PGDG), Redis 7, nginx, PM2
+- [x] HTTPS end-to-end: Cloudflare Full (Strict) + 15-year Origin Cert
+- [x] nginx hardening: HSTS, X-Frame-Options DENY, X-Content-Type-Options, Referrer-Policy, Permissions-Policy
+- [ ] CI/CD pipeline (currently manual `pnpm build` + `pm2 restart` on the box)
+- [ ] Local development environment (Docker stack)
+
+**Web platform foundations**
+
+- [x] pnpm workspace: `apps/web` + `packages/content` + `packages/design-tokens`
+- [x] Next.js 14 App Router, TypeScript strict
+- [x] Tailwind CSS 3.4 sourced from design tokens
+- [x] Self-hosted Fraunces + Inter via `next/font/google`
+- [x] Design tokens (`packages/design-tokens`) with full brand palette
+- [x] Content strings (`packages/content`) with brand voice guard (1736 string literals scanned, 0 violations)
+- [x] `/styleguide` route rendering tokens
+- [x] Shared `PageShell` (Nav + footer + skip-link) and `LongForm` primitives
+
+**Marketing surface (Sprint 1)**
+
+- [x] Home (`/`) with hero photo, trust strip, pillars, how-it-works teaser, founder note, visit gallery, pricing teaser, FAQ, final CTA
+- [x] `/how-it-works`, `/pricing`, `/safeguarding`, `/companions/join` (full content from `@igc/content`)
+- [x] `/about` (founder copy from internal review bundle)
+- [x] `/privacy`, `/terms`, `/accessibility` (long-form drafts, robots:noindex, "Draft for review" banners, italic placeholders for Companies House / ICO numbers)
+- [x] `/not-found`, `/icon.svg` favicon
+- [x] Mobile drawer, sticky nav, full-name horizontal wordmark
+
+**SEO + social**
+
+- [x] `robots.txt`, `sitemap.xml`, `theme-color`, `apple-mobile-web-app-status-bar-style`
+- [x] Open Graph + Twitter card defaults in root layout
+- [x] Per-page OG images (`/`, `/pricing`, `/safeguarding`, `/how-it-works`, `/about`, `/companions/join`) rendered via `next/og` with real Fraunces italic
+- [x] JSON-LD: LocalBusiness in root layout, FAQPage on home
+- [x] Title template `%s · You Are In Good Company`
+
+**Database**
+
+- [x] Postgres 16 on the IONOS box, loopback only, role `yaigc` with CREATEDB for migrations
+- [x] Prisma 6.19 schema v0: `User`, `Account`, `Session`, `VerificationToken` (Auth.js standard) + `UserRole` enum (`USER` / `COMPANION` / `OPERATOR` / `ADMIN`)
+- [x] First migration applied (`20260521..._init`)
+- [ ] Business models: `Family`, `FamilyMember`, `Recipient`, `Companion`, `Visit`, `AuditLogEntry`
 - [ ] Seed script with realistic dev data
 - [ ] Bounded-context directory scaffolding with `dependency-cruiser` enforcement
-- [ ] Auth.js v5 with magic link + password + database sessions
+
+**Auth + accounts**
+
+- [x] Auth.js v5 (beta) with `@auth/prisma-adapter`, database session strategy
+- [x] Magic link via Brevo SMTP, branded HTML email with horizontal wordmark
+- [x] `/sign-in`, `/sign-in/check-email`, `/me` (Server Component, redirects to `/sign-in?callbackUrl=/me` if not signed in; shows email + user id + sign-out)
+- [x] `/api/auth/[...nextauth]` route handlers
+- [ ] Password provider (Auth.js Credentials, hashed via argon2)
 - [ ] Role-based middleware enforcing route-group access
-- [ ] `/me` smoke-test page
 - [ ] Audit log writer wired into auth flows
-- [ ] Sentry, PostHog (EU, gated on cookie consent), Better Stack logging
-- [ ] Cookie consent banner
-- [ ] Legal page surfaces (privacy, terms, accessibility, cookies, safeguarding) as editable MDX
-- [ ] First 11 ADRs documenting the major decisions
+
+**Performance + caching**
+
+- [x] `sharp` installed for next/image production optimisation
+- [x] Long-cache headers (`max-age=31536000, immutable`) for `/logo`, `/photos`, `/fonts`
+- [x] Explicit width/height on all `<img>` tags (CLS-protective)
+
+**Observability + legal (queued)**
+
+- [ ] Sentry, PostHog (EU region, gated on cookie consent), Better Stack logging
+- [ ] Cookie consent banner (PECR + UK GDPR)
+- [ ] Real Companies House registration number + ICO registration number swapped in for the italic placeholders in /privacy and /terms
+- [ ] First 11 ADRs documenting the major decisions (the `docs/adr/` directory is currently empty)
 
 ### In flight (Sprint 1+)
 
-- [ ] Marketing site pages: home, how-it-works, pricing, our-companions, about, FAQ, join-the-companion-club, contact
 - [ ] Family portal: sign-up, dashboard, visits, recipient profile, plan and payments, household, messages
 - [ ] Companion portal: application, onboarding tracker, profile, availability calendar, visits, post-visit report, earnings
 - [ ] Operator console: family list, companion roster, booking management, safeguarding cases, payment ledger, audit viewer
@@ -476,6 +527,8 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 - [ ] SMS reminders (Twilio)
 - [ ] DBS expiry tracking and alerts (uCheck)
 - [ ] Identity verification (Stripe Identity)
+- [ ] Migrate AWS from `769018976493` (current Rom Flex account) → YAIGC's own AWS account
+- [ ] Migrate Brevo from Rom Flex's account → YAIGC's own Brevo account
 
 ### Not yet started (Phase 2+)
 
