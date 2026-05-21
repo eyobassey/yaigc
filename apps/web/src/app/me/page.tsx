@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { auth, signOut } from '@/lib/auth';
 import { PageShell } from '@/components/marketing/PageShell';
+import { Button } from '@/components/ui/Button';
 
 export const metadata: Metadata = {
   title: 'Your account',
@@ -51,12 +52,9 @@ export default async function MePage() {
             }}
             className="mt-10"
           >
-            <button
-              type="submit"
-              className="inline-flex items-center justify-center px-6 py-3 rounded-full border border-moss text-moss text-[0.95rem] font-medium hover:bg-moss hover:text-cream transition-colors"
-            >
+            <Button type="submit" variant="outline" size="small">
               Sign out
-            </button>
+            </Button>
           </form>
         </div>
       </section>

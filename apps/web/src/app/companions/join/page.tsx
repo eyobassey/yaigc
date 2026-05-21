@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { ArrowRight, Check, X } from 'lucide-react';
 import { brand, joinCompanionClub } from '@igc/content';
 import { PageShell } from '@/components/marketing/PageShell';
+import { Button } from '@/components/ui/Button';
 
 export const metadata: Metadata = {
   title: `Join ${brand.companionSubBrand}`,
@@ -37,12 +38,9 @@ function JoinHero() {
             {joinCompanionClub.hero.body}
           </p>
           <div className="flex flex-wrap gap-4 mt-10">
-            <a
-              href="/companions/join/apply"
-              className="inline-flex items-center justify-center px-9 py-[1.125rem] rounded-full bg-moss text-cream text-base font-medium hover:bg-moss-dark transition-all duration-200 hover:shadow-lg hover:-translate-y-px"
-            >
+            <Button href="/companions/join/apply">
               {joinCompanionClub.hero.primaryCta}
-            </a>
+            </Button>
             <Link
               href="#what-it-is"
               className="inline-flex items-center justify-center px-4 py-[1.125rem] text-moss text-base font-medium hover:text-terracotta transition-colors"
@@ -167,12 +165,9 @@ function ApplyCTA() {
         <p className="text-charcoal text-lg leading-[1.6] max-w-[44ch] mx-auto mb-10">
           Tell us a little about you and we will pick up the phone within a few days.
         </p>
-        <a
-          href="/companions/join/apply"
-          className="inline-flex items-center justify-center px-9 py-[1.125rem] rounded-full bg-moss text-cream text-base font-medium hover:bg-moss-dark transition-all duration-200 hover:shadow-lg hover:-translate-y-px"
-        >
+        <Button href="/companions/join/apply">
           {joinCompanionClub.hero.primaryCta}
-        </a>
+        </Button>
       </div>
     </section>
   );

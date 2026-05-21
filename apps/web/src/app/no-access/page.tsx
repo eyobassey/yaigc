@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { brand } from '@igc/content';
 import { PageShell } from '@/components/marketing/PageShell';
+import { Button } from '@/components/ui/Button';
 
 export const metadata: Metadata = {
   title: 'Access denied',
@@ -25,18 +25,10 @@ export default function NoAccessPage() {
             should be able to reach it, please get in touch.
           </p>
           <div className="mt-10 flex flex-wrap gap-4 justify-center">
-            <Link
-              href="/"
-              className="inline-flex items-center justify-center px-9 py-[1.125rem] rounded-full bg-moss text-cream text-base font-medium hover:bg-moss-dark transition-all duration-200 hover:shadow-lg hover:-translate-y-px"
-            >
-              Back to home
-            </Link>
-            <a
-              href={`mailto:${brand.supportEmail}`}
-              className="inline-flex items-center justify-center px-9 py-[1.125rem] rounded-full border border-moss text-moss text-base font-medium hover:bg-moss hover:text-cream transition-colors"
-            >
+            <Button href="/">Back to home</Button>
+            <Button href={`mailto:${brand.supportEmail}`} variant="outline">
               Email us
-            </a>
+            </Button>
           </div>
         </div>
       </section>

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { signIn } from '@/lib/auth';
 import { PageShell } from '@/components/marketing/PageShell';
+import { Button } from '@/components/ui/Button';
 
 export const metadata: Metadata = {
   title: 'Sign in',
@@ -68,12 +69,9 @@ export default function SignInPage({
               <input type="hidden" name="redirectTo" value={callbackUrl} />
             ) : null}
 
-            <button
-              type="submit"
-              className="inline-flex items-center justify-center px-6 py-3.5 rounded-full bg-moss text-cream text-base font-medium hover:bg-moss-dark transition-all duration-200 hover:shadow-lg hover:-translate-y-px"
-            >
+            <Button type="submit" className="!px-6 !py-3.5">
               Email me a sign-in link
-            </button>
+            </Button>
           </form>
 
           <p className="mt-8 text-sm text-stone leading-[1.55]">

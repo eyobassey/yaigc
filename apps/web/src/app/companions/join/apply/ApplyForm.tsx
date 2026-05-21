@@ -6,6 +6,7 @@ import {
   type ApplicationState,
 } from '@/lib/companion';
 import { DAYS, PERIODS } from '@/lib/availability';
+import { Button } from '@/components/ui/Button';
 
 const initial: ApplicationState = { ok: false };
 
@@ -368,12 +369,8 @@ function Checkbox({
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="inline-flex items-center justify-center px-9 py-[1.125rem] rounded-full bg-moss text-cream text-base font-medium hover:bg-moss-dark transition-all duration-200 hover:shadow-lg hover:-translate-y-px disabled:opacity-60 disabled:cursor-not-allowed self-start"
-    >
+    <Button type="submit" disabled={pending} className="self-start">
       {pending ? 'Sending…' : 'Submit application'}
-    </button>
+    </Button>
   );
 }

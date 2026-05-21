@@ -1,5 +1,5 @@
-import Link from 'next/link';
 import { brand } from '@igc/content';
+import { Button } from '@/components/ui/Button';
 
 /**
  * Brand-aligned 404. Several footer / nav links point at routes that have
@@ -32,18 +32,10 @@ export default function NotFound() {
           need to start a conversation with us.
         </p>
         <div className="mt-10 flex flex-wrap gap-4 justify-center">
-          <Link
-            href="/"
-            className="inline-flex items-center justify-center px-9 py-[1.125rem] rounded-full bg-moss text-cream text-base font-medium hover:bg-moss-dark transition-all duration-200 hover:shadow-lg hover:-translate-y-px"
-          >
-            Back to home
-          </Link>
-          <a
-            href={`tel:${brand.supportPhone.replace(/\s/g, '')}`}
-            className="inline-flex items-center justify-center px-9 py-[1.125rem] rounded-full border border-moss text-moss text-base font-medium hover:bg-moss hover:text-cream transition-colors"
-          >
+          <Button href="/">Back to home</Button>
+          <Button href={`tel:${brand.supportPhone.replace(/\s/g, '')}`} variant="outline">
             Or call us on {brand.supportPhone}
-          </a>
+          </Button>
         </div>
         <p className="mt-16 font-head italic text-terracotta text-lg">
           {brand.closingLine}
