@@ -28,6 +28,14 @@ const PASSTHROUGH_PREFIXES = [
   '/_next',
   '/sign-in',
   '/no-access',
+  // Static brand asset folders served from /public. Without these the
+  // sign-in page (which renders the marketing PageShell, which renders the
+  // nav, which loads /logo/wordmark-horizontal-moss-on-cream.svg) ends up
+  // redirecting every <img> request to /ops and the page loads logoless.
+  '/logo',
+  '/photos',
+  '/fonts',
+  '/email',
 ] as const;
 
 const PASSTHROUGH_EXACT = new Set([
@@ -54,7 +62,14 @@ export function middleware(request: NextRequest) {
       const forwardedHost = request.headers.get('x-forwarded-host') ?? host;
       const proto = request.headers.get('x-forwarded-proto') ?? 'https';
       const target = new URL(`${proto}://${forwardedHost}/ops`);
-      return NextResponse.redirect(target, 308);
+      const response = NextResponse.redirect(target, 308);
+      // Do not let Cloudflare or browsers cache this redirect. If we ever
+      // change the passthrough list, a cached 308 for (say) /logo/*.svg
+      // would survive for as long as the origin Cache-Control instructs
+      // (currently 1 year, immutable). no-store keeps the redirect
+      // ephemeral so middleware behaviour can evolve without footguns.
+      response.headers.set('Cache-Control', 'no-store');
+      return response;
     }
   }
 
