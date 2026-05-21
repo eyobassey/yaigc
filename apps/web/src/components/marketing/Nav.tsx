@@ -59,11 +59,14 @@ export function Nav() {
             {/* SVG wordmark — viewBox 369x62, scales by height, width auto.
                 alt="" because the enclosing <Link> already carries the
                 accessible name via aria-label, so re-announcing the brand
-                name would just create double-speak for screen-reader users. */}
+                name would just create double-speak for screen-reader users.
+                width/height attrs let the browser reserve layout space. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/logo/wordmark-moss-on-cream.svg"
               alt=""
+              width={369}
+              height={62}
               className="h-7 sm:h-8 w-auto"
             />
           </Link>
@@ -145,6 +148,8 @@ export function Nav() {
             <img
               src="/logo/wordmark-moss-on-cream.svg"
               alt={brand.fullName}
+              width={369}
+              height={62}
               className="h-7 w-auto"
             />
             <button

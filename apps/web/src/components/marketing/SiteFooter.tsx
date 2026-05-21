@@ -8,11 +8,15 @@ export function SiteFooter() {
       <div className="max-w-[1240px] mx-auto px-[clamp(1.25rem,4vw,2.5rem)]">
         <div className="grid gap-12 mb-16 min-[760px]:grid-cols-[1.5fr_1fr_1fr_1fr]">
           <div>
-            {/* Stacked cream-on-moss wordmark for the moss-green footer */}
+            {/* Stacked cream-on-moss wordmark for the moss-green footer.
+                Intrinsic viewBox 289x211; explicit width/height let the browser
+                reserve layout space before the SVG downloads (CLS-protective). */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/logo/wordmark-cream-on-moss.svg"
               alt={brand.fullName}
+              width={289}
+              height={211}
               className="h-20 w-auto mb-6"
             />
             <p className="font-head italic text-[1.0625rem] leading-[1.5] max-w-[28ch] opacity-85">
