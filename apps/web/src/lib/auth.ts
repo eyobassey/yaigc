@@ -1,13 +1,19 @@
 import NextAuth from 'next-auth';
 import Nodemailer from 'next-auth/providers/nodemailer';
 import { PrismaAdapter } from '@auth/prisma-adapter';
+import { createTransport } from 'nodemailer';
+import { brand } from '@igc/content';
 import { prisma } from '@/lib/prisma';
+import {
+  magicLinkHtml,
+  magicLinkText,
+  magicLinkSubject,
+} from '@/lib/email/magic-link';
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: PrismaAdapter(prisma),
 
-  // Database sessions, not JWT. Required by Auth.js when using an adapter.
-  // Per README: "Auth.js v5 with database sessions" is the chosen strategy.
+  // Database sessions per README. Required when using an adapter.
   session: { strategy: 'database' },
 
   providers: [
@@ -20,7 +26,28 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           pass: process.env.SMTP_PASSWORD!,
         },
       },
-      from: process.env.EMAIL_SENDER!,
+      from: `${brand.fullName} <${process.env.EMAIL_SENDER}>`,
+
+      // Override the default Auth.js email body with the branded template.
+      async sendVerificationRequest({ identifier: to, url, provider }) {
+        const { host } = new URL(url);
+        const transport = createTransport(provider.server);
+
+        const result = await transport.sendMail({
+          to,
+          from: provider.from,
+          subject: magicLinkSubject(),
+          text: magicLinkText({ url, host }),
+          html: magicLinkHtml({ url, host }),
+        });
+
+        const failed = result.rejected.concat(result.pending).filter(Boolean);
+        if (failed.length) {
+          throw new Error(
+            `magic link email rejected for: ${failed.join(', ')}`,
+          );
+        }
+      },
     }),
   ],
 
@@ -29,6 +56,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     verifyRequest: '/sign-in/check-email',
   },
 
-  // Trust the X-Forwarded-* headers from nginx (CF -> nginx -> Next.js)
+  // Trust X-Forwarded-* headers because the chain is CF -> nginx -> Next.js
   trustHost: true,
 });

@@ -56,17 +56,15 @@ export function Nav() {
             aria-label={`${brand.fullName}, home`}
             className="flex items-center min-w-0 flex-shrink"
           >
-            {/* SVG wordmark — viewBox 369x62, scales by height, width auto.
-                alt="" because the enclosing <Link> already carries the
-                accessible name via aria-label, so re-announcing the brand
-                name would just create double-speak for screen-reader users.
-                width/height attrs let the browser reserve layout space. */}
+            {/* Horizontal full-name lockup — viewBox 924x115, ~8:1 ratio,
+                fits naturally in the nav strip. alt="" because the enclosing
+                <Link> already has the accessible name via aria-label. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/logo/wordmark-moss-on-cream.svg"
+              src="/logo/wordmark-horizontal-moss-on-cream.svg"
               alt=""
-              width={369}
-              height={62}
+              width={924}
+              height={115}
               className="h-7 sm:h-8 w-auto"
             />
           </Link>
@@ -146,10 +144,10 @@ export function Nav() {
           <div className="flex items-center justify-between px-6 py-5 border-b border-moss/10">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/logo/wordmark-moss-on-cream.svg"
+              src="/logo/wordmark-horizontal-moss-on-cream.svg"
               alt={brand.fullName}
-              width={369}
-              height={62}
+              width={924}
+              height={115}
               className="h-7 w-auto"
             />
             <button

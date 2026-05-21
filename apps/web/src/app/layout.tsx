@@ -54,7 +54,7 @@ const localBusinessJsonLd = {
   legalName: brand.legalEntity,
   alternateName: brand.shortName,
   url: SITE_URL,
-  logo: `${SITE_URL}/logo/wordmark-moss-on-cream.svg`,
+  logo: `${SITE_URL}/logo/wordmark-full-moss-on-cream.svg`,
   image: `${SITE_URL}/opengraph-image`,
   description: 'Companionship visits for older adults across South Manchester, Trafford, Stockport, and Salford. Vetted, trained, insured companions. The same companion every visit.',
   telephone: brand.supportPhone,
