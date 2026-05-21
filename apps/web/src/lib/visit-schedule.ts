@@ -226,6 +226,47 @@ export function formatUkTime(at: Date): string {
   }).format(at);
 }
 
+/**
+ * Half-open interval [start, end) covering the UK-local calendar day
+ * that contains the given instant. Uses Europe/London so BST/GMT
+ * transitions are handled correctly - a "today" query at 1am UK local
+ * during BST returns visits from the same UK day, not yesterday's
+ * UTC day. Returned bounds are UTC Dates.
+ */
+export function ukLocalDayBounds(at: Date): { startUtc: Date; endUtc: Date } {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(at);
+  const o: Record<string, string> = {};
+  for (const p of parts) o[p.type] = p.value;
+  const y = Number(o.year ?? '1970');
+  const m = Number(o.month ?? '1') - 1;
+  const d = Number(o.day ?? '1');
+  const startUtc = ukWallClockToUtc(y, m, d, 0, 0);
+  // Add a calendar day in UK local. We cannot just add 24h because of
+  // DST transitions (one day per year is 23h, another is 25h).
+  const nextDay = new Date(Date.UTC(y, m, d + 1));
+  const np = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(nextDay);
+  const no: Record<string, string> = {};
+  for (const p of np) no[p.type] = p.value;
+  const endUtc = ukWallClockToUtc(
+    Number(no.year ?? '1970'),
+    Number(no.month ?? '1') - 1,
+    Number(no.day ?? '1'),
+    0,
+    0,
+  );
+  return { startUtc, endUtc };
+}
+
 export const VISIT_STATE_LABEL: Record<string, string> = {
   scheduled: 'Scheduled',
   confirmed: 'Confirmed',

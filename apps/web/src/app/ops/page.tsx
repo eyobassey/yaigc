@@ -95,11 +95,10 @@ export default async function OpsTodayPage() {
     prisma.companionApplication.count({ where: { status: 'received' } }),
     prisma.match.count({ where: { status: 'proposed' } }),
     (async () => {
-      const startOfToday = new Date();
-      startOfToday.setUTCHours(0, 0, 0, 0);
-      const endOfToday = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000);
+      const { ukLocalDayBounds } = await import('@/lib/visit-schedule');
+      const { startUtc, endUtc } = ukLocalDayBounds(new Date());
       return prisma.visit.count({
-        where: { scheduledStartAt: { gte: startOfToday, lt: endOfToday } },
+        where: { scheduledStartAt: { gte: startUtc, lt: endUtc } },
       });
     })(),
     prisma.visit.count({ where: { state: 'completed', report: null } }),

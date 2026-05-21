@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Calendar, ChevronRight } from 'lucide-react';
 import { type Prisma, type VisitState } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { formatUkDateTime, VISIT_STATE_LABEL } from '@/lib/visit-schedule';
+import { formatUkDateTime, VISIT_STATE_LABEL, ukLocalDayBounds } from '@/lib/visit-schedule';
 
 export const metadata = { title: 'Visits' };
 
@@ -42,9 +42,7 @@ export default async function OpsVisitsPage({
   const filter = FILTERS.some((f) => f.value === rawFilter) ? rawFilter : 'upcoming';
 
   const now = new Date();
-  const startOfToday = new Date(now);
-  startOfToday.setUTCHours(0, 0, 0, 0);
-  const endOfToday = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000);
+  const { startUtc: startOfToday, endUtc: endOfToday } = ukLocalDayBounds(now);
 
   let where: Prisma.VisitWhereInput = {};
   let orderDirection: 'asc' | 'desc' = 'asc';
