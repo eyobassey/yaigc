@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ChevronLeft, ExternalLink } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, ArrowRight } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { getSessionUser } from '@/lib/auth-helpers';
 import { StatusPill, SourcePill } from '../page';
@@ -64,6 +64,51 @@ export default async function OpsEnquiryDetailPage({
           />
         </div>
       </header>
+
+      {/* Conversion banner: appears for triaged enquiries (call-to-action)
+          and for converted enquiries (deep link to the resulting Family). */}
+      {enquiry.status === 'triaged' ? (
+        <div className="mb-6 bg-moss text-cream rounded-[12px] p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <div className="font-body text-[0.7rem] uppercase tracking-[0.1em] text-terracotta-light mb-1">
+              Ready when you are
+            </div>
+            <div className="font-head text-cream text-[1.125rem] font-medium leading-[1.3]">
+              Convert this enquiry into a Family.
+            </div>
+            <div className="text-cream/75 text-[0.875rem] mt-1">
+              Creates the Family, the payer, and a Recipient. Triggered after the intake call.
+            </div>
+          </div>
+          <Link
+            href={`/ops/enquiries/${enquiry.id}/convert`}
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-cream text-moss text-[0.9375rem] font-medium hover:bg-cream-deep transition-colors whitespace-nowrap"
+          >
+            Convert
+            <ArrowRight size={16} strokeWidth={1.75} aria-hidden="true" />
+          </Link>
+        </div>
+      ) : null}
+
+      {enquiry.status === 'converted' && enquiry.convertedToFamilyId ? (
+        <div className="mb-6 bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <div className="font-body text-[0.7rem] uppercase tracking-[0.1em] text-stone mb-1">
+              Outcome
+            </div>
+            <div className="font-head text-moss text-[1.0625rem] font-medium">
+              Converted into a Family.
+            </div>
+          </div>
+          <Link
+            href={`/ops/families/${enquiry.convertedToFamilyId}`}
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-moss text-cream text-[0.9375rem] font-medium hover:bg-moss-dark transition-colors whitespace-nowrap"
+          >
+            Open Family
+            <ChevronRight size={16} strokeWidth={1.75} aria-hidden="true" />
+          </Link>
+        </div>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">

@@ -1,6 +1,6 @@
 import { getSessionUser } from '@/lib/auth-helpers';
 import Link from 'next/link';
-import { Inbox, Calendar, FileText, ShieldAlert, Heart, AlertTriangle } from 'lucide-react';
+import { Inbox, Calendar, FileText, ShieldAlert, Heart, AlertTriangle, Users } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 
 export const metadata = {
@@ -22,6 +22,13 @@ const TILES = [
     href: '/ops/enquiries',
     icon: Inbox,
     accent: 'text-terracotta',
+    placeholder: 'live',
+  },
+  {
+    label: 'Prospect families',
+    href: '/ops/families',
+    icon: Users,
+    accent: 'text-moss',
     placeholder: 'live',
   },
   {
@@ -60,9 +67,10 @@ export default async function OpsTodayPage() {
   // Counts that already have backing data go straight to the DB. Tiles
   // whose models do not exist yet keep the em-dash placeholder until
   // their stage lands.
-  const newEnquiriesCount = await prisma.enquiry.count({
-    where: { status: 'new' },
-  });
+  const [newEnquiriesCount, prospectFamiliesCount] = await Promise.all([
+    prisma.enquiry.count({ where: { status: 'new' } }),
+    prisma.family.count({ where: { status: 'prospect' } }),
+  ]);
 
   return (
     <div>
@@ -93,7 +101,13 @@ export default async function OpsTodayPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {TILES.map((tile) => {
           const isLive = tile.placeholder === 'live';
-          const value = isLive && tile.label === 'New enquiries' ? newEnquiriesCount : null;
+          const value = !isLive
+            ? null
+            : tile.label === 'New enquiries'
+            ? newEnquiriesCount
+            : tile.label === 'Prospect families'
+            ? prospectFamiliesCount
+            : null;
           return (
             <Link
               key={tile.label}

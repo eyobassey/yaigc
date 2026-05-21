@@ -40,8 +40,9 @@ model User {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  accounts Account[]
-  sessions Session[]
+  accounts        Account[]
+  sessions        Session[]
+  familyMembers   FamilyMember[]
 
   @@index([email])
   @@index([role])
@@ -89,6 +90,115 @@ model VerificationToken {
 }
 
 // ----------------------------------------------------------------------------
+// Family context (SDD §12.2) — the buying side of the marketplace.
+//
+// One Family is a single customer relationship. It holds:
+//   - one or more FamilyMembers (the payer plus optionally household members)
+//   - one or more Recipients (the older adults receiving visits)
+//   - subscriptions, payments, etc. (added in later stages)
+//
+// Address fields are intentionally flattened here rather than modelled as
+// embedded composite types: simpler to query, simpler to migrate. JSON or
+// Postgres composite types can come later if we need richer modelling.
+//
+// Sensitive PII fields (address, dateOfBirth, healthNotes, mobility,
+// religiousObservance) carry an `isSensitive: true` access-control intent
+// that the application layer should respect when surfacing data to
+// non-operator-admin roles. The fields are not currently gated at the DB
+// layer; that is operator_safeguarding / operator_admin RBAC work for a
+// later stage.
+// ----------------------------------------------------------------------------
+
+model Family {
+  id                 String        @id @default(cuid())
+  status             FamilyStatus  @default(prospect)
+  billingName        String
+  intakeNotes        String?       @db.Text
+
+  joinedAt           DateTime      @default(now())
+  cancelledAt        DateTime?
+  cancellationReason String?       @db.Text
+
+  members    FamilyMember[]
+  recipients Recipient[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([status, createdAt(sort: Desc)])
+}
+
+model FamilyMember {
+  id                      String                     @id @default(cuid())
+  familyId                String
+  userId                  String
+  role                    FamilyMemberRole           @default(payer)
+  relationshipToRecipient FamilyMemberRelationship?
+  isPrimaryContact        Boolean                    @default(false)
+  addedAt                 DateTime                   @default(now())
+
+  family Family @relation(fields: [familyId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([familyId, userId])
+  @@index([familyId])
+  @@index([userId])
+}
+
+model Recipient {
+  id                  String    @id @default(cuid())
+  familyId            String
+  firstName           String
+  lastName            String
+  preferredName       String?
+  dateOfBirth         DateTime? @db.Date
+  phone               String?
+  pronouns            String?
+  interests           String?   @db.Text
+  thingsToKnow        String?   @db.Text
+  mobility            String?   @db.Text
+  healthNotes         String?   @db.Text
+  dietary             String?   @db.Text
+  religiousObservance String?   @db.Text
+
+  family Family @relation(fields: [familyId], references: [id])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([familyId])
+}
+
+enum FamilyStatus {
+  prospect    // intake done, no first visit yet
+  active      // visiting
+  paused      // subscription paused
+  cancelled   // subscription cancelled
+  archived    // historical / removed from active lists
+}
+
+enum FamilyMemberRole {
+  payer       // billing access; full account control
+  viewer      // [Phase 2] read-only secondary household member
+}
+
+enum FamilyMemberRelationship {
+  daughter
+  son
+  partner
+  spouse
+  sibling
+  grandchild
+  other
+}
+
+// ----------------------------------------------------------------------------
 // Marketing context (SDD §12.10) — inbound enquiries from the public site.
 // A new Enquiry is created by any of:
 //   - the /contact form (source = contact_form)
@@ -113,9 +223,16 @@ model Enquiry {
   createdAt             DateTime        @default(now())
   updatedAt             DateTime        @updatedAt
 
+  // Soft foreign key — once a Family is created from this Enquiry, the
+  // operator surface uses convertedToFamilyId to deep-link. No DB FK is
+  // declared here because (a) we may want to allow merging two enquiries
+  // into one Family later, and (b) cascading deletes between contexts
+  // are deliberately avoided per the data conventions in SDD §12.1.
+
   @@index([status, createdAt(sort: Desc)])
   @@index([source, createdAt(sort: Desc)])
   @@index([email])
+  @@index([convertedToFamilyId])
 }
 
 enum EnquirySource {
