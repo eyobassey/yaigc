@@ -3,9 +3,19 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { createTransport } from 'nodemailer';
+import { brand } from '@igc/content';
 import { prisma } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
 import { getSessionUser } from '@/lib/auth-helpers';
+import {
+  matchConfirmedToFamilyHtml,
+  matchConfirmedToFamilyText,
+  matchConfirmedToFamilySubject,
+  matchConfirmedToCompanionHtml,
+  matchConfirmedToCompanionText,
+  matchConfirmedToCompanionSubject,
+} from '@/lib/email/match-confirmed';
 
 // -------------------------------------------------------------------------
 // PROPOSE A MATCH
@@ -184,10 +194,133 @@ export async function transitionMatch(formData: FormData): Promise<void> {
         ...(d.note ? { note: d.note } : {}),
       },
     });
+
+    if (d.to === 'accepted') {
+      await sendMatchConfirmationEmails(d.matchId);
+    }
   }
 
   revalidatePath('/ops');
   revalidatePath('/ops/matches');
   revalidatePath(`/ops/matches/${d.matchId}`);
   revalidatePath(`/ops/families/${before.familyId}`);
+}
+
+// -------------------------------------------------------------------------
+// EMAIL: on Match.accepted, confirm to family (all members) and companion
+// -------------------------------------------------------------------------
+
+async function sendMatchConfirmationEmails(matchId: string): Promise<void> {
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    include: {
+      family: {
+        select: {
+          id: true,
+          billingName: true,
+          members: {
+            where: { deletedAt: null },
+            include: { user: { select: { email: true } } },
+          },
+        },
+      },
+      recipient: {
+        select: { firstName: true, lastName: true, preferredName: true },
+      },
+      companion: {
+        select: {
+          firstName: true,
+          lastName: true,
+          borough: true,
+          bio: true,
+          user: { select: { email: true } },
+        },
+      },
+    },
+  });
+  if (!match || !match.recipient) return;
+
+  const transport = createTransport({
+    host: process.env.SMTP_HOST!,
+    port: Number(process.env.SMTP_PORT ?? 587),
+    auth: { user: process.env.SMTP_USER!, pass: process.env.SMTP_PASSWORD! },
+  });
+  const from = `${brand.fullName} <${process.env.EMAIL_SENDER}>`;
+
+  // Family side: send to every active member (payer + any household
+  // members). Dedupe by email in case the same address appears twice.
+  const familyEmails = Array.from(
+    new Set(
+      match.family.members
+        .map((m) => m.user.email)
+        .filter((e): e is string => Boolean(e)),
+    ),
+  );
+  const familyInput = {
+    recipientFirstName: match.recipient.firstName,
+    recipientPreferredName: match.recipient.preferredName,
+    companionFirstName: match.companion.firstName,
+    companionLastName: match.companion.lastName,
+    companionBorough: match.companion.borough,
+    companionBio: match.companion.bio,
+  };
+  for (const to of familyEmails) {
+    try {
+      await transport.sendMail({
+        to,
+        from,
+        subject: matchConfirmedToFamilySubject(familyInput),
+        text: matchConfirmedToFamilyText(familyInput),
+        html: matchConfirmedToFamilyHtml(familyInput),
+      });
+      await audit({
+        actorType: 'system',
+        actorId: null,
+        actionType: 'state_change',
+        targetType: 'Match',
+        targetId: matchId,
+        metadata: { event: 'match_confirmation_email_sent', audience: 'family', to },
+      });
+    } catch (err) {
+      console.error('[match] family confirmation email failed', { to, matchId, err });
+    }
+  }
+
+  // Companion side.
+  const companionEmail = match.companion.user.email;
+  if (companionEmail) {
+    const companionInput = {
+      companionFirstName: match.companion.firstName,
+      familyBillingName: match.family.billingName,
+      recipientFirstName: match.recipient.firstName,
+      recipientPreferredName: match.recipient.preferredName,
+    };
+    try {
+      await transport.sendMail({
+        to: companionEmail,
+        from,
+        subject: matchConfirmedToCompanionSubject(companionInput),
+        text: matchConfirmedToCompanionText(companionInput),
+        html: matchConfirmedToCompanionHtml(companionInput),
+      });
+      await audit({
+        actorType: 'system',
+        actorId: null,
+        actionType: 'state_change',
+        targetType: 'Match',
+        targetId: matchId,
+        metadata: {
+          event: 'match_confirmation_email_sent',
+          audience: 'companion',
+          to: companionEmail,
+        },
+      });
+    } catch (err) {
+      console.error('[match] companion confirmation email failed', {
+        to: companionEmail,
+        matchId,
+        err,
+      });
+    }
+  }
 }

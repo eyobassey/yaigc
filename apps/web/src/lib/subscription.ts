@@ -4,9 +4,19 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
+import { createTransport } from 'nodemailer';
+import { brand } from '@igc/content';
 import { prisma } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
 import { getSessionUser } from '@/lib/auth-helpers';
+import {
+  subscriptionCreatedToFamilyHtml,
+  subscriptionCreatedToFamilyText,
+  subscriptionCreatedToFamilySubject,
+  subscriptionCreatedToCompanionHtml,
+  subscriptionCreatedToCompanionText,
+  subscriptionCreatedToCompanionSubject,
+} from '@/lib/email/subscription-created';
 
 // -------------------------------------------------------------------------
 // CREATE
@@ -151,6 +161,8 @@ export async function createSubscription(
     data: { status: 'active' },
   });
 
+  await sendSubscriptionCreatedEmails(sub.id);
+
   revalidatePath('/ops');
   revalidatePath('/ops/matches');
   revalidatePath(`/ops/families/${sub.familyId}`);
@@ -235,5 +247,135 @@ export async function transitionSubscription(formData: FormData): Promise<void> 
   revalidatePath('/ops');
   revalidatePath(`/ops/subscriptions/${d.subscriptionId}`);
   revalidatePath(`/ops/families/${before.familyId}`);
+}
+
+// -------------------------------------------------------------------------
+// EMAIL: on createSubscription, confirm to family (all members) + companion
+// -------------------------------------------------------------------------
+
+async function sendSubscriptionCreatedEmails(subscriptionId: string): Promise<void> {
+  const sub = await prisma.subscription.findUnique({
+    where: { id: subscriptionId },
+    include: {
+      family: {
+        select: {
+          id: true,
+          billingName: true,
+          members: {
+            where: { deletedAt: null },
+            include: { user: { select: { email: true } } },
+          },
+        },
+      },
+      recipient: { select: { firstName: true, preferredName: true } },
+      companion: {
+        select: {
+          firstName: true,
+          lastName: true,
+          user: { select: { email: true } },
+        },
+      },
+    },
+  });
+  if (!sub) return;
+
+  const transport = createTransport({
+    host: process.env.SMTP_HOST!,
+    port: Number(process.env.SMTP_PORT ?? 587),
+    auth: { user: process.env.SMTP_USER!, pass: process.env.SMTP_PASSWORD! },
+  });
+  const from = `${brand.fullName} <${process.env.EMAIL_SENDER}>`;
+
+  const schedule = {
+    frequency: sub.frequency,
+    dayOfWeek: sub.dayOfWeek,
+    startTime: sub.startTime,
+    durationMinutes: sub.durationMinutes,
+    hourlyRate: sub.hourlyRate.toString(),
+  };
+
+  // Family side: every active member.
+  const familyEmails = Array.from(
+    new Set(
+      sub.family.members
+        .map((m) => m.user.email)
+        .filter((e): e is string => Boolean(e)),
+    ),
+  );
+  const familyInput = {
+    ...schedule,
+    recipientFirstName: sub.recipient.firstName,
+    recipientPreferredName: sub.recipient.preferredName,
+    companionFirstName: sub.companion.firstName,
+    companionLastName: sub.companion.lastName,
+  };
+  for (const to of familyEmails) {
+    try {
+      await transport.sendMail({
+        to,
+        from,
+        subject: subscriptionCreatedToFamilySubject(),
+        text: subscriptionCreatedToFamilyText(familyInput),
+        html: subscriptionCreatedToFamilyHtml(familyInput),
+      });
+      await audit({
+        actorType: 'system',
+        actorId: null,
+        actionType: 'state_change',
+        targetType: 'Subscription',
+        targetId: subscriptionId,
+        metadata: {
+          event: 'subscription_confirmation_email_sent',
+          audience: 'family',
+          to,
+        },
+      });
+    } catch (err) {
+      console.error('[subscription] family confirmation email failed', {
+        to,
+        subscriptionId,
+        err,
+      });
+    }
+  }
+
+  // Companion side.
+  const companionEmail = sub.companion.user.email;
+  if (companionEmail) {
+    const companionInput = {
+      ...schedule,
+      companionFirstName: sub.companion.firstName,
+      familyBillingName: sub.family.billingName,
+      recipientFirstName: sub.recipient.firstName,
+      recipientPreferredName: sub.recipient.preferredName,
+    };
+    try {
+      await transport.sendMail({
+        to: companionEmail,
+        from,
+        subject: subscriptionCreatedToCompanionSubject(),
+        text: subscriptionCreatedToCompanionText(companionInput),
+        html: subscriptionCreatedToCompanionHtml(companionInput),
+      });
+      await audit({
+        actorType: 'system',
+        actorId: null,
+        actionType: 'state_change',
+        targetType: 'Subscription',
+        targetId: subscriptionId,
+        metadata: {
+          event: 'subscription_confirmation_email_sent',
+          audience: 'companion',
+          to: companionEmail,
+        },
+      });
+    } catch (err) {
+      console.error('[subscription] companion confirmation email failed', {
+        to: companionEmail,
+        subscriptionId,
+        err,
+      });
+    }
+  }
 }
 
