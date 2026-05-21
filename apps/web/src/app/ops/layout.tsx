@@ -27,7 +27,7 @@ const NAV_ITEMS = [
   { href: '/ops/visits', label: 'Visits', icon: Calendar, status: 'planned' as const },
   { href: '/ops/safeguarding', label: 'Safeguarding', icon: ShieldAlert, status: 'planned' as const },
   { href: '/ops/payments', label: 'Payments', icon: Coins, status: 'planned' as const },
-  { href: '/ops/audit', label: 'Audit', icon: FileSearch, status: 'planned' as const },
+  { href: '/ops/audit', label: 'Audit', icon: FileSearch },
 ];
 
 export default async function OpsLayout({ children }: { children: ReactNode }) {

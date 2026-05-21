@@ -89,6 +89,35 @@ model VerificationToken {
 }
 
 // ----------------------------------------------------------------------------
+// Audit context (SDD §12.7) — append-only log of every sensitive action.
+// Append-only is enforced at the DB layer by triggers; see migration
+// 20260521..._add_audit_log_entry. Per DR-008, this lives in the same
+// Postgres database as the rest of the app for v1 scale.
+// ----------------------------------------------------------------------------
+
+model AuditLogEntry {
+  id          BigInt     @id @default(autoincrement())
+  occurredAt  DateTime   @default(now())
+  actorType   ActorType
+  actorId     String?
+  actorRole   String?
+  actionType  ActionType
+  targetType  String
+  targetId    String?
+  beforeState Json?
+  afterState  Json?
+  ip          String?
+  userAgent   String?
+  requestId   String?
+  metadata    Json?
+
+  @@index([occurredAt(sort: Desc)])
+  @@index([actorId, occurredAt(sort: Desc)])
+  @@index([targetType, targetId])
+  @@index([actionType, occurredAt(sort: Desc)])
+}
+
+// ----------------------------------------------------------------------------
 // Enums
 // ----------------------------------------------------------------------------
 
@@ -99,6 +128,27 @@ model VerificationToken {
 // Operator sub-roles enable least-privilege RBAC in the operator console
 // (DR-013 spirit): a finance operator does not need access to safeguarding
 // cases, a read_only operator cannot mutate, etc.
+enum ActorType {
+  user
+  system
+  integration
+}
+
+// Action categories per SDD §12.7.1. Granular enough to support meaningful
+// log search ("show me every payment action by this operator last week")
+// without exploding into one enum per concrete event type.
+enum ActionType {
+  create
+  update
+  delete
+  read_sensitive   // operator opened a record containing PII
+  state_change     // visit state machine, case state machine, etc.
+  auth             // sign-in, sign-out, 2FA challenge
+  payment          // any payment-context event
+  consent          // recipient consent capture or revocation
+  export           // data export by operator or by GDPR access request
+}
+
 enum UserRole {
   family_payer
   family_viewer            // [Phase 2] secondary household members
