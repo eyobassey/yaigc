@@ -39,9 +39,9 @@ export default async function OpsEnquiryDetailPage({
         All enquiries
       </Link>
 
-      <header className="mb-6 flex items-start justify-between gap-6 flex-wrap">
-        <div>
-          <div className="flex items-center gap-2 mb-2">
+      <header className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
             <StatusPill status={enquiry.status} />
             <SourcePill source={enquiry.source} />
             <time
@@ -51,41 +51,47 @@ export default async function OpsEnquiryDetailPage({
               {enquiry.createdAt.toISOString().replace('T', ' ').slice(0, 19)}
             </time>
           </div>
-          <h1 className="font-head font-normal text-moss text-[clamp(1.75rem,3vw,2.25rem)] leading-[1.1]">
+          <h1 className="font-head font-normal text-moss text-[clamp(1.75rem,3vw,2.25rem)] leading-[1.1] break-words">
             {enquiry.name}
           </h1>
         </div>
-        <StatusActions
-          enquiryId={enquiry.id}
-          currentStatus={enquiry.status}
-          actorId={user?.id ?? ''}
-          actorRole={user?.role ?? ''}
-        />
+        <div className="w-full lg:w-auto lg:max-w-sm">
+          <StatusActions
+            enquiryId={enquiry.id}
+            currentStatus={enquiry.status}
+            actorId={user?.id ?? ''}
+            actorRole={user?.role ?? ''}
+          />
+        </div>
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-        <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-6">
+        <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
           <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-3">
             Message
           </h2>
-          <p className="text-charcoal leading-[1.65] whitespace-pre-wrap">
+          <p className="text-charcoal leading-[1.65] whitespace-pre-wrap break-words">
             {enquiry.message}
           </p>
         </section>
 
-        <aside className="bg-paper border border-moss/[0.08] rounded-[12px] p-6">
+        <aside className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
           <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-4">
             Contact
           </h2>
-          <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-[0.9375rem]">
-            <dt className="text-stone">Email</dt>
+          <dl className="grid grid-cols-1 sm:grid-cols-[max-content_1fr] gap-x-4 gap-y-3 sm:gap-y-2 text-[0.9375rem]">
+            <dt className="text-stone text-[0.75rem] uppercase tracking-[0.08em] sm:text-[0.9375rem] sm:normal-case sm:tracking-normal">
+              Email
+            </dt>
             <dd className="text-charcoal break-all">
               <a href={`mailto:${enquiry.email}`} className="link inline-flex items-center gap-1">
                 {enquiry.email}
                 <ExternalLink size={12} strokeWidth={1.75} aria-hidden="true" />
               </a>
             </dd>
-            <dt className="text-stone">Phone</dt>
+            <dt className="text-stone text-[0.75rem] uppercase tracking-[0.08em] sm:text-[0.9375rem] sm:normal-case sm:tracking-normal">
+              Phone
+            </dt>
             <dd className="text-charcoal">
               {enquiry.phone ? (
                 <a href={`tel:${enquiry.phone.replace(/\s/g, '')}`} className="link">
@@ -95,11 +101,15 @@ export default async function OpsEnquiryDetailPage({
                 <em className="not-italic text-stone/60">-</em>
               )}
             </dd>
-            <dt className="text-stone">Postcode</dt>
+            <dt className="text-stone text-[0.75rem] uppercase tracking-[0.08em] sm:text-[0.9375rem] sm:normal-case sm:tracking-normal">
+              Postcode
+            </dt>
             <dd className="text-charcoal font-mono">
               {enquiry.postcode ?? <em className="not-italic text-stone/60">-</em>}
             </dd>
-            <dt className="text-stone">Marketing</dt>
+            <dt className="text-stone text-[0.75rem] uppercase tracking-[0.08em] sm:text-[0.9375rem] sm:normal-case sm:tracking-normal">
+              Marketing
+            </dt>
             <dd className="text-charcoal">
               {enquiry.consentMarketing ? 'opted in' : 'opted out'}
             </dd>
@@ -117,17 +127,22 @@ export default async function OpsEnquiryDetailPage({
           ) : (
             <ul className="divide-y divide-moss/[0.08] text-[0.875rem]">
               {history.map((e) => (
-                <li key={e.id.toString()} className="px-5 py-3 grid grid-cols-[max-content_max-content_1fr] gap-x-4 items-baseline">
-                  <time
-                    dateTime={e.occurredAt.toISOString()}
-                    className="text-stone font-mono text-[0.8125rem]"
-                  >
-                    {e.occurredAt.toISOString().replace('T', ' ').slice(0, 19)}
-                  </time>
-                  <span className="font-body text-[0.6875rem] uppercase tracking-[0.06em] text-moss bg-moss/10 rounded px-1.5 py-0.5 inline-block">
-                    {e.actionType}
-                  </span>
-                  <span className="text-charcoal text-[0.875rem]">
+                <li
+                  key={e.id.toString()}
+                  className="px-4 sm:px-5 py-3 flex flex-col gap-1.5 sm:grid sm:grid-cols-[max-content_max-content_1fr] sm:gap-x-4 sm:items-baseline"
+                >
+                  <div className="flex items-center gap-2 sm:contents">
+                    <time
+                      dateTime={e.occurredAt.toISOString()}
+                      className="text-stone font-mono text-[0.75rem] sm:text-[0.8125rem]"
+                    >
+                      {e.occurredAt.toISOString().replace('T', ' ').slice(0, 19)}
+                    </time>
+                    <span className="font-body text-[0.6875rem] uppercase tracking-[0.06em] text-moss bg-moss/10 rounded px-1.5 py-0.5 inline-block">
+                      {e.actionType}
+                    </span>
+                  </div>
+                  <span className="text-charcoal text-[0.875rem] break-words">
                     {summariseEntry(e.metadata, e.beforeState, e.afterState)}
                   </span>
                 </li>

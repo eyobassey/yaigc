@@ -4,6 +4,7 @@ import { Home, Inbox, Users, Heart, Calendar, ShieldAlert, Coins, FileSearch, Lo
 import { brand } from '@igc/content';
 import { signOut } from '@/lib/auth';
 import { requireOperator } from '@/lib/auth-helpers';
+import { OpsMobileNav } from './_components/OpsMobileNav';
 
 // The operator console is deliberately a different visual shell from the
 // marketing site (per SDD §6.4 spirit, even though we are on a subdomain
@@ -37,19 +38,25 @@ export default async function OpsLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-cream-deep flex flex-col">
       {/* Top bar */}
       <header className="bg-moss text-cream border-b border-moss-dark/40">
-        <div className="max-w-[1440px] mx-auto px-6 h-14 flex items-center justify-between gap-6">
-          <div className="flex items-center gap-3">
-            <Link href="/ops" className="font-head text-cream text-lg tracking-tight hover:text-terracotta-light transition-colors">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <OpsMobileNav items={NAV_ITEMS.map(({ href, label }) => ({ href, label }))} />
+            <Link
+              href="/ops"
+              className="font-head text-cream text-base sm:text-lg tracking-tight hover:text-terracotta-light transition-colors truncate"
+            >
               Operator Console
             </Link>
-            <span className="text-cream/40">·</span>
-            <span className="font-body text-cream/70 text-sm hidden sm:inline">{brand.fullName}</span>
+            <span className="text-cream/40 hidden sm:inline">·</span>
+            <span className="font-body text-cream/70 text-sm hidden sm:inline truncate">
+              {brand.fullName}
+            </span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <div className="hidden sm:flex items-center gap-2 text-sm">
-              <span className="text-cream/60">{user.email}</span>
+              <span className="text-cream/60 truncate max-w-[16rem]">{user.email}</span>
               <span
-                className="font-body text-[0.7rem] uppercase tracking-[0.08em] bg-terracotta/20 text-terracotta-light px-2 py-0.5 rounded"
+                className="font-body text-[0.7rem] uppercase tracking-[0.08em] bg-terracotta/20 text-terracotta-light px-2 py-0.5 rounded whitespace-nowrap"
                 title={user.role}
               >
                 {user.role.replace('operator_', '')}
@@ -74,9 +81,9 @@ export default async function OpsLayout({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      {/* Main shell: sidebar + content */}
+      {/* Main shell: desktop sidebar + content */}
       <div className="flex-1 flex max-w-[1440px] mx-auto w-full">
-        <aside className="hidden md:block w-56 border-r border-moss/10 bg-cream py-6 px-3">
+        <aside className="hidden md:block w-56 border-r border-moss/10 bg-cream py-6 px-3 flex-shrink-0">
           <nav aria-label="Operator console">
             <ul className="flex flex-col gap-0.5">
               {NAV_ITEMS.map(({ href, label, icon: Icon, status }) => (
@@ -102,7 +109,7 @@ export default async function OpsLayout({ children }: { children: ReactNode }) {
           </nav>
         </aside>
 
-        <main className="flex-1 p-6 md:p-10">{children}</main>
+        <main className="flex-1 min-w-0 p-4 sm:p-6 md:p-10">{children}</main>
       </div>
     </div>
   );
