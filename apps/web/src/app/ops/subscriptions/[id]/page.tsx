@@ -1,9 +1,12 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Plus } from 'lucide-react';
 import type { SubscriptionStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { summariseSubscription, DAY_LABELS, FREQUENCY_LABELS } from '@/lib/subscription-format';
+import { formatUkDateTime } from '@/lib/visit-schedule';
+import { generateNextVisit } from '@/lib/visit';
+import { VisitStatePill } from '../../visits/page';
 import { TransitionPanel } from './TransitionPanel';
 
 export const metadata = { title: 'Subscription' };
@@ -30,6 +33,10 @@ export default async function OpsSubscriptionDetailPage({
         },
       },
       originatingMatch: { select: { id: true } },
+      visits: {
+        orderBy: { scheduledStartAt: 'desc' },
+        take: 20,
+      },
     },
   });
   if (!sub) notFound();
@@ -167,6 +174,53 @@ export default async function OpsSubscriptionDetailPage({
               <p className="text-charcoal leading-[1.55] whitespace-pre-wrap">{sub.notes}</p>
             </section>
           ) : null}
+
+          <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
+            <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+              <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone inline-flex items-center gap-2">
+                <Calendar size={14} strokeWidth={1.75} className="text-moss" aria-hidden="true" />
+                Visits ({sub.visits.length})
+              </h2>
+              {sub.status === 'active' ? (
+                <form action={generateNextVisit}>
+                  <input type="hidden" name="subscriptionId" value={sub.id} />
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-moss/20 text-moss text-[0.75rem] font-medium hover:bg-moss hover:text-cream transition-colors whitespace-nowrap"
+                  >
+                    <Plus size={12} strokeWidth={2} aria-hidden="true" />
+                    Generate next visit
+                  </button>
+                </form>
+              ) : null}
+            </div>
+            {sub.visits.length === 0 ? (
+              <p className="text-stone text-sm">No visits yet.</p>
+            ) : (
+              <ul className="divide-y divide-moss/[0.06]">
+                {sub.visits.map((v) => (
+                  <li key={v.id}>
+                    <Link
+                      href={`/ops/visits/${v.id}`}
+                      className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0 hover:opacity-80 transition-opacity"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <VisitStatePill state={v.state} />
+                        </div>
+                        <div className="text-charcoal text-[0.9375rem] font-mono">
+                          {formatUkDateTime(v.scheduledStartAt)}
+                        </div>
+                        <div className="text-stone text-[0.8125rem]">
+                          {v.scheduledDurationMinutes} min
+                        </div>
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
 
           {sub.cancellationReason ? (
             <section className="bg-terracotta/10 border-l-4 border-terracotta px-5 py-4 rounded-r">

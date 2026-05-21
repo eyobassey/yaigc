@@ -47,10 +47,10 @@ const TILES = [
   },
   {
     label: 'Visits today',
-    href: '/ops/visits',
+    href: '/ops/visits?filter=today',
     icon: Calendar,
     accent: 'text-moss',
-    placeholder: 'O.7:Visit model',
+    placeholder: 'live',
   },
   {
     label: 'Missing post-visit reports',
@@ -86,11 +86,20 @@ export default async function OpsTodayPage() {
     prospectFamiliesCount,
     newApplicationsCount,
     openMatchesCount,
+    visitsTodayCount,
   ] = await Promise.all([
     prisma.enquiry.count({ where: { status: 'new' } }),
     prisma.family.count({ where: { status: 'prospect' } }),
     prisma.companionApplication.count({ where: { status: 'received' } }),
     prisma.match.count({ where: { status: 'proposed' } }),
+    (async () => {
+      const startOfToday = new Date();
+      startOfToday.setUTCHours(0, 0, 0, 0);
+      const endOfToday = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000);
+      return prisma.visit.count({
+        where: { scheduledStartAt: { gte: startOfToday, lt: endOfToday } },
+      });
+    })(),
   ]);
 
   return (
@@ -132,6 +141,8 @@ export default async function OpsTodayPage() {
             ? newApplicationsCount
             : tile.label === 'Open matches'
             ? openMatchesCount
+            : tile.label === 'Visits today'
+            ? visitsTodayCount
             : null;
           return (
             <Link

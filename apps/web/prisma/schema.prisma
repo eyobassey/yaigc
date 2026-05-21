@@ -135,6 +135,7 @@ model Family {
   recipients    Recipient[]
   matches       Match[]
   subscriptions Subscription[]
+  visits        Visit[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -200,6 +201,7 @@ model Recipient {
   family        Family         @relation(fields: [familyId], references: [id])
   matches       Match[]
   subscriptions Subscription[]
+  visits        Visit[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -335,6 +337,7 @@ model Subscription {
   recipient        Recipient @relation(fields: [recipientId], references: [id])
   companion        Companion @relation(fields: [companionId], references: [id])
   originatingMatch Match?    @relation(fields: [originatingMatchId], references: [id])
+  visits           Visit[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -342,6 +345,80 @@ model Subscription {
   @@index([familyId, status])
   @@index([companionId, status])
   @@index([status, dayOfWeek])
+}
+
+// ----------------------------------------------------------------------------
+// Visit (SDD §12.4.2) — a single companionship visit. Generated from a
+// Subscription's recurring schedule. The state machine (SDD §11.1) is
+// driven by the operator in v1 since neither the companion portal nor the
+// family portal exists yet — the operator updates state based on phone
+// calls from the companion.
+//
+// State flow:
+//   scheduled -> confirmed -> en_route -> in_progress -> completed -> reported
+//             \-> cancelled_by_family | cancelled_by_companion | cancelled_by_operator
+//             \-> no_show_companion | no_show_recipient
+//
+// scheduledStartAt is stored as UTC, computed from the Subscription's
+// dayOfWeek + startTime (HH:MM UK local) via a small Intl-based helper
+// that handles BST/GMT correctly. actualStartAt / actualEndAt are
+// captured when the operator moves the visit through in_progress and
+// completed — those drive billing accuracy.
+// ----------------------------------------------------------------------------
+
+model Visit {
+  id                       String     @id @default(cuid())
+  subscriptionId           String
+  familyId                 String
+  recipientId              String
+  companionId              String
+
+  state                    VisitState @default(scheduled)
+  scheduledStartAt         DateTime
+  scheduledDurationMinutes Int
+  actualStartAt            DateTime?
+  actualEndAt              DateTime?
+
+  agreedActivity           String?    @db.Text
+  safetyFlags              String?    @db.Text
+
+  cancellationReason       String?    @db.Text
+  cancellationActor        CancellationActor?
+
+  stateChangedAt           DateTime   @default(now())
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+  family       Family       @relation(fields: [familyId], references: [id])
+  recipient    Recipient    @relation(fields: [recipientId], references: [id])
+  companion    Companion    @relation(fields: [companionId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([state, scheduledStartAt])
+  @@index([subscriptionId, scheduledStartAt(sort: Desc)])
+  @@index([companionId, scheduledStartAt])
+  @@index([familyId, scheduledStartAt])
+}
+
+enum VisitState {
+  scheduled
+  confirmed
+  en_route
+  in_progress
+  completed
+  reported
+  cancelled_by_family
+  cancelled_by_companion
+  cancelled_by_operator
+  no_show_companion
+  no_show_recipient
+}
+
+enum CancellationActor {
+  family
+  companion
+  operator
 }
 
 enum SubscriptionStatus {
@@ -452,6 +529,7 @@ model Companion {
   application   CompanionApplication @relation(fields: [applicationId], references: [id])
   matches       Match[]
   subscriptions Subscription[]
+  visits        Visit[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

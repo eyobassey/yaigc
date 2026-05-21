@@ -163,6 +163,19 @@ export async function createSubscription(
 
   await sendSubscriptionCreatedEmails(sub.id);
 
+  // Generate the first visit. Best-effort: a failure here logs but does
+  // not block the subscription creation. Operator can manually generate
+  // visits from the subscription detail page.
+  try {
+    const { generateNextVisitForSubscription } = await import('@/lib/visit');
+    await generateNextVisitForSubscription(sub.id, {
+      actor: 'user',
+      actorId: operator.id,
+    });
+  } catch (err) {
+    console.error('[subscription] first visit generation failed', { subscriptionId: sub.id, err });
+  }
+
   revalidatePath('/ops');
   revalidatePath('/ops/matches');
   revalidatePath(`/ops/families/${sub.familyId}`);
