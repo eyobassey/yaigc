@@ -1,12 +1,21 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Calendar, Pencil } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Pencil, FileText } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { formatUkDateTime, formatUkTime } from '@/lib/visit-schedule';
 import { VisitStatePill } from '../page';
 import { TransitionPanel } from './TransitionPanel';
 
 const EDITABLE_STATES = new Set(['scheduled', 'confirmed']);
+
+const WELLBEING_LABEL: Record<string, string> = {
+  cheerful: 'Cheerful and chatty',
+  quiet: 'Quiet but settled',
+  tired: 'Tired',
+  unwell: 'Not feeling their best',
+  distressed: 'Upset, followed up',
+  other: 'Other',
+};
 
 export const metadata = { title: 'Visit' };
 
@@ -42,6 +51,11 @@ export default async function OpsVisitDetailPage({
         },
       },
       subscription: { select: { id: true } },
+      report: {
+        include: {
+          submittedBy: { select: { firstName: true, lastName: true, email: true } },
+        },
+      },
     },
   });
   if (!visit) notFound();
@@ -215,9 +229,84 @@ export default async function OpsVisitDetailPage({
               </p>
             </section>
           ) : null}
+
+          {visit.report ? (
+            <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
+              <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-3 inline-flex items-center gap-2">
+                <FileText size={14} strokeWidth={1.75} className="text-moss" aria-hidden="true" />
+                Post-visit report
+              </h2>
+              <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-[0.9375rem] mb-4">
+                <dt className="text-stone">Submitted</dt>
+                <dd className="text-charcoal">
+                  {visit.report.submittedAt.toISOString().replace('T', ' ').slice(0, 19)}
+                  {visit.report.submittedBy ? (
+                    <span className="text-stone ml-2">
+                      by{' '}
+                      {`${visit.report.submittedBy.firstName ?? ''} ${visit.report.submittedBy.lastName ?? ''}`.trim() ||
+                        visit.report.submittedBy.email}
+                    </span>
+                  ) : null}
+                </dd>
+                <dt className="text-stone">Actual duration</dt>
+                <dd className="text-charcoal">{visit.report.actualDurationMinutes} min</dd>
+                <dt className="text-stone">How they seemed</dt>
+                <dd className="text-charcoal">
+                  {WELLBEING_LABEL[visit.report.howWereThey] ?? visit.report.howWereThey}
+                </dd>
+                {visit.report.howWereTheyNote ? (
+                  <>
+                    <dt className="text-stone">A little more</dt>
+                    <dd className="text-charcoal whitespace-pre-wrap">{visit.report.howWereTheyNote}</dd>
+                  </>
+                ) : null}
+                <dt className="text-stone">Family email</dt>
+                <dd className="text-charcoal">
+                  {visit.report.deliveredToFamilyAt
+                    ? `delivered ${visit.report.deliveredToFamilyAt.toISOString().replace('T', ' ').slice(0, 19)}`
+                    : 'not sent (check consent)'}
+                </dd>
+              </dl>
+              <div className="pt-4 border-t border-moss/10">
+                <div className="font-body text-[0.7rem] font-medium uppercase tracking-[0.08em] text-stone mb-1">
+                  What happened
+                </div>
+                <p className="text-charcoal leading-[1.55] whitespace-pre-wrap break-words">
+                  {visit.report.whatHappened}
+                </p>
+              </div>
+              {visit.report.thingsToFlag ? (
+                <div className="mt-4 pt-4 border-t border-terracotta/20 bg-terracotta/5 -mx-5 sm:-mx-6 px-5 sm:px-6 -mb-5 sm:-mb-6 pb-5 sm:pb-6 rounded-b-[12px]">
+                  <div className="font-body text-[0.7rem] font-medium uppercase tracking-[0.08em] text-terracotta mb-1">
+                    Things to flag (internal only)
+                  </div>
+                  <p className="text-charcoal leading-[1.55] whitespace-pre-wrap break-words">
+                    {visit.report.thingsToFlag}
+                  </p>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
         </div>
 
         <aside className="flex flex-col gap-6">
+          {visit.state === 'completed' && !visit.report ? (
+            <section className="bg-moss/5 border border-moss/15 rounded-[12px] p-5 sm:p-6">
+              <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-moss mb-2">
+                Next step
+              </h2>
+              <p className="text-charcoal text-[0.875rem] mb-3">
+                Capture the companion's report. Family gets a redacted summary.
+              </p>
+              <Link
+                href={`/ops/visits/${visit.id}/report/new`}
+                className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-moss text-cream text-[0.875rem] font-medium hover:bg-moss-dark transition-colors"
+              >
+                Submit post-visit report
+              </Link>
+            </section>
+          ) : null}
+
           <TransitionPanel visitId={visit.id} currentState={visit.state} />
 
           <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
@@ -269,6 +358,17 @@ function summarise(metadata: unknown, before: unknown, after: unknown): string {
   if (metadata && typeof metadata === 'object') {
     const m = metadata as Record<string, unknown>;
     if (m.event === 'visit_generated') return 'Visit generated';
+    if (m.event === 'post_visit_report_submitted') {
+      return m.safeguardingHook
+        ? 'Report submitted (safeguarding flag)'
+        : 'Report submitted';
+    }
+    if (m.event === 'post_visit_report_family_email_sent') {
+      return `Report email sent to family (${m.to})`;
+    }
+    if (m.event === 'post_visit_report_email_skipped_no_consent') {
+      return 'Family email skipped (no consent on file)';
+    }
     if (m.event === 'visit_updated' && Array.isArray(m.changedFields)) {
       return `Visit updated: ${(m.changedFields as string[]).join(', ')}`;
     }

@@ -40,12 +40,13 @@ model User {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  accounts         Account[]
-  sessions         Session[]
-  familyMembers    FamilyMember[]
-  companion        Companion?
-  proposedMatches  Match[]        @relation("MatchProposedBy")
-  endedMatches     Match[]        @relation("MatchEndedBy")
+  accounts          Account[]
+  sessions          Session[]
+  familyMembers     FamilyMember[]
+  companion         Companion?
+  proposedMatches   Match[]            @relation("MatchProposedBy")
+  endedMatches      Match[]            @relation("MatchEndedBy")
+  submittedReports  PostVisitReport[]  @relation("ReportSubmittedBy")
 
   @@index([email])
   @@index([role])
@@ -387,10 +388,11 @@ model Visit {
 
   stateChangedAt           DateTime   @default(now())
 
-  subscription Subscription @relation(fields: [subscriptionId], references: [id])
-  family       Family       @relation(fields: [familyId], references: [id])
-  recipient    Recipient    @relation(fields: [recipientId], references: [id])
-  companion    Companion    @relation(fields: [companionId], references: [id])
+  subscription Subscription     @relation(fields: [subscriptionId], references: [id])
+  family       Family           @relation(fields: [familyId], references: [id])
+  recipient    Recipient        @relation(fields: [recipientId], references: [id])
+  companion    Companion        @relation(fields: [companionId], references: [id])
+  report       PostVisitReport?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -399,6 +401,57 @@ model Visit {
   @@index([subscriptionId, scheduledStartAt(sort: Desc)])
   @@index([companionId, scheduledStartAt])
   @@index([familyId, scheduledStartAt])
+}
+
+// ----------------------------------------------------------------------------
+// PostVisitReport (SDD §12.4.3) — companion's report after each Visit. The
+// family-facing summary is a redacted view: it includes what happened and
+// wellbeing observations, but NOT thingsToFlag (operator-only). When the
+// recipient has consentToReportSharing=false, the family email is skipped
+// and the audit log captures that.
+//
+// In v1 the operator submits the report on behalf of the companion (from
+// a phone call / text) since the companion portal is not built. The
+// submittedByOperatorId column carries the operator's User id. When the
+// companion portal lands (Phase 2) the same row will be written by the
+// companion's session.
+//
+// PostVisitReportPhoto (SDD §12.4.4) is deferred to a follow-up stage.
+// ----------------------------------------------------------------------------
+
+model PostVisitReport {
+  id                    String           @id @default(cuid())
+  visitId               String           @unique
+  companionId           String
+
+  actualDurationMinutes Int
+  whatHappened          String           @db.Text
+  howWereThey           WellbeingRating
+  howWereTheyNote       String?          @db.Text
+  thingsToFlag          String?          @db.Text
+
+  submittedAt           DateTime         @default(now())
+  submittedByOperatorId String?
+  deliveredToFamilyAt   DateTime?
+
+  visit       Visit     @relation(fields: [visitId], references: [id])
+  companion   Companion @relation(fields: [companionId], references: [id])
+  submittedBy User?     @relation("ReportSubmittedBy", fields: [submittedByOperatorId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companionId, submittedAt(sort: Desc)])
+  @@index([submittedAt(sort: Desc)])
+}
+
+enum WellbeingRating {
+  cheerful
+  quiet
+  tired
+  unwell
+  distressed
+  other
 }
 
 enum VisitState {
@@ -530,6 +583,7 @@ model Companion {
   matches       Match[]
   subscriptions Subscription[]
   visits        Visit[]
+  reports       PostVisitReport[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

@@ -9,6 +9,7 @@ export const metadata = { title: 'Visits' };
 const FILTERS: { value: string; label: string }[] = [
   { value: 'upcoming', label: 'Upcoming' },
   { value: 'today', label: 'Today' },
+  { value: 'needs-report', label: 'Needs report' },
   { value: 'past', label: 'Past' },
   { value: 'cancelled', label: 'Cancelled / no show' },
   { value: 'all', label: 'All' },
@@ -54,6 +55,9 @@ export default async function OpsVisitsPage({
   } else if (filter === 'today') {
     where = { scheduledStartAt: { gte: startOfToday, lt: endOfToday } };
     orderDirection = 'asc';
+  } else if (filter === 'needs-report') {
+    where = { state: 'completed', report: null };
+    orderDirection = 'desc';
   } else if (filter === 'past') {
     where = { scheduledStartAt: { lt: now }, state: { in: TERMINAL_STATES.filter((s) => !CANCELLED_STATES.includes(s)) } };
     orderDirection = 'desc';
@@ -66,6 +70,7 @@ export default async function OpsVisitsPage({
     Promise.all([
       prisma.visit.count({ where: { scheduledStartAt: { gte: now }, state: { notIn: CANCELLED_STATES } } }),
       prisma.visit.count({ where: { scheduledStartAt: { gte: startOfToday, lt: endOfToday } } }),
+      prisma.visit.count({ where: { state: 'completed', report: null } }),
       prisma.visit.count({ where: { scheduledStartAt: { lt: now }, state: { in: TERMINAL_STATES.filter((s) => !CANCELLED_STATES.includes(s)) } } }),
       prisma.visit.count({ where: { state: { in: CANCELLED_STATES } } }),
       prisma.visit.count(),
@@ -82,10 +87,11 @@ export default async function OpsVisitsPage({
     }),
   ]);
 
-  const [upcomingCount, todayCount, pastCount, cancelledCount, allCount] = counts;
+  const [upcomingCount, todayCount, needsReportCount, pastCount, cancelledCount, allCount] = counts;
   const countByFilter: Record<string, number> = {
     upcoming: upcomingCount,
     today: todayCount,
+    'needs-report': needsReportCount,
     past: pastCount,
     cancelled: cancelledCount,
     all: allCount,

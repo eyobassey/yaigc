@@ -54,10 +54,10 @@ const TILES = [
   },
   {
     label: 'Missing post-visit reports',
-    href: '/ops/visits?filter=missing-report',
+    href: '/ops/visits?filter=needs-report',
     icon: FileText,
     accent: 'text-terracotta',
-    placeholder: 'O.7:PostVisitReport',
+    placeholder: 'live',
   },
   {
     label: 'Open safeguarding cases',
@@ -87,6 +87,7 @@ export default async function OpsTodayPage() {
     newApplicationsCount,
     openMatchesCount,
     visitsTodayCount,
+    missingReportsCount,
   ] = await Promise.all([
     prisma.enquiry.count({ where: { status: 'new' } }),
     prisma.family.count({ where: { status: 'prospect' } }),
@@ -100,6 +101,7 @@ export default async function OpsTodayPage() {
         where: { scheduledStartAt: { gte: startOfToday, lt: endOfToday } },
       });
     })(),
+    prisma.visit.count({ where: { state: 'completed', report: null } }),
   ]);
 
   return (
@@ -143,6 +145,8 @@ export default async function OpsTodayPage() {
             ? openMatchesCount
             : tile.label === 'Visits today'
             ? visitsTodayCount
+            : tile.label === 'Missing post-visit reports'
+            ? missingReportsCount
             : null;
           return (
             <Link

@@ -1,12 +1,14 @@
 import type { VisitState } from '@prisma/client';
 import { transitionVisit } from '@/lib/visit';
 
+// 'completed' deliberately omitted - the right next step is to submit the
+// post-visit report (via the dedicated CTA on the visit detail), which
+// atomically transitions the visit to 'reported'.
 const PRIMARY_NEXT: Partial<Record<VisitState, { to: VisitState; label: string }[]>> = {
   scheduled: [{ to: 'confirmed', label: 'Mark confirmed' }],
   confirmed: [{ to: 'en_route', label: 'Mark en route' }],
   en_route: [{ to: 'in_progress', label: 'Mark in progress' }],
   in_progress: [{ to: 'completed', label: 'Mark completed' }],
-  completed: [{ to: 'reported', label: 'Mark reported' }],
 };
 
 const CANCEL_OPTIONS: { to: VisitState; label: string }[] = [
@@ -36,6 +38,11 @@ export function TransitionPanel({
   visitId: string;
   currentState: VisitState;
 }) {
+  // 'completed' has its own dedicated CTA elsewhere (Submit post-visit
+  // report), so suppress this panel entirely there to avoid two
+  // competing affordances.
+  if (currentState === 'completed') return null;
+
   if (TERMINAL.includes(currentState)) {
     return (
       <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">

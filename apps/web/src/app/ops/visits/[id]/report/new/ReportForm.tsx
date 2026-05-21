@@ -1,0 +1,146 @@
+'use client';
+
+import { useFormState, useFormStatus } from 'react-dom';
+import {
+  submitPostVisitReport,
+  type SubmitReportState,
+} from '@/lib/post-visit-report';
+import { Field, TextArea, Section } from '@/app/ops/_components/EditField';
+
+const WELLBEING = [
+  { value: 'cheerful', label: 'Cheerful and chatty', hint: 'Engaged, in good spirits.' },
+  { value: 'quiet', label: 'Quiet but settled', hint: 'Less talkative than usual but content.' },
+  { value: 'tired', label: 'Tired', hint: 'Visibly worn out; visit was shorter or gentler.' },
+  { value: 'unwell', label: 'Not feeling their best', hint: 'Off-colour. Worth a follow-up call.' },
+  {
+    value: 'distressed',
+    label: 'Upset',
+    hint: "Operator should follow up the family today. Use Things to flag for what's behind it.",
+  },
+  { value: 'other', label: 'Other', hint: 'Add a note below.' },
+];
+
+const initial: SubmitReportState = { ok: false };
+
+export function ReportForm({
+  visitId,
+  defaultDurationMinutes,
+}: {
+  visitId: string;
+  defaultDurationMinutes: number;
+}) {
+  const [state, action] = useFormState(submitPostVisitReport, initial);
+
+  return (
+    <form action={action} noValidate className="flex flex-col gap-6">
+      <input type="hidden" name="visitId" value={visitId} />
+
+      {state.errors?._form ? (
+        <div className="bg-terracotta/10 border-l-4 border-terracotta px-4 py-3 rounded-r text-charcoal text-[0.9375rem]">
+          {state.errors._form}
+        </div>
+      ) : null}
+
+      <Section title="How long was the visit">
+        <Field
+          name="actualDurationMinutes"
+          label="Actual duration (minutes)"
+          type="number"
+          required
+          defaultValue={
+            state.values?.actualDurationMinutes ?? String(defaultDurationMinutes)
+          }
+          error={state.errors?.actualDurationMinutes}
+          hint="Defaults to the scheduled duration. Adjust if it ran short or long."
+        />
+      </Section>
+
+      <Section
+        title="What happened"
+        description="In the companion's own words. Goes to the family verbatim."
+      >
+        <TextArea
+          name="whatHappened"
+          label="The visit"
+          rows={6}
+          required
+          defaultValue={state.values?.whatHappened}
+          error={state.errors?.whatHappened}
+          hint="A short paragraph. Coffee, conversation, a walk, a phone call together."
+        />
+      </Section>
+
+      <Section title="How they seemed">
+        <fieldset className="flex flex-col gap-2">
+          <legend className="sr-only">Wellbeing rating</legend>
+          {WELLBEING.map((w) => (
+            <label
+              key={w.value}
+              htmlFor={`wellbeing-${w.value}`}
+              className="flex items-start gap-3 cursor-pointer text-charcoal text-[0.9375rem] leading-[1.4] p-3 rounded-md border border-moss/10 hover:border-moss/30 hover:bg-cream-deep/40 transition-colors has-[:checked]:border-moss has-[:checked]:bg-moss/5"
+            >
+              <input
+                id={`wellbeing-${w.value}`}
+                type="radio"
+                name="howWereThey"
+                value={w.value}
+                defaultChecked={state.values?.howWereThey === w.value}
+                required
+                className="mt-0.5 w-4 h-4 text-moss focus:ring-moss/30 flex-shrink-0"
+              />
+              <span className="flex flex-col gap-0.5">
+                <span className="font-medium">{w.label}</span>
+                <span className="text-stone text-[0.8125rem]">{w.hint}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+        <TextArea
+          name="howWereTheyNote"
+          label="A little more (optional)"
+          rows={2}
+          defaultValue={state.values?.howWereTheyNote}
+          error={state.errors?.howWereTheyNote}
+          hint="Goes to the family alongside the rating."
+        />
+      </Section>
+
+      <Section
+        title="Things to flag (internal only)"
+        description="Anything we should follow up on. Does NOT go to the family. If you write here, the safeguarding team picks it up."
+      >
+        <TextArea
+          name="thingsToFlag"
+          label="For the safeguarding queue"
+          rows={4}
+          defaultValue={state.values?.thingsToFlag}
+          error={state.errors?.thingsToFlag}
+          hint="Leave blank if there is nothing to flag."
+        />
+      </Section>
+
+      <div className="flex flex-wrap gap-3">
+        <SubmitButton />
+        <a
+          href={`/ops/visits/${visitId}`}
+          className="inline-flex items-center justify-center px-6 py-3 rounded-full border border-moss text-moss text-[0.9375rem] font-medium hover:bg-moss/5 transition-colors"
+        >
+          Cancel
+        </a>
+      </div>
+    </form>
+  );
+}
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="inline-flex items-center justify-center px-7 py-3 rounded-full bg-moss text-cream text-[0.9375rem] font-medium hover:bg-moss-dark transition-all duration-200 hover:shadow-lg hover:-translate-y-px disabled:opacity-60 disabled:cursor-not-allowed"
+    >
+      {pending ? 'Submitting…' : 'Submit report'}
+    </button>
+  );
+}
