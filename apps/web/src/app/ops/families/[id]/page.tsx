@@ -1,9 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ChevronLeft, Pencil, Plus, Sparkles } from 'lucide-react';
+import { ChevronLeft, Pencil, Plus, Sparkles, Calendar } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { FamilyStatusPill } from '../page';
 import { MatchStatusPill } from '../../matches/page';
+import { SubscriptionStatusPill } from '../../subscriptions/[id]/page';
+import { summariseSubscription } from '@/lib/subscription-format';
 
 export const metadata = {
   title: 'Family',
@@ -36,6 +38,13 @@ export default async function OpsFamilyDetailPage({
         take: 10,
         include: {
           companion: { select: { firstName: true, lastName: true, borough: true } },
+          recipient: { select: { firstName: true, lastName: true } },
+        },
+      },
+      subscriptions: {
+        orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+        include: {
+          companion: { select: { firstName: true, lastName: true } },
           recipient: { select: { firstName: true, lastName: true } },
         },
       },
@@ -215,6 +224,53 @@ export default async function OpsFamilyDetailPage({
                     </li>
                   );
                 })}
+              </ul>
+            )}
+          </section>
+
+          <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
+            <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+              <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone inline-flex items-center gap-2">
+                <Calendar size={14} strokeWidth={1.75} className="text-moss" aria-hidden="true" />
+                Subscriptions ({family.subscriptions.length})
+              </h2>
+              {family.recipients.length > 0 ? (
+                <Link
+                  href={`/ops/families/${family.id}/subscriptions/new`}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-moss/20 text-moss text-[0.75rem] font-medium hover:bg-moss hover:text-cream transition-colors whitespace-nowrap"
+                >
+                  <Plus size={12} strokeWidth={2} aria-hidden="true" />
+                  Create subscription
+                </Link>
+              ) : null}
+            </div>
+            {family.subscriptions.length === 0 ? (
+              <p className="text-stone text-sm">No subscriptions yet.</p>
+            ) : (
+              <ul className="divide-y divide-moss/[0.06]">
+                {family.subscriptions.map((s) => (
+                  <li key={s.id}>
+                    <Link
+                      href={`/ops/subscriptions/${s.id}`}
+                      className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0 hover:opacity-80 transition-opacity"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <SubscriptionStatusPill status={s.status} />
+                        </div>
+                        <div className="font-head text-moss text-[0.9375rem] font-medium break-words">
+                          {s.companion.firstName} {s.companion.lastName}
+                          <span className="text-stone font-body font-normal text-[0.8125rem]">
+                            {' '}for {s.recipient.firstName}
+                          </span>
+                        </div>
+                        <div className="text-stone text-[0.8125rem] mt-0.5">
+                          {summariseSubscription(s)}
+                        </div>
+                      </div>
+                    </Link>
+                  </li>
+                ))}
               </ul>
             )}
           </section>
@@ -432,6 +488,7 @@ function summarise(targetType: string, metadata: unknown): string {
       return `Member added${m.email ? ` (${m.email})` : ''}`;
     }
     if (m.event === 'recipient_added') return 'Recipient added';
+    if (m.event === 'subscription_created') return 'Subscription created';
     if (m.event === 'consent_change' && Array.isArray(m.changedFields)) {
       const fields = (m.changedFields as string[])
         .map((f) => f.replace(/^consentTo/, ''))

@@ -36,6 +36,7 @@ export default async function OpsMatchDetailPage({
         },
       },
       proposedBy: { select: { id: true, email: true, firstName: true, lastName: true } },
+      subscription: { select: { id: true } },
     },
   });
   if (!match) notFound();
@@ -158,6 +159,38 @@ export default async function OpsMatchDetailPage({
         </div>
 
         <aside className="flex flex-col gap-6">
+          {match.status === 'accepted' ? (
+            match.subscription ? (
+              <section className="bg-moss/5 border border-moss/15 rounded-[12px] p-5 sm:p-6">
+                <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-moss mb-2">
+                  Subscription created
+                </h2>
+                <Link
+                  href={`/ops/subscriptions/${match.subscription.id}`}
+                  className="link text-[0.875rem] inline-flex items-center gap-1"
+                >
+                  Open subscription
+                  <ChevronRight size={14} strokeWidth={1.75} aria-hidden="true" />
+                </Link>
+              </section>
+            ) : (
+              <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
+                <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-2">
+                  Next step
+                </h2>
+                <p className="text-charcoal text-[0.875rem] mb-3">
+                  Both sides accepted. Create the recurring subscription.
+                </p>
+                <Link
+                  href={`/ops/families/${match.family.id}/subscriptions/new?match=${match.id}`}
+                  className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-moss text-cream text-[0.875rem] font-medium hover:bg-moss-dark transition-colors"
+                >
+                  Create subscription
+                </Link>
+              </section>
+            )
+          ) : null}
+
           <TransitionPanel matchId={match.id} currentStatus={match.status} />
 
           <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
