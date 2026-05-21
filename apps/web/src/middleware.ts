@@ -34,6 +34,7 @@ const PASSTHROUGH_PREFIXES = [
   // means the role check lands in a deterministic place rather than
   // double-redirecting.
   '/family',
+  '/companion',
   // Static brand asset folders served from /public. Without these the
   // sign-in page (which renders the marketing PageShell, which renders the
   // nav, which loads /logo/wordmark-horizontal-moss-on-cream.svg) ends up
