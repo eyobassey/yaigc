@@ -1,3 +1,4 @@
+import { Plus } from 'lucide-react';
 import { faqTeaser } from '@/content/landing-extras';
 
 export function FAQ() {
@@ -27,9 +28,9 @@ export function FAQ() {
                 <span>{item.question}</span>
                 <span
                   aria-hidden="true"
-                  className="flex-shrink-0 inline-flex items-center justify-center w-6 h-6 text-moss text-xl group-open:rotate-45 transition-transform duration-300"
+                  className="flex-shrink-0 inline-flex items-center justify-center w-6 h-6 text-moss group-open:rotate-45 transition-transform duration-300"
                 >
-                  +
+                  <Plus size={22} strokeWidth={1.75} />
                 </span>
               </summary>
               <div className="mt-4 text-charcoal leading-[1.65] max-w-[60ch]">{item.answer}</div>

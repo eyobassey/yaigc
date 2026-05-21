@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import { ArrowRight, Check } from 'lucide-react';
 import { home } from '@igc/content';
 
 export function Hero() {
@@ -55,14 +56,13 @@ export function Hero() {
               href="/how-it-works"
               className="inline-flex items-center justify-center px-4 py-[1.125rem] text-moss text-base font-medium hover:text-terracotta transition-colors"
             >
-              {home.hero.secondaryCta} <span aria-hidden="true" className="ml-2">→</span>
+              {home.hero.secondaryCta}
+              <ArrowRight size={18} strokeWidth={1.75} aria-hidden="true" className="ml-2" />
             </Link>
           </div>
 
           <p className="mt-8 text-sm text-stone flex items-center gap-2.5">
-            <span aria-hidden="true" className="text-moss font-semibold">
-              ✓
-            </span>
+            <Check size={16} strokeWidth={2} aria-hidden="true" className="text-moss flex-shrink-0" />
             {home.hero.reassurance}
           </p>
         </div>

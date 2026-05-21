@@ -16,16 +16,16 @@ export function VisitGallery() {
         </div>
 
         <div className="grid gap-[clamp(1.5rem,3vw,2.5rem)] min-[700px]:grid-cols-2 min-[1000px]:grid-cols-4 mt-16">
-          {visitGallery.cards.map((card) => (
+          {visitGallery.cards.map(({ icon: Icon, title, body }) => (
             <article
-              key={card.title}
+              key={title}
               className="bg-paper p-8 rounded-[24px] border border-moss/[0.06] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(60,90,58,0.08)]"
             >
-              <div className="w-9 h-9 rounded-full bg-cream-deep flex items-center justify-center mb-6 font-head italic text-terracotta text-xl">
-                {card.icon}
+              <div className="w-11 h-11 rounded-full bg-cream-deep flex items-center justify-center mb-6 text-terracotta">
+                <Icon size={22} strokeWidth={1.6} aria-hidden="true" />
               </div>
-              <h3 className="font-head text-moss text-lg font-medium mb-2.5">{card.title}</h3>
-              <p className="text-charcoal text-[0.95rem] leading-[1.55]">{card.body}</p>
+              <h3 className="font-head text-moss text-lg font-medium mb-2.5">{title}</h3>
+              <p className="text-charcoal text-[0.95rem] leading-[1.55]">{body}</p>
             </article>
           ))}
         </div>

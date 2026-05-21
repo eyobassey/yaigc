@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { Check } from 'lucide-react';
 import { brand } from '@igc/content';
 import { PageShell } from '@/components/marketing/PageShell';
 
@@ -109,7 +110,7 @@ function WhereWeWork() {
       <ul className="mt-6 grid gap-3 max-w-[36ch] min-[600px]:grid-cols-2 min-[600px]:gap-x-12">
         {['South Manchester', 'Trafford', 'Stockport', 'Salford'].map((b) => (
           <li key={b} className="flex items-start gap-3 text-charcoal leading-[1.55]">
-            <span aria-hidden="true" className="mt-1 text-moss font-semibold">✓</span>
+            <Check size={18} strokeWidth={2} aria-hidden="true" className="mt-1 text-moss flex-shrink-0" />
             <span>{b}</span>
           </li>
         ))}
@@ -318,9 +319,7 @@ function PromiseList({ items }: { items: string[] }) {
     <ul className="flex flex-col gap-3">
       {items.map((item) => (
         <li key={item} className="flex items-start gap-3 text-charcoal leading-[1.6] max-w-[60ch]">
-          <span aria-hidden="true" className="mt-1 text-moss font-semibold">
-            ✓
-          </span>
+          <Check size={18} strokeWidth={2} aria-hidden="true" className="mt-1 text-moss flex-shrink-0" />
           <span>{item}</span>
         </li>
       ))}

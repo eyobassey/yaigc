@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { Check, X } from 'lucide-react';
 import { pricing } from '@igc/content';
 import { PageShell } from '@/components/marketing/PageShell';
 import { FinalCTA } from '@/components/marketing/FinalCTA';
@@ -95,14 +96,14 @@ function Tiers() {
                 <ul className="mt-6 flex flex-col gap-3">
                   {tier.features.map((feature) => (
                     <li key={feature} className="flex items-start gap-3 leading-[1.5]">
-                      <span
+                      <Check
+                        size={18}
+                        strokeWidth={2}
                         aria-hidden="true"
-                        className={`mt-1 font-semibold ${
+                        className={`mt-0.5 flex-shrink-0 ${
                           featured ? 'text-terracotta-light' : 'text-moss'
                         }`}
-                      >
-                        ✓
-                      </span>
+                      />
                       <span className={featured ? 'text-cream/90' : 'text-charcoal'}>
                         {feature}
                       </span>
@@ -156,9 +157,7 @@ function WhatIsNotIncluded() {
         <ul className="mt-8 grid gap-3 min-[700px]:grid-cols-2 min-[700px]:gap-x-12">
           {pricing.whatIsNotIncluded.items.map((item) => (
             <li key={item} className="flex items-start gap-3 text-charcoal leading-[1.55]">
-              <span aria-hidden="true" className="mt-1 text-terracotta font-semibold">
-                ×
-              </span>
+              <X size={18} strokeWidth={2} aria-hidden="true" className="mt-0.5 text-terracotta flex-shrink-0" />
               <span>{item}</span>
             </li>
           ))}

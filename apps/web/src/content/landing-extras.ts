@@ -12,6 +12,7 @@
  * delete this file. Tracked in docs/decisions.md.
  */
 
+import { Coffee, Footprints, Sparkles, PenLine, type LucideIcon } from 'lucide-react';
 import { brand } from '@igc/content';
 
 export const trustStrip = [
@@ -31,32 +32,36 @@ export const founderNote = {
   attribution: 'Bassey and the team, Manchester',
 } as const;
 
-export const visitGallery = {
+export const visitGallery: {
+  eyebrow: string;
+  title: string;
+  cards: ReadonlyArray<{ icon: LucideIcon; title: string; body: string }>;
+} = {
   eyebrow: 'What a visit looks like',
   title: 'Not a clipboard. Not a uniform. Just company.',
   cards: [
     {
-      icon: '♥', // heart suit
+      icon: Coffee,
       title: 'A cup of tea',
       body: 'The kettle goes on. The biscuit tin comes out. Real conversation, in the same kitchen, every week.',
     },
     {
-      icon: '◆', // diamond
+      icon: Footprints,
       title: 'A walk to the shops',
       body: 'A short walk in fresh air. Choosing fruit at the corner shop. A bench in the park if it is warm.',
     },
     {
-      icon: '♣', // club
+      icon: Sparkles,
       title: 'An outing',
       body: 'The garden centre on a quiet morning. The cinema on a Wednesday afternoon. The local museum.',
     },
     {
-      icon: '♠', // spade
+      icon: PenLine,
       title: 'A note for the family',
       body: 'A short, honest note within hours. Where you went, what you did, how your mum or dad seemed.',
     },
   ],
-} as const;
+};
 
 export const pricingTeaser = {
   eyebrow: 'Honest pricing',

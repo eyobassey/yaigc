@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { X } from 'lucide-react';
 import { brand, nav } from '@igc/content';
 
 const navLinks = [
@@ -156,9 +157,7 @@ export function Nav() {
               aria-label="Close menu"
               onClick={() => setMenuOpen(false)}
             >
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <path d="M4 4l12 12M16 4L4 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
+              <X size={20} strokeWidth={2} aria-hidden="true" />
             </button>
           </div>
 

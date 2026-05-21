@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { ArrowRight, Check, X } from 'lucide-react';
 import { brand, joinCompanionClub } from '@igc/content';
 import { PageShell } from '@/components/marketing/PageShell';
 
@@ -46,7 +47,8 @@ function JoinHero() {
               href="#what-it-is"
               className="inline-flex items-center justify-center px-4 py-[1.125rem] text-moss text-base font-medium hover:text-terracotta transition-colors"
             >
-              {joinCompanionClub.hero.secondaryCta} <span aria-hidden="true" className="ml-2">→</span>
+              {joinCompanionClub.hero.secondaryCta}
+              <ArrowRight size={18} strokeWidth={1.75} aria-hidden="true" className="ml-2" />
             </Link>
           </div>
         </div>
@@ -93,9 +95,7 @@ function WhatWeLookFor() {
         <ul className="mt-8 grid gap-3 min-[700px]:grid-cols-2 min-[700px]:gap-x-12">
           {joinCompanionClub.whatWeLookFor.list.map((item) => (
             <li key={item} className="flex items-start gap-3 text-charcoal leading-[1.55]">
-              <span aria-hidden="true" className="mt-1 text-moss font-semibold">
-                ✓
-              </span>
+              <Check size={18} strokeWidth={2} aria-hidden="true" className="mt-0.5 text-moss flex-shrink-0" />
               <span>{item}</span>
             </li>
           ))}
@@ -118,9 +118,7 @@ function NotForYou() {
         <ul className="mt-8 flex flex-col gap-3">
           {joinCompanionClub.notForYou.list.map((item) => (
             <li key={item} className="flex items-start gap-3 text-charcoal leading-[1.55]">
-              <span aria-hidden="true" className="mt-1 text-terracotta font-semibold">
-                ×
-              </span>
+              <X size={18} strokeWidth={2} aria-hidden="true" className="mt-0.5 text-terracotta flex-shrink-0" />
               <span>{item}</span>
             </li>
           ))}
