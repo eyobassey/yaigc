@@ -1,0 +1,100 @@
+// YAIGC database schema v0
+//
+// Phase 1 scope: Auth.js v5 standard tables + minimal User extensions.
+// Business tables (Family, FamilyMember, Recipient, Companion, Visit,
+// AuditLogEntry) land in subsequent migrations as each context is built.
+//
+// Conventions:
+// - `id` is cuid() everywhere (URL-friendly, sortable, no leaked counts)
+// - Every business model has createdAt / updatedAt
+// - Models holding personal data have deletedAt for soft-delete with audit
+// - Migrations are append-only — never edit a committed migration
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------------
+// Auth.js v5 standard tables (Prisma adapter)
+// ----------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+
+  // YAIGC business fields
+  firstName String?
+  lastName  String?
+  role      UserRole @default(USER)
+
+  // Audit
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  accounts Account[]
+  sessions Session[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expires])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@index([expires])
+}
+
+// ----------------------------------------------------------------------------
+// Enums
+// ----------------------------------------------------------------------------
+
+enum UserRole {
+  USER       // default — family payer or general visitor
+  COMPANION  // visiting companion (Companion Club member)
+  OPERATOR   // internal ops console user
+  ADMIN      // full-access internal user
+}
