@@ -1,6 +1,6 @@
 import { getSessionUser } from '@/lib/auth-helpers';
 import Link from 'next/link';
-import { Inbox, Calendar, FileText, ShieldAlert, Heart, AlertTriangle, Users, Sparkles, MessageSquare } from 'lucide-react';
+import { Inbox, Calendar, FileText, ShieldAlert, Heart, AlertTriangle, Users, Sparkles, MessageSquare, ShieldCheck } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 
 export const metadata = {
@@ -74,11 +74,11 @@ const TILES = [
     placeholder: 'live',
   },
   {
-    label: 'DBSs expiring (30d)',
-    href: '/ops/companions?filter=dbs-expiring',
-    icon: Heart,
-    accent: 'text-stone',
-    placeholder: 'O.6:Companion',
+    label: 'Compliance flags (30d)',
+    href: '/ops/compliance',
+    icon: ShieldCheck,
+    accent: 'text-amber-700',
+    placeholder: 'live',
   },
 ];
 
@@ -88,6 +88,8 @@ export default async function OpsTodayPage() {
   // Counts that already have backing data go straight to the DB. Tiles
   // whose models do not exist yet keep the em-dash placeholder until
   // their stage lands.
+  const today = new Date();
+  const in30 = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
   const [
     newEnquiriesCount,
     prospectFamiliesCount,
@@ -97,6 +99,7 @@ export default async function OpsTodayPage() {
     missingReportsCount,
     openCasesCount,
     pendingRequestsCount,
+    complianceFlagCount,
   ] = await Promise.all([
     prisma.enquiry.count({ where: { status: 'new' } }),
     prisma.family.count({ where: { status: 'prospect' } }),
@@ -116,6 +119,21 @@ export default async function OpsTodayPage() {
     prisma.subscription.count({
       where: {
         OR: [{ pauseRequestedAt: { not: null } }, { cancelRequestedAt: { not: null } }],
+      },
+    }),
+    // Companions with DBS or insurance expired or expiring within 30 days,
+    // or with either credential missing entirely.
+    prisma.companion.count({
+      where: {
+        deletedAt: null,
+        status: { in: ['onboarding', 'active'] },
+        OR: [
+          { dbsCertificateNumber: null },
+          { dbsRenewalDueAt: null },
+          { dbsRenewalDueAt: { lte: in30 } },
+          { insuranceExpiresAt: null },
+          { insuranceExpiresAt: { lte: in30 } },
+        ],
       },
     }),
   ]);
@@ -167,6 +185,8 @@ export default async function OpsTodayPage() {
             ? openCasesCount
             : tile.label === 'Pending family requests'
             ? pendingRequestsCount
+            : tile.label === 'Compliance flags (30d)'
+            ? complianceFlagCount
             : null;
           return (
             <Link
