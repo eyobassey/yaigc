@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { Home, Inbox, Users, Heart, Calendar, ShieldAlert, Coins, FileSearch, LogOut, Sparkles } from 'lucide-react';
+import { Home, Inbox, Users, Heart, Calendar, ShieldAlert, Coins, FileSearch, LogOut, Sparkles, Search } from 'lucide-react';
 import { brand } from '@igc/content';
 import { signOut } from '@/lib/auth';
 import { requireOperator } from '@/lib/auth-helpers';
@@ -53,6 +53,21 @@ export default async function OpsLayout({ children }: { children: ReactNode }) {
               {brand.fullName}
             </span>
           </div>
+          <form
+            action="/ops/search"
+            method="get"
+            className="hidden md:flex items-center bg-cream/10 hover:bg-cream/15 focus-within:bg-cream/20 rounded-full pl-3 pr-1 py-1 transition-colors"
+            role="search"
+          >
+            <Search size={14} strokeWidth={1.75} className="text-cream/70 flex-shrink-0" aria-hidden="true" />
+            <input
+              type="search"
+              name="q"
+              placeholder="Search families, companions, enquiries…"
+              aria-label="Search"
+              className="bg-transparent border-0 outline-none text-cream placeholder-cream/50 text-sm px-2 py-0.5 w-[20rem] xl:w-[26rem]"
+            />
+          </form>
           <div className="flex items-center gap-3 sm:gap-4">
             <div className="hidden sm:flex items-center gap-2 text-sm">
               <span className="text-cream/60 truncate max-w-[16rem]">{user.email}</span>
