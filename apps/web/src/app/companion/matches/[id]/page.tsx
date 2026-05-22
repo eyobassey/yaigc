@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ChevronLeft, MapPin } from 'lucide-react';
+import { Bus, Car, ChevronLeft, Footprints, MapPin } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { requireCompanion } from '@/lib/auth-helpers';
+import { estimateTravel } from '@/lib/postcode-distance';
 import {
   buildResponseLabel,
   inferDecliner,
@@ -22,13 +23,16 @@ export default async function CompanionMatchDetailPage({
   const match = await prisma.match.findUnique({
     where: { id: params.id },
     include: {
-      family: { select: { billingName: true, billingCity: true } },
+      family: {
+        select: { billingName: true, billingCity: true, billingPostcode: true },
+      },
       recipient: {
         select: {
           firstName: true,
           preferredName: true,
           dateOfBirth: true,
           addressCity: true,
+          addressPostcode: true,
           interests: true,
           mobility: true,
           dietary: true,
@@ -39,6 +43,22 @@ export default async function CompanionMatchDetailPage({
 
   // Defensive: this match must be assigned to the signed-in companion.
   if (!match || match.candidateCompanionId !== companion.id) notFound();
+
+  // Pre-accept travel estimate. We use the postcode the companion put
+  // on their application (own row, off the linked CompanionApplication)
+  // and the recipient's postcode, falling back to the family's billing
+  // postcode if the recipient address isn't on file yet. Pre-accept we
+  // intentionally show a coarse band only - no postcode is rendered.
+  const application = await prisma.companionApplication.findUnique({
+    where: { id: companion.applicationId },
+    select: { postcode: true },
+  });
+  const recipientPostcode =
+    match.recipient?.addressPostcode ?? match.family.billingPostcode ?? null;
+  const travel = await estimateTravel(
+    application?.postcode,
+    recipientPostcode,
+  );
 
   const responded = Boolean(match.companionResponseAt);
   const canRespond = match.status === 'proposed' && !responded;
@@ -158,6 +178,40 @@ export default async function CompanionMatchDetailPage({
                 the match is set up - we keep contact details inside the
                 team until both sides have agreed.
               </p>
+            </section>
+          ) : null}
+
+          {travel ? (
+            <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
+              <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-1">
+                Travel from your postcode
+              </h2>
+              <p className="text-stone text-[0.8125rem] mb-3">
+                Approximate - about {travel.distanceMiles} miles by road. We
+                share the full address once the match is set up.
+              </p>
+              <ul className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[0.875rem]">
+                <li className="flex items-center gap-2 bg-cream rounded-md px-3 py-2">
+                  <Car size={16} strokeWidth={1.75} className="text-moss" aria-hidden="true" />
+                  <span className="text-charcoal">
+                    <span className="font-medium">~{travel.drivingMinutes} min</span> by car
+                  </span>
+                </li>
+                <li className="flex items-center gap-2 bg-cream rounded-md px-3 py-2">
+                  <Bus size={16} strokeWidth={1.75} className="text-moss" aria-hidden="true" />
+                  <span className="text-charcoal">
+                    <span className="font-medium">~{travel.transitMinutes} min</span> by transit
+                  </span>
+                </li>
+                {travel.walkableMinutes ? (
+                  <li className="flex items-center gap-2 bg-cream rounded-md px-3 py-2">
+                    <Footprints size={16} strokeWidth={1.75} className="text-moss" aria-hidden="true" />
+                    <span className="text-charcoal">
+                      <span className="font-medium">~{travel.walkableMinutes} min</span> on foot
+                    </span>
+                  </li>
+                ) : null}
+              </ul>
             </section>
           ) : null}
 
