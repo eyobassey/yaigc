@@ -15,6 +15,8 @@ interface Props {
   initialBio: string;
   initialInterests: string;
   initialAvailability: Record<string, unknown> | null;
+  initialDriverLicenceNumber: string;
+  initialDriverLicenceExpiresAt: string;
   currentPhotoSrc: string | null;
 }
 
@@ -22,6 +24,8 @@ export function ProfileEditForm({
   initialBio,
   initialInterests,
   initialAvailability,
+  initialDriverLicenceNumber,
+  initialDriverLicenceExpiresAt,
   currentPhotoSrc,
 }: Props) {
   const [state, action] = useFormState(editCompanionProfile, initial);
@@ -176,6 +180,30 @@ export function ProfileEditForm({
         />
       </Section>
 
+      <Section title="Driver's licence (optional)">
+        <p className="text-stone text-[0.875rem] leading-[1.55] -mt-1">
+          If you drive, tell us your licence number and when it expires.
+          Upload a picture of the licence on the{' '}
+          <a href="/companion/documents" className="link">
+            Documents
+          </a>{' '}
+          page (pick "Driver's licence" as the type).
+        </p>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <PlainField
+            name="driverLicenceNumber"
+            label="Licence number"
+            defaultValue={initialDriverLicenceNumber}
+          />
+          <PlainField
+            name="driverLicenceExpiresAt"
+            type="date"
+            label="Expiry date"
+            defaultValue={initialDriverLicenceExpiresAt}
+          />
+        </div>
+      </Section>
+
       <Section title="When you can visit">
         <p className="text-stone text-[0.875rem] leading-[1.55] -mt-1">
           Update every slot that usually works for you. Most companions tick
@@ -297,6 +325,34 @@ function AvailabilityGrid({
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+function PlainField({
+  name,
+  label,
+  type = 'text',
+  defaultValue,
+}: {
+  name: string;
+  label: string;
+  type?: string;
+  defaultValue?: string;
+}) {
+  const id = useId();
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-charcoal text-[0.9375rem]">
+        {label}
+      </label>
+      <input
+        id={id}
+        name={name}
+        type={type}
+        defaultValue={defaultValue}
+        className="bg-cream border border-moss/15 rounded-md px-3 py-2 text-charcoal focus:outline-none focus:ring-2 focus:ring-moss/25 focus:border-moss/40"
+      />
     </div>
   );
 }

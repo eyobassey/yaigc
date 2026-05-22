@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { ChevronLeft, Pencil } from 'lucide-react';
+import { prisma } from '@/lib/prisma';
 import { requireCompanion } from '@/lib/auth-helpers';
 import { companionPhotoSrc } from '@/lib/companion-photo-src';
 import { ProfileEditForm } from './ProfileEditForm';
@@ -10,6 +11,16 @@ export default async function EditCompanionProfilePage() {
   const { companion } = await requireCompanion('/companion/profile/edit');
 
   const photoSrc = companionPhotoSrc(companion);
+
+  // Pull the licence columns separately - requireCompanion's narrower
+  // context doesn't include them.
+  const extras = await prisma.companion.findUnique({
+    where: { id: companion.id },
+    select: {
+      driverLicenceNumber: true,
+      driverLicenceExpiresAt: true,
+    },
+  });
 
   // Best-effort hand-off of the JSON availability column. The form is
   // a client component that wants a plain JSON value, not a Prisma type.
@@ -44,6 +55,12 @@ export default async function EditCompanionProfilePage() {
         initialBio={companion.bio ?? ''}
         initialInterests={companion.interests ?? ''}
         initialAvailability={availability}
+        initialDriverLicenceNumber={extras?.driverLicenceNumber ?? ''}
+        initialDriverLicenceExpiresAt={
+          extras?.driverLicenceExpiresAt
+            ? extras.driverLicenceExpiresAt.toISOString().slice(0, 10)
+            : ''
+        }
         currentPhotoSrc={photoSrc}
       />
     </div>

@@ -19,6 +19,11 @@ import {
 const EditSchema = z.object({
   bio: z.string().trim().max(4000).optional(),
   interests: z.string().trim().max(2000).optional(),
+  driverLicenceNumber: z.string().trim().max(60).optional(),
+  driverLicenceExpiresAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD.')
+    .optional(),
 });
 
 export type EditProfileState = {
@@ -36,6 +41,10 @@ export async function editCompanionProfile(
   const raw = {
     bio: String(formData.get('bio') ?? '').trim() || undefined,
     interests: String(formData.get('interests') ?? '').trim() || undefined,
+    driverLicenceNumber:
+      String(formData.get('driverLicenceNumber') ?? '').trim() || undefined,
+    driverLicenceExpiresAt:
+      String(formData.get('driverLicenceExpiresAt') ?? '').trim() || undefined,
   };
   const parsed = EditSchema.safeParse(raw);
   if (!parsed.success) {
@@ -102,6 +111,10 @@ export async function editCompanionProfile(
       bio: d.bio ?? null,
       interests: d.interests ?? null,
       availability: slots as object,
+      driverLicenceNumber: d.driverLicenceNumber ?? null,
+      driverLicenceExpiresAt: d.driverLicenceExpiresAt
+        ? new Date(`${d.driverLicenceExpiresAt}T00:00:00Z`)
+        : null,
       ...(newFilename ? { photoFilename: newFilename } : {}),
     },
   });

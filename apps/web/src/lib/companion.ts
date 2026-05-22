@@ -647,6 +647,10 @@ const DOCUMENT_KINDS = [
   'visa_letter',
   'ilr_document',
   'dbs_certificate',
+  'driver_licence',
+  'photo_id',
+  'proof_of_address',
+  'insurance_certificate',
   'other',
 ] as const;
 
@@ -808,6 +812,11 @@ const EditCompanionSchema = z.object({
   maxConcurrentMatches: z.coerce.number().int().min(1).max(20),
   bio: z.string().trim().max(4000).optional(),
   interests: z.string().trim().max(2000).optional(),
+  driverLicenceNumber: z.string().trim().max(60).optional(),
+  driverLicenceExpiresAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD.')
+    .optional(),
 });
 
 export type EditCompanionState = {
@@ -838,6 +847,10 @@ export async function editCompanionByOperator(
     maxConcurrentMatches: formData.get('maxConcurrentMatches'),
     bio: String(formData.get('bio') ?? '').trim() || undefined,
     interests: String(formData.get('interests') ?? '').trim() || undefined,
+    driverLicenceNumber:
+      String(formData.get('driverLicenceNumber') ?? '').trim() || undefined,
+    driverLicenceExpiresAt:
+      String(formData.get('driverLicenceExpiresAt') ?? '').trim() || undefined,
   };
   const parsed = EditCompanionSchema.safeParse(raw);
   if (!parsed.success) {
@@ -960,6 +973,10 @@ export async function editCompanionByOperator(
       bio: d.bio ?? null,
       interests: d.interests ?? null,
       availability: slots as object,
+      driverLicenceNumber: d.driverLicenceNumber ?? null,
+      driverLicenceExpiresAt: d.driverLicenceExpiresAt
+        ? new Date(`${d.driverLicenceExpiresAt}T00:00:00Z`)
+        : null,
       ...(newFilename ? { photoFilename: newFilename } : {}),
     },
   });

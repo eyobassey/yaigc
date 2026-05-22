@@ -59,6 +59,8 @@ export default async function CompanionAccountPage() {
         dbsRenewalDueAt: true,
         insuranceProvider: true,
         insuranceExpiresAt: true,
+        driverLicenceNumber: true,
+        driverLicenceExpiresAt: true,
         createdAt: true,
         user: { select: { createdAt: true } },
       },
@@ -148,6 +150,16 @@ export default async function CompanionAccountPage() {
         </Row>
         <Row label="Insurance expires">
           {formatDate(full?.insuranceExpiresAt)}
+        </Row>
+        <Row label="Driver's licence">
+          {full?.driverLicenceNumber ? (
+            <span className="font-mono">{full.driverLicenceNumber}</span>
+          ) : (
+            'Not on file'
+          )}
+        </Row>
+        <Row label="Licence expires">
+          {formatDate(full?.driverLicenceExpiresAt)}
         </Row>
         <div className="col-span-2 pt-2">
           <Link

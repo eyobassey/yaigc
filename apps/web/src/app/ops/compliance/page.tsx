@@ -22,6 +22,8 @@ interface CompanionLite {
   insuranceExpiresAt: Date | null;
   insuranceProvider: string | null;
   dbsCertificateNumber: string | null;
+  driverLicenceNumber: string | null;
+  driverLicenceExpiresAt: Date | null;
 }
 
 function daysBetween(a: Date, b: Date): number {
@@ -57,6 +59,8 @@ export default async function OpsCompliancePage() {
       insuranceExpiresAt: true,
       insuranceProvider: true,
       dbsCertificateNumber: true,
+      driverLicenceNumber: true,
+      driverLicenceExpiresAt: true,
     },
   })) as CompanionLite[];
 
@@ -64,7 +68,7 @@ export default async function OpsCompliancePage() {
   // appears in at most one bucket (so an expired DBS and expiring
   // insurance both show on the "expired" row), and we annotate which
   // credentials are in trouble so the office can act on the right one.
-  type RowFlag = { kind: 'dbs' | 'insurance'; daysFromToday: number | null };
+  type RowFlag = { kind: 'dbs' | 'insurance' | 'licence'; daysFromToday: number | null };
   type Row = { c: CompanionLite; flags: RowFlag[]; severity: number };
 
   const rows: Row[] = [];
@@ -86,6 +90,15 @@ export default async function OpsCompliancePage() {
       flags.push({
         kind: 'insurance',
         daysFromToday: daysBetween(today, c.insuranceExpiresAt),
+      });
+    }
+    // Driver's licence - only flag when expiring. Missing licence is
+    // expected for non-drivers, so we don't badge "missing" the way
+    // we do for DBS/insurance.
+    if (c.driverLicenceExpiresAt && c.driverLicenceExpiresAt <= in90) {
+      flags.push({
+        kind: 'licence',
+        daysFromToday: daysBetween(today, c.driverLicenceExpiresAt),
       });
     }
     if (flags.length === 0) continue;
@@ -230,7 +243,7 @@ function Bucket({
   title: string;
   intro: string;
   tone: 'red' | 'amber' | 'stone';
-  rows: { c: CompanionLite; flags: { kind: 'dbs' | 'insurance'; daysFromToday: number | null }[]; severity: number }[];
+  rows: { c: CompanionLite; flags: { kind: 'dbs' | 'insurance' | 'licence'; daysFromToday: number | null }[]; severity: number }[];
 }) {
   if (rows.length === 0) return null;
   const titleAccent =
@@ -271,6 +284,7 @@ function Bucket({
                     days={f.daysFromToday}
                     dbsDue={c.dbsRenewalDueAt}
                     insuranceDue={c.insuranceExpiresAt}
+                    licenceDue={c.driverLicenceExpiresAt}
                   />
                 ))}
               </div>
@@ -287,14 +301,18 @@ function FlagBadge({
   days,
   dbsDue,
   insuranceDue,
+  licenceDue,
 }: {
-  kind: 'dbs' | 'insurance';
+  kind: 'dbs' | 'insurance' | 'licence';
   days: number | null;
   dbsDue: Date | null;
   insuranceDue: Date | null;
+  licenceDue: Date | null;
 }) {
-  const due = kind === 'dbs' ? dbsDue : insuranceDue;
-  const label = kind === 'dbs' ? 'DBS' : 'Insurance';
+  const due =
+    kind === 'dbs' ? dbsDue : kind === 'insurance' ? insuranceDue : licenceDue;
+  const label =
+    kind === 'dbs' ? 'DBS' : kind === 'insurance' ? 'Insurance' : 'Licence';
   let cls = 'bg-stone/10 text-stone';
   let text = `${label} - missing`;
   if (days !== null) {

@@ -751,6 +751,10 @@ enum CompanionDocumentKind {
   visa_letter
   ilr_document
   dbs_certificate
+  driver_licence
+  photo_id
+  proof_of_address
+  insurance_certificate
   other
 }
 
@@ -778,6 +782,12 @@ model Companion {
   dbsRenewalDueAt      DateTime? @db.Date
   insuranceProvider    String?
   insuranceExpiresAt   DateTime? @db.Date
+
+  // Driver's licence. Optional - not every companion drives. Number is
+  // a free text field; pattern varies by issuing country. The expiry
+  // date feeds the compliance dashboard alongside DBS and insurance.
+  driverLicenceNumber    String?
+  driverLicenceExpiresAt DateTime? @db.Date
 
   // Payments. Stripe Connect onboarding is deferred to Stage O.7+.
   stripeConnectedAccountId String?

@@ -42,6 +42,8 @@ interface InitialValues {
   bio: string;
   interests: string;
   availability: Record<string, unknown> | null;
+  driverLicenceNumber: string;
+  driverLicenceExpiresAt: string;
 }
 
 interface Props {
@@ -275,6 +277,28 @@ export function EditCompanionForm({
           defaultValue={v('interests')}
           error={state.errors?.interests}
         />
+      </Section>
+
+      <Section title="Driver's licence">
+        <p className="text-stone text-[0.875rem] leading-[1.55] -mt-1">
+          Optional. Upload the picture of the licence as a document
+          ("Driver's licence" type) on the application page.
+        </p>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field
+            name="driverLicenceNumber"
+            label="Licence number"
+            defaultValue={v('driverLicenceNumber')}
+            error={state.errors?.driverLicenceNumber}
+          />
+          <Field
+            name="driverLicenceExpiresAt"
+            label="Expiry date"
+            type="date"
+            defaultValue={v('driverLicenceExpiresAt')}
+            error={state.errors?.driverLicenceExpiresAt}
+          />
+        </div>
       </Section>
 
       <Section title="Availability">

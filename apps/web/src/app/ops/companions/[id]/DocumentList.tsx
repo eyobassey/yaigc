@@ -15,6 +15,10 @@ const KIND_LABEL: Record<string, string> = {
   visa_letter: 'Visa letter',
   ilr_document: 'ILR document',
   dbs_certificate: 'DBS certificate',
+  driver_licence: "Driver's licence",
+  photo_id: 'Photo ID',
+  proof_of_address: 'Proof of address',
+  insurance_certificate: 'Insurance certificate',
   other: 'Other',
 };
 

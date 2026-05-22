@@ -69,6 +69,10 @@ export default async function OpsCompanionEditPage({
           bio: companion.bio ?? '',
           interests: companion.interests ?? '',
           availability,
+          driverLicenceNumber: companion.driverLicenceNumber ?? '',
+          driverLicenceExpiresAt: companion.driverLicenceExpiresAt
+            ? companion.driverLicenceExpiresAt.toISOString().slice(0, 10)
+            : '',
         }}
         currentPhotoSrc={photoSrc}
       />
