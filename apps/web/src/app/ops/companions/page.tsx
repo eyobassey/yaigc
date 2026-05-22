@@ -4,6 +4,7 @@ import type { CompanionApplicationStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { Paginator } from '@/components/ui/Paginator';
 import { parsePagination, buildView } from '@/lib/pagination';
+import { BADGE_BY_SLUG, tierFromVisits, tierToneClass } from '@/lib/badges';
 
 export const metadata = { title: 'Companions' };
 
@@ -46,7 +47,17 @@ export default async function OpsCompanionsPage({
       take: state.pageSize,
       include: {
         companion: {
-          select: { id: true, status: true, borough: true },
+          select: {
+            id: true,
+            status: true,
+            borough: true,
+            badges: { select: { slug: true }, orderBy: { awardedAt: 'asc' } },
+            _count: {
+              select: {
+                visits: { where: { state: { in: ['completed', 'reported'] } } },
+              },
+            },
+          },
         },
       },
     }),
@@ -115,43 +126,77 @@ export default async function OpsCompanionsPage({
           </div>
         ) : (
           <ul className="divide-y divide-moss/[0.08]">
-            {applications.map((a) => (
-              <li key={a.id}>
-                <Link
-                  href={`/ops/companions/${a.id}`}
-                  className="flex items-center gap-4 px-5 py-4 hover:bg-cream-deep/40 transition-colors group"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <ApplicationStatusPill status={a.status} />
-                      {a.companion ? (
-                        <span className="font-body text-[0.6875rem] uppercase tracking-[0.06em] text-moss bg-moss/10 rounded px-1.5 py-0.5">
-                          {a.companion.borough.replace('_', ' ')}
-                        </span>
+            {applications.map((a) => {
+              const tier = a.companion
+                ? tierFromVisits(a.companion._count.visits)
+                : null;
+              const badges = a.companion
+                ? a.companion.badges
+                    .map((b) => BADGE_BY_SLUG[b.slug])
+                    .filter((b): b is NonNullable<typeof b> => Boolean(b))
+                : [];
+              return (
+                <li key={a.id}>
+                  <Link
+                    href={`/ops/companions/${a.id}`}
+                    className="flex items-center gap-4 px-5 py-4 hover:bg-cream-deep/40 transition-colors group"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <ApplicationStatusPill status={a.status} />
+                        {a.companion ? (
+                          <span className="font-body text-[0.6875rem] uppercase tracking-[0.06em] text-moss bg-moss/10 rounded px-1.5 py-0.5">
+                            {a.companion.borough.replace('_', ' ')}
+                          </span>
+                        ) : null}
+                        {tier?.label ? (
+                          <span
+                            className={`inline-flex items-center font-body text-[0.6875rem] font-medium uppercase tracking-[0.08em] px-2 py-0.5 rounded ${tierToneClass(tier.tier)}`}
+                            title={`${tier.visits} completed visits`}
+                          >
+                            {tier.label} · {tier.visits}
+                          </span>
+                        ) : tier && tier.visits > 0 ? (
+                          <span className="font-body text-[0.6875rem] uppercase tracking-[0.06em] text-stone">
+                            {tier.visits} {tier.visits === 1 ? 'visit' : 'visits'}
+                          </span>
+                        ) : null}
+                        <time
+                          dateTime={a.createdAt.toISOString()}
+                          className="text-stone text-[0.75rem] font-mono"
+                        >
+                          {formatRelative(a.createdAt)}
+                        </time>
+                      </div>
+                      <div className="font-head text-moss text-[1.0625rem] font-medium">
+                        {a.firstName} {a.lastName}
+                      </div>
+                      <div className="text-stone text-[0.875rem] mt-0.5 break-all">
+                        {a.email} · {a.phone} · {a.postcode}
+                      </div>
+                      {badges.length > 0 ? (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {badges.map((b) => (
+                            <span
+                              key={b.slug}
+                              className="inline-flex items-center font-body text-[0.7rem] text-charcoal bg-moss/10 rounded-full px-2 py-0.5"
+                            >
+                              {b.label}
+                            </span>
+                          ))}
+                        </div>
                       ) : null}
-                      <time
-                        dateTime={a.createdAt.toISOString()}
-                        className="text-stone text-[0.75rem] font-mono"
-                      >
-                        {formatRelative(a.createdAt)}
-                      </time>
                     </div>
-                    <div className="font-head text-moss text-[1.0625rem] font-medium">
-                      {a.firstName} {a.lastName}
-                    </div>
-                    <div className="text-stone text-[0.875rem] mt-0.5 break-all">
-                      {a.email} · {a.phone} · {a.postcode}
-                    </div>
-                  </div>
-                  <ChevronRight
-                    size={20}
-                    strokeWidth={1.5}
-                    aria-hidden="true"
-                    className="text-stone/50 group-hover:text-moss flex-shrink-0 transition-colors"
-                  />
-                </Link>
-              </li>
-            ))}
+                    <ChevronRight
+                      size={20}
+                      strokeWidth={1.5}
+                      aria-hidden="true"
+                      className="text-stone/50 group-hover:text-moss flex-shrink-0 transition-colors"
+                    />
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
