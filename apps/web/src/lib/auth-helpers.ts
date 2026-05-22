@@ -147,3 +147,63 @@ export async function requireFamilyPayer(callbackPath: string): Promise<FamilyCo
   if (ctx.member.role !== 'payer') redirect('/no-access');
   return ctx;
 }
+
+// ---------------------------------------------------------------------------
+// Companion portal helpers. Mirrors the Family-portal helpers above.
+// A signed-in companion needs:
+//   - role = companion
+//   - a Companion row pointing at this User (created on application
+//     approval at /ops/companions/[id])
+// Anything else lands at /no-access (operator-promoted but no Companion
+// row, dormant invitee, etc.).
+// ---------------------------------------------------------------------------
+
+export type CompanionContext = {
+  user: SessionUser;
+  companion: {
+    id: string;
+    applicationId: string;
+    status: string;
+    firstName: string;
+    lastName: string;
+    borough: string;
+    photoUrl: string | null;
+    bio: string | null;
+    interests: string | null;
+  };
+};
+
+/**
+ * Server-component guard for any /companion route. Redirects:
+ *   - not signed in   -> /sign-in?callbackUrl=<path>
+ *   - operator role   -> /ops (wrong portal)
+ *   - family role     -> /family (wrong portal)
+ *   - companion role but no Companion row -> /no-access
+ */
+export async function requireCompanion(callbackPath: string): Promise<CompanionContext> {
+  const user = await getSessionUser();
+  if (!user) {
+    redirect(`/sign-in?callbackUrl=${encodeURIComponent(callbackPath)}`);
+  }
+  if (isOperator(user.role)) redirect('/ops');
+  if (isFamily(user.role)) redirect('/family');
+  if (!isCompanion(user.role)) redirect('/no-access');
+
+  const companion = await prisma.companion.findUnique({
+    where: { userId: user.id },
+    select: {
+      id: true,
+      applicationId: true,
+      status: true,
+      firstName: true,
+      lastName: true,
+      borough: true,
+      photoUrl: true,
+      bio: true,
+      interests: true,
+    },
+  });
+  if (!companion) redirect('/no-access');
+
+  return { user, companion };
+}
