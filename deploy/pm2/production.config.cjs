@@ -53,9 +53,12 @@ module.exports = {
     {
       // M.1.1 - WebSocket realtime server. Standalone Node process,
       // bound to 127.0.0.1:3004. nginx proxies wss://.../realtime/
-      // here with the Upgrade dance.
+      // here with the Upgrade dance. We point at the tsx ESM entry
+      // directly (not the .bin/ shell wrapper) so PM2 doesn't try to
+      // parse the shell script as JS - same workaround as igc-prod-web.
       name: 'igc-prod-realtime',
-      script: './node_modules/.bin/tsx',
+      script:
+        '../../node_modules/.pnpm/tsx@4.22.2/node_modules/tsx/dist/cli.mjs',
       args: 'scripts/realtime-server.ts',
       cwd: webDir,
       node_args: `--env-file=${secretsFile}`,
