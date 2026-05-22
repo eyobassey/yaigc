@@ -11,11 +11,11 @@ import { listUserSessions } from '@/lib/session';
 export const metadata = { title: 'Account' };
 
 const ROLE_LABEL: Record<string, string> = {
-  operator_admin: 'Operator admin',
-  operator: 'Operator',
-  safeguarding_lead: 'Safeguarding lead',
-  finance: 'Finance',
-  support: 'Support',
+  operator_admin: 'Admin',
+  operator_coordinator: 'Coordinator',
+  operator_safeguarding: 'Safeguarding lead',
+  operator_finance: 'Finance',
+  operator_read_only: 'Read-only',
 };
 
 function formatDate(d: Date | null | undefined): string {
