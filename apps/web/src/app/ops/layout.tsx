@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { Home, Inbox, Users, Heart, Calendar, ShieldAlert, ShieldCheck, Coins, FileSearch, LogOut, Sparkles, Search } from 'lucide-react';
+import { Home, Inbox, Users, Heart, Calendar, ShieldAlert, ShieldCheck, Coins, FileSearch, LogOut, Sparkles, Search, Settings } from 'lucide-react';
 import { brand } from '@igc/content';
 import { signOut } from '@/lib/auth';
 import { requireOperator } from '@/lib/auth-helpers';
@@ -31,6 +31,7 @@ const NAV_ITEMS = [
   { href: '/ops/compliance', label: 'Compliance', icon: ShieldCheck },
   { href: '/ops/payments', label: 'Payments', icon: Coins, status: 'planned' as const },
   { href: '/ops/audit', label: 'Audit', icon: FileSearch },
+  { href: '/ops/account', label: 'Account', icon: Settings },
 ];
 
 export default async function OpsLayout({ children }: { children: ReactNode }) {
