@@ -27,7 +27,12 @@ export default async function FamilyMessagesPage({
   const { user } = await requireFamilyMember('/family/messages');
   const state = parsePagination(searchParams, { pageSize: 20 });
 
-  const where = { partyId: user.id };
+  // Either side of an operator-mediated thread (partyId) OR the
+  // family side of a direct thread (familyUserId). Same query for
+  // count + page so paging stays consistent.
+  const where = {
+    OR: [{ partyId: user.id }, { familyUserId: user.id }],
+  };
   const [total, threads] = await Promise.all([
     prisma.thread.count({ where }),
     prisma.thread.findMany({
@@ -37,6 +42,7 @@ export default async function FamilyMessagesPage({
       take: state.pageSize,
       include: {
         operator: { select: { firstName: true, lastName: true } },
+        companionUser: { select: { firstName: true, lastName: true } },
         messages: {
           orderBy: { createdAt: 'desc' },
           take: 1,
@@ -69,10 +75,16 @@ export default async function FamilyMessagesPage({
           <ul className="divide-y divide-moss/[0.08]">
             {threads.map((t) => {
               const last = t.messages[0];
+              const isDirect = t.kind === 'FAMILY_COMPANION';
+              const lastReadAt = isDirect ? t.familyLastReadAt : t.partyLastReadAt;
+              const counterpartUserId = isDirect ? t.companionUserId : t.operatorId;
               const unread =
-                last && (!t.partyLastReadAt || last.createdAt > t.partyLastReadAt)
-                  ? last.senderId === t.operatorId
+                last && (!lastReadAt || last.createdAt > lastReadAt)
+                  ? last.senderId === counterpartUserId
                   : false;
+              const title = isDirect
+                ? `Direct thread with ${t.companionUser?.firstName ?? 'your companion'}`
+                : t.subject || 'A thread with the office';
               return (
                 <li key={t.id}>
                   <Link
@@ -86,12 +98,17 @@ export default async function FamilyMessagesPage({
                             New
                           </span>
                         ) : null}
+                        {isDirect ? (
+                          <span className="inline-flex items-center font-body text-[0.65rem] font-medium uppercase tracking-[0.08em] px-2 py-0.5 rounded bg-terracotta/15 text-terracotta">
+                            Direct
+                          </span>
+                        ) : null}
                         <time className="text-stone text-[0.75rem] font-mono">
                           {formatRelative(t.lastMessageAt)}
                         </time>
                       </div>
                       <div className="font-head text-moss text-[1.0625rem] font-medium">
-                        {t.subject || 'A thread with the office'}
+                        {title}
                       </div>
                       <div className="text-stone text-[0.875rem] mt-0.5 truncate">
                         {last ? last.body : 'No messages.'}

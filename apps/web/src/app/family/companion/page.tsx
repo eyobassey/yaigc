@@ -1,7 +1,8 @@
-import { Heart, MapPin } from 'lucide-react';
+import { Heart, MapPin, MessageSquare } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { requireFamilyMember } from '@/lib/auth-helpers';
 import { companionPhotoSrc } from '@/lib/companion-photo-src';
+import { openDirectThread } from '@/lib/messaging';
 
 export const metadata = { title: 'Your companion' };
 
@@ -23,7 +24,15 @@ export default async function FamilyCompanionPage() {
       },
       include: {
         companion: {
-          select: { id: true, firstName: true, bio: true, photoUrl: true, photoFilename: true, borough: true },
+          select: {
+            id: true,
+            firstName: true,
+            bio: true,
+            photoUrl: true,
+            photoFilename: true,
+            borough: true,
+            directMessagingEnabled: true,
+          },
         },
         recipient: { select: { firstName: true, preferredName: true } },
       },
@@ -37,7 +46,15 @@ export default async function FamilyCompanionPage() {
       },
       include: {
         companion: {
-          select: { id: true, firstName: true, bio: true, photoUrl: true, photoFilename: true, borough: true },
+          select: {
+            id: true,
+            firstName: true,
+            bio: true,
+            photoUrl: true,
+            photoFilename: true,
+            borough: true,
+            directMessagingEnabled: true,
+          },
         },
         recipient: { select: { firstName: true, preferredName: true } },
       },
@@ -54,9 +71,11 @@ export default async function FamilyCompanionPage() {
       photoUrl: string | null;
       photoFilename: string | null;
       borough: string;
+      directMessagingEnabled: boolean;
     };
     recipientLabel: string;
     state: 'active' | 'paused' | 'matched';
+    matchId: string | null;
   };
 
   const pairs: Pair[] = [
@@ -65,6 +84,7 @@ export default async function FamilyCompanionPage() {
       companion: s.companion,
       recipientLabel: s.recipient.preferredName || s.recipient.firstName,
       state: s.status as 'active' | 'paused',
+      matchId: s.originatingMatchId,
     })),
     ...openMatches.map((m) => ({
       key: `match-${m.id}`,
@@ -72,6 +92,7 @@ export default async function FamilyCompanionPage() {
       recipientLabel:
         m.recipient?.preferredName || m.recipient?.firstName || 'your household',
       state: 'matched' as const,
+      matchId: m.id,
     })),
   ];
 
@@ -136,6 +157,18 @@ export default async function FamilyCompanionPage() {
                     {p.companion.firstName} has not shared a bio yet.
                   </p>
                 )}
+                {p.companion.directMessagingEnabled && p.matchId ? (
+                  <form action={openDirectThread} className="mt-4">
+                    <input type="hidden" name="matchId" value={p.matchId} />
+                    <button
+                      type="submit"
+                      className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-md bg-moss text-cream text-sm font-medium hover:bg-moss-deep transition-colors"
+                    >
+                      <MessageSquare size={14} strokeWidth={1.75} aria-hidden="true" />
+                      Message {p.companion.firstName} directly
+                    </button>
+                  </form>
+                ) : null}
               </div>
             </article>
           ))}

@@ -203,6 +203,7 @@ export type CompanionContext = {
     bio: string | null;
     interests: string | null;
     availability: unknown;
+    directMessagingEnabled: boolean;
   };
 };
 
@@ -236,6 +237,7 @@ export async function requireCompanion(callbackPath: string): Promise<CompanionC
       bio: true,
       interests: true,
       availability: true,
+      directMessagingEnabled: true,
     },
   });
   if (!companion) redirect('/no-access');

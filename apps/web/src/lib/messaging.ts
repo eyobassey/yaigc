@@ -15,10 +15,10 @@ import {
 } from '@/lib/email/new-message';
 import { publishMessageToUsers } from '@/lib/realtime';
 
-// M.1: operator-mediated messaging. Threads always have one operator
-// and one customer-side party (family_payer or companion). The
-// operator initiates. Both sides can reply. v1 deliberately does NOT
-// support direct family <-> companion threads.
+// M.1: operator-mediated messaging - operator + one customer-side party.
+// M.2: direct family <-> companion messaging, gated per-companion by
+// operator_admin. Both kinds share Message + MessageAttachment and the
+// same WebSocket fan-out; participants differ.
 
 const NOTIFICATION_DEBOUNCE_MS = 5 * 60 * 1000;
 const MESSAGE_MAX_LEN = 4000;
@@ -229,27 +229,61 @@ export async function sendMessage(
     include: {
       operator: { select: { id: true, firstName: true, email: true } },
       party: { select: { id: true, firstName: true, email: true, deletedAt: true } },
+      familyUser: {
+        select: { id: true, firstName: true, email: true, deletedAt: true },
+      },
+      companionUser: {
+        select: { id: true, firstName: true, email: true, deletedAt: true },
+      },
     },
   });
   if (!thread) return { ok: false, error: 'Thread not found.' };
-  // M.2.1: this path handles operator-mediated threads only. Direct
-  // FAMILY_COMPANION threads land here once M.2.3 ships and will be
-  // routed via a dedicated send path. Until then, refuse early so the
-  // operator-mediated invariants below hold.
-  if (thread.kind === 'FAMILY_COMPANION') {
-    return { ok: false, error: 'Direct messaging is not available on this thread yet.' };
-  }
-  if (!thread.operator || !thread.party || !thread.operatorId || !thread.partyId || !thread.partyRole) {
-    return { ok: false, error: 'Thread is in an inconsistent state.' };
-  }
-  if (thread.party.deletedAt) {
-    return { ok: false, error: 'The other party is no longer available.' };
-  }
 
-  const isActorOperator = actor.id === thread.operatorId;
-  const isActorParty = actor.id === thread.partyId;
-  if (!isActorOperator && !isActorParty) {
-    return { ok: false, error: 'You are not a participant in this thread.' };
+  // M.2.3: kind-aware participant resolution. Operator-mediated threads
+  // run through operatorId/partyId; direct threads through
+  // familyUserId/companionUserId. The two pairs are mutually
+  // exclusive by data invariant (M.2.1 schema).
+  const isDirect = thread.kind === 'FAMILY_COMPANION';
+  let isActorOperator = false;
+  let isActorParty = false;
+  let isActorFamily = false;
+  let isActorCompanion = false;
+
+  if (isDirect) {
+    if (
+      !thread.familyUser ||
+      !thread.companionUser ||
+      !thread.familyUserId ||
+      !thread.companionUserId
+    ) {
+      return { ok: false, error: 'Thread is in an inconsistent state.' };
+    }
+    if (thread.familyUser.deletedAt || thread.companionUser.deletedAt) {
+      return { ok: false, error: 'The other party is no longer available.' };
+    }
+    isActorFamily = actor.id === thread.familyUserId;
+    isActorCompanion = actor.id === thread.companionUserId;
+    if (!isActorFamily && !isActorCompanion) {
+      return { ok: false, error: 'You are not a participant in this thread.' };
+    }
+  } else {
+    if (
+      !thread.operator ||
+      !thread.party ||
+      !thread.operatorId ||
+      !thread.partyId ||
+      !thread.partyRole
+    ) {
+      return { ok: false, error: 'Thread is in an inconsistent state.' };
+    }
+    if (thread.party.deletedAt) {
+      return { ok: false, error: 'The other party is no longer available.' };
+    }
+    isActorOperator = actor.id === thread.operatorId;
+    isActorParty = actor.id === thread.partyId;
+    if (!isActorOperator && !isActorParty) {
+      return { ok: false, error: 'You are not a participant in this thread.' };
+    }
   }
 
   // Validate any attachment ids: must belong to THIS thread, must
@@ -306,7 +340,11 @@ export async function sendMessage(
       where: { id: thread.id },
       data: {
         lastMessageAt: new Date(),
-        ...(isActorOperator
+        ...(isDirect
+          ? isActorFamily
+            ? { familyLastReadAt: new Date() }
+            : { companionLastReadAt: new Date() }
+          : isActorOperator
           ? { operatorLastReadAt: new Date() }
           : { partyLastReadAt: new Date() }),
       },
@@ -323,7 +361,11 @@ export async function sendMessage(
     originalFilename: a.originalFilename,
   }));
 
-  await publishMessageToUsers([thread.operatorId, thread.partyId], {
+  const recipientUserIds = isDirect
+    ? [thread.familyUserId!, thread.companionUserId!]
+    : [thread.operatorId!, thread.partyId!];
+
+  await publishMessageToUsers(recipientUserIds, {
     kind: 'message',
     threadId: thread.id,
     message: {
@@ -335,6 +377,14 @@ export async function sendMessage(
     },
   });
 
+  const senderRole = isDirect
+    ? isActorFamily
+      ? 'family'
+      : 'companion'
+    : isActorOperator
+    ? 'operator'
+    : thread.partyRole;
+
   await audit({
     actorType: 'user',
     actorId: actor.id,
@@ -345,7 +395,8 @@ export async function sendMessage(
     metadata: {
       event: 'message_sent',
       threadId: thread.id,
-      senderRole: isActorOperator ? 'operator' : thread.partyRole,
+      threadKind: thread.kind,
+      senderRole,
       attachmentCount: attachmentsForBind.length,
     },
   });
@@ -356,29 +407,35 @@ export async function sendMessage(
     d.body || (attachmentsForBind.length > 0 ? '[attachment]' : '');
 
   // Notify the OTHER side, respecting the 5-min debounce.
-  if (isActorOperator) {
-    await notifyPartyOfMessage({
-      threadId: thread.id,
-      partyId: thread.party.id,
-      partyFirstName: thread.party.firstName,
-      partyEmail: thread.party.email,
-      partyRole: thread.partyRole,
-      preview: emailPreview,
-      fromOperator: true,
-    });
-  } else {
-    await notifyOperatorOfMessage({
-      threadId: thread.id,
-      operatorId: thread.operator.id,
-      operatorFirstName: thread.operator.firstName,
-      operatorEmail: thread.operator.email,
-      preview: emailPreview,
-    });
+  // M.2.3 deliberately skips email for direct threads; email + WS
+  // fan-out to ops admins both land in M.2.5.
+  if (!isDirect) {
+    if (isActorOperator) {
+      await notifyPartyOfMessage({
+        threadId: thread.id,
+        partyId: thread.party!.id,
+        partyFirstName: thread.party!.firstName,
+        partyEmail: thread.party!.email,
+        partyRole: thread.partyRole!,
+        preview: emailPreview,
+        fromOperator: true,
+      });
+    } else {
+      await notifyOperatorOfMessage({
+        threadId: thread.id,
+        operatorId: thread.operator!.id,
+        operatorFirstName: thread.operator!.firstName,
+        operatorEmail: thread.operator!.email,
+        preview: emailPreview,
+      });
+    }
   }
 
   revalidatePath(`/ops/messages/${thread.id}`);
   revalidatePath(`/family/messages/${thread.id}`);
   revalidatePath(`/companion/messages/${thread.id}`);
+  revalidatePath('/family/messages');
+  revalidatePath('/companion/messages');
   return { ok: true };
 }
 
@@ -391,7 +448,13 @@ export async function markThreadRead(threadId: string): Promise<void> {
   if (!actor) return;
   const thread = await prisma.thread.findUnique({
     where: { id: threadId },
-    select: { id: true, operatorId: true, partyId: true },
+    select: {
+      id: true,
+      operatorId: true,
+      partyId: true,
+      familyUserId: true,
+      companionUserId: true,
+    },
   });
   if (!thread) return;
   if (actor.id === thread.operatorId) {
@@ -404,6 +467,121 @@ export async function markThreadRead(threadId: string): Promise<void> {
       where: { id: thread.id },
       data: { partyLastReadAt: new Date() },
     });
+  } else if (actor.id === thread.familyUserId) {
+    await prisma.thread.update({
+      where: { id: thread.id },
+      data: { familyLastReadAt: new Date() },
+    });
+  } else if (actor.id === thread.companionUserId) {
+    await prisma.thread.update({
+      where: { id: thread.id },
+      data: { companionLastReadAt: new Date() },
+    });
+  }
+}
+
+// ---------------------------------------------------------------
+// OPEN DIRECT THREAD (M.2.3)
+// ---------------------------------------------------------------
+//
+// Find-or-create the FAMILY_COMPANION thread for a Match, then send
+// the actor straight to the thread page in their portal. Used by the
+// "Message X directly" buttons on /family/companion and on the
+// companion-side accepted-match view.
+//
+// Eligibility:
+//   - companion has directMessagingEnabled (operator_admin gated in M.2.2)
+//   - match status = 'accepted' AND not ended
+//   - actor is one of the two participants
+
+export async function openDirectThread(formData: FormData): Promise<void> {
+  'use server';
+  const actor = await getSessionUser();
+  if (!actor) {
+    redirect('/sign-in');
+  }
+
+  const matchId = String(formData.get('matchId') ?? '');
+  if (!matchId) return;
+
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    select: {
+      id: true,
+      status: true,
+      endedAt: true,
+      family: {
+        select: {
+          id: true,
+          members: {
+            where: { role: 'payer', deletedAt: null },
+            select: { userId: true },
+            take: 1,
+          },
+        },
+      },
+      companion: {
+        select: { id: true, userId: true, directMessagingEnabled: true },
+      },
+    },
+  });
+  if (!match) return;
+  if (!match.companion.directMessagingEnabled) return;
+  if (match.status !== 'accepted' || match.endedAt) return;
+
+  const familyUserId = match.family.members[0]?.userId;
+  const companionUserId = match.companion.userId;
+  if (!familyUserId || !companionUserId) return;
+  if (actor.id !== familyUserId && actor.id !== companionUserId) return;
+
+  const existing = await prisma.thread.findFirst({
+    where: {
+      kind: 'FAMILY_COMPANION',
+      familyUserId,
+      companionUserId,
+    },
+    select: { id: true },
+  });
+
+  let threadId: string;
+  if (existing) {
+    threadId = existing.id;
+  } else {
+    const created = await prisma.thread.create({
+      data: {
+        kind: 'FAMILY_COMPANION',
+        familyUserId,
+        companionUserId,
+        // Mark the creator as having read it so they don't see a
+        // self-generated unread badge.
+        ...(actor.id === familyUserId
+          ? { familyLastReadAt: new Date() }
+          : { companionLastReadAt: new Date() }),
+      },
+      select: { id: true },
+    });
+    threadId = created.id;
+    await audit({
+      actorType: 'user',
+      actorId: actor.id,
+      actorRole: actor.role,
+      actionType: 'create',
+      targetType: 'Thread',
+      targetId: threadId,
+      metadata: {
+        event: 'direct_thread_created',
+        threadKind: 'FAMILY_COMPANION',
+        matchId,
+      },
+    });
+    revalidatePath('/family/messages');
+    revalidatePath('/companion/messages');
+  }
+
+  if (actor.id === familyUserId) {
+    redirect(`/family/messages/${threadId}`);
+  } else {
+    redirect(`/companion/messages/${threadId}`);
   }
 }
 

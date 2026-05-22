@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ChevronLeft, MessageSquare } from 'lucide-react';
+import { ChevronLeft, MessageSquare, Eye } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { requireFamilyMember } from '@/lib/auth-helpers';
 import { markThreadRead } from '@/lib/messaging';
@@ -19,6 +19,7 @@ export default async function FamilyThreadDetailPage({
     where: { id: params.id },
     include: {
       operator: { select: { id: true, firstName: true, lastName: true } },
+      companionUser: { select: { id: true, firstName: true, lastName: true } },
       messages: {
         orderBy: { createdAt: 'asc' },
         include: {
@@ -38,14 +39,26 @@ export default async function FamilyThreadDetailPage({
       },
     },
   });
-  if (!thread || thread.partyId !== user.id || !thread.operator) notFound();
+  if (!thread) notFound();
+
+  const isDirect = thread.kind === 'FAMILY_COMPANION';
+  if (isDirect) {
+    if (thread.familyUserId !== user.id || !thread.companionUser) notFound();
+  } else {
+    if (thread.partyId !== user.id || !thread.operator) notFound();
+  }
 
   await markThreadRead(thread.id);
 
-  const operatorLabel =
-    [thread.operator.firstName, thread.operator.lastName]
-      .filter(Boolean)
-      .join(' ') || 'The office';
+  const otherPartyLabel = isDirect
+    ? thread.companionUser!.firstName ?? 'your companion'
+    : [thread.operator!.firstName, thread.operator!.lastName]
+        .filter(Boolean)
+        .join(' ') || 'The office';
+
+  const heading = isDirect
+    ? `Direct thread with ${thread.companionUser!.firstName ?? 'your companion'}`
+    : thread.subject || 'A thread with the office';
 
   return (
     <div>
@@ -60,13 +73,15 @@ export default async function FamilyThreadDetailPage({
       <header className="mb-6 flex items-center gap-3">
         <MessageSquare size={22} strokeWidth={1.75} className="text-moss" aria-hidden="true" />
         <h1 className="font-head font-normal text-moss text-[clamp(1.5rem,3vw,2rem)] leading-[1.15] break-words">
-          {thread.subject || 'A thread with the office'}
+          {heading}
         </h1>
       </header>
 
+      {isDirect ? <OversightBanner /> : null}
+
       <ThreadView
         threadId={thread.id}
-        otherPartyLabel={operatorLabel}
+        otherPartyLabel={otherPartyLabel}
         currentUserId={user.id}
         messages={thread.messages.map((m) => ({
           id: m.id,
@@ -77,10 +92,30 @@ export default async function FamilyThreadDetailPage({
             m.senderId === user.id
               ? 'You'
               : [m.sender.firstName, m.sender.lastName].filter(Boolean).join(' ') ||
-                operatorLabel,
+                otherPartyLabel,
           attachments: m.attachments,
         }))}
       />
+    </div>
+  );
+}
+
+// M.2.3 - disclosure banner. Both sides of a direct thread are told
+// up-front that the office can read their messages. Per the M.2
+// design decision: no surprise oversight.
+function OversightBanner() {
+  return (
+    <div className="mb-5 rounded-md border border-terracotta/30 bg-terracotta/[0.06] px-4 py-3 flex items-start gap-3">
+      <Eye
+        size={18}
+        strokeWidth={1.75}
+        aria-hidden="true"
+        className="text-terracotta flex-shrink-0 mt-0.5"
+      />
+      <p className="text-charcoal text-[0.875rem] leading-[1.55]">
+        The office can read messages in this thread. We are here if
+        anything ever goes wrong.
+      </p>
     </div>
   );
 }
