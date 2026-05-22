@@ -10,7 +10,8 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getSessionUser } from '@/lib/auth-helpers';
+import { audit } from '@/lib/audit';
+import { getSessionUser, isOperator } from '@/lib/auth-helpers';
 import { readAttachmentBytes } from '@/lib/message-attachment-storage';
 
 export const runtime = 'nodejs';
@@ -33,6 +34,7 @@ export async function GET(
       originalFilename: true,
       thread: {
         select: {
+          kind: true,
           operatorId: true,
           partyId: true,
           familyUserId: true,
@@ -43,16 +45,34 @@ export async function GET(
   });
   if (!att) return new NextResponse('Not found', { status: 404 });
 
-  // Matches the upload-route gate: any of the four participant
-  // columns (kind-dependent) may identify the caller. Operators
-  // outside this thread still don't get access.
+  // Any of the four participant columns (kind-dependent) identifies
+  // the caller. For FAMILY_COMPANION threads, operators with the
+  // oversight role also see attachments - mirrors the page-level
+  // gate on /ops/messages/[id]. Operators on OPS_* threads must be
+  // the assigned operator, no blanket access.
   const isParticipant =
     user.id === att.thread.operatorId ||
     user.id === att.thread.partyId ||
     user.id === att.thread.familyUserId ||
     user.id === att.thread.companionUserId;
-  if (!isParticipant) {
+  const isOversight =
+    att.thread.kind === 'FAMILY_COMPANION' && isOperator(user.role);
+  if (!isParticipant && !isOversight) {
     return new NextResponse('Forbidden', { status: 403 });
+  }
+  if (isOversight) {
+    await audit({
+      actorType: 'user',
+      actorId: user.id,
+      actorRole: user.role,
+      actionType: 'read_sensitive',
+      targetType: 'MessageAttachment',
+      targetId: params.id,
+      metadata: {
+        event: 'direct_attachment_read',
+        threadId: att.threadId,
+      },
+    });
   }
 
   let bytes: Buffer;
