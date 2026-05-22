@@ -4,7 +4,6 @@
 // Session row directly (same as lib/auth-password.ts) so the existing
 // database-session model keeps working.
 
-import { randomBytes } from 'node:crypto';
 import {
   generateRegistrationOptions as swGenerateRegistrationOptions,
   generateAuthenticationOptions as swGenerateAuthenticationOptions,
@@ -267,32 +266,6 @@ export async function verifyAuthentication(
   });
 
   return { ok: true, userId: authenticator.userId };
-}
-
-// -------------------------------------------------------------------
-// Session minting (shared with lib/auth-password.ts)
-// -------------------------------------------------------------------
-
-const SESSION_DAYS = 30;
-const SESSION_COOKIE_NAME =
-  process.env.NODE_ENV === 'production'
-    ? '__Secure-authjs.session-token'
-    : 'authjs.session-token';
-
-export function sessionCookieName(): string {
-  return SESSION_COOKIE_NAME;
-}
-
-export async function mintSession(userId: string): Promise<{
-  sessionToken: string;
-  expires: Date;
-}> {
-  const sessionToken = randomBytes(32).toString('hex');
-  const expires = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
-  await prisma.session.create({
-    data: { sessionToken, userId, expires },
-  });
-  return { sessionToken, expires };
 }
 
 // -------------------------------------------------------------------

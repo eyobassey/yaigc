@@ -2,6 +2,7 @@ import NextAuth from 'next-auth';
 import Nodemailer from 'next-auth/providers/nodemailer';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import { createTransport } from 'nodemailer';
+import { headers } from 'next/headers';
 import { brand } from '@igc/content';
 import { prisma } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
@@ -10,16 +11,20 @@ import {
   magicLinkText,
   magicLinkSubject,
 } from '@/lib/email/magic-link';
+import { LONG_SESSION_DAYS } from '@/lib/session';
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: PrismaAdapter(prisma),
 
-  // Database sessions per README. Required when using an adapter.
-  // Password sign-in (P.1) creates Session rows directly via the
-  // PrismaAdapter rather than going through a Credentials provider
-  // (which would force JWT sessions and break the magic-link flow).
-  // See lib/auth-password.ts.
-  session: { strategy: 'database' },
+  // Database sessions. Magic-link uses Auth.js's PrismaAdapter to
+  // create the row, with `maxAge` controlling expiry. Password (P.1)
+  // and passkey (P.2) paths create rows directly via lib/session.ts.
+  // 60 days matches LONG_SESSION_DAYS so a magic-link sign-in lasts
+  // the same as a "remember me" password / passkey sign-in.
+  session: {
+    strategy: 'database',
+    maxAge: LONG_SESSION_DAYS * 24 * 60 * 60,
+  },
 
   providers: [
     Nodemailer({
@@ -69,6 +74,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   // (it logs to stderr) so a DB hiccup never blocks a sign-in.
   events: {
     async signIn({ user, isNewUser }) {
+      // Capture User-Agent on the most recent session for this user
+      // (the one Auth.js just created via PrismaAdapter). headers()
+      // is request-scoped and available inside auth callbacks.
+      if (user.id) {
+        try {
+          const ua = headers().get('user-agent');
+          if (ua) {
+            await prisma.session.updateMany({
+              where: { userId: user.id, userAgent: null },
+              data: { userAgent: ua.slice(0, 400) },
+            });
+          }
+        } catch (err) {
+          console.error('[auth] failed to capture user-agent', { err });
+        }
+      }
       await audit({
         actorType: 'user',
         actorId: user.id ?? null,

@@ -132,11 +132,18 @@ model Session {
   sessionToken String   @unique
   userId       String
   expires      DateTime
+  // P.3 additions. userAgent populated at sign-in for the device list
+  // on /account; lastActiveAt is refreshed by the middleware on each
+  // request so the device list shows when a session was last used.
+  userAgent    String?
+  lastActiveAt DateTime @default(now())
+  createdAt    DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expires])
+  @@index([userId, lastActiveAt(sort: Desc)])
 }
 
 model VerificationToken {

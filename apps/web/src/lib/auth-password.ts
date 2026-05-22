@@ -1,11 +1,10 @@
 'use server';
 
-import { randomBytes } from 'node:crypto';
-import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
 import { getSessionUser } from '@/lib/auth-helpers';
+import { mintAndSetSession } from '@/lib/session';
 import {
   hashPassword,
   verifyPassword,
@@ -14,42 +13,6 @@ import {
   recordFailure,
   clearAttempts,
 } from '@/lib/password';
-
-// Session cookie name + lifetime. Mirrors lib/auth.ts so a session
-// created here is indistinguishable from one created via magic-link.
-// 30 days for now; P.3 bumps to 60.
-const SESSION_DAYS = 30;
-const SESSION_COOKIE_NAME =
-  process.env.NODE_ENV === 'production'
-    ? '__Secure-authjs.session-token'
-    : 'authjs.session-token';
-
-function sessionExpiry(): Date {
-  return new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
-}
-
-async function issueSession(userId: string): Promise<void> {
-  // Auth.js uses a random hex string as the sessionToken. We match the
-  // shape (256-bit, hex-encoded) so the existing auth() function reads
-  // the row through PrismaAdapter as it would any other session.
-  const sessionToken = randomBytes(32).toString('hex');
-  const expires = sessionExpiry();
-  await prisma.session.create({
-    data: { sessionToken, userId, expires },
-  });
-  cookies().set({
-    name: SESSION_COOKIE_NAME,
-    value: sessionToken,
-    httpOnly: true,
-    sameSite: 'lax',
-    path: '/',
-    secure: process.env.NODE_ENV === 'production',
-    expires,
-    ...(process.env.NODE_ENV === 'production'
-      ? { domain: '.youareingoodcompany.co.uk' }
-      : {}),
-  });
-}
 
 // ============================================================
 // SIGN IN with email + password
@@ -68,6 +31,10 @@ export async function signInWithPassword(
   const email = String(formData.get('email') ?? '').trim().toLowerCase();
   const password = String(formData.get('password') ?? '');
   const redirectTo = String(formData.get('redirectTo') ?? '/me');
+  // Default to remembering. "Remember me" checkbox is checked by
+  // default; absence of the field means the user explicitly unchecked
+  // it, which collapses to a short session.
+  const remember = formData.get('rememberMe') === 'on';
 
   if (!email || !password) {
     return { ok: false, error: 'Email and password are both required.', values: { email } };
@@ -152,14 +119,14 @@ export async function signInWithPassword(
 
   // Success: clear counter, mint session, audit, redirect.
   clearAttempts(email);
-  await issueSession(user.id);
+  await mintAndSetSession({ userId: user.id, remember });
   await audit({
     actorType: 'user',
     actorId: user.id,
     actionType: 'auth',
     targetType: 'Session',
     targetId: user.id,
-    metadata: { event: 'sign_in', method: 'password', email },
+    metadata: { event: 'sign_in', method: 'password', email, remember },
   });
   redirect(redirectTo);
 }

@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { verifyAuthentication, mintSession, sessionCookieName } from '@/lib/passkey';
+import { verifyAuthentication } from '@/lib/passkey';
+import { mintAndSetSession } from '@/lib/session';
 import { audit } from '@/lib/audit';
 
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as {
     response?: Parameters<typeof verifyAuthentication>[0];
     redirectTo?: string;
+    remember?: boolean;
   } | null;
   if (!body || !body.response) {
     return new NextResponse('Bad request.', { status: 400 });
@@ -25,20 +26,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: result.reason }, { status: 401 });
   }
 
-  const { sessionToken, expires } = await mintSession(result.userId);
-
-  cookies().set({
-    name: sessionCookieName(),
-    value: sessionToken,
-    httpOnly: true,
-    sameSite: 'lax',
-    path: '/',
-    secure: process.env.NODE_ENV === 'production',
-    expires,
-    ...(process.env.NODE_ENV === 'production'
-      ? { domain: '.youareingoodcompany.co.uk' }
-      : {}),
-  });
+  const remember = body.remember !== false;
+  await mintAndSetSession({ userId: result.userId, remember });
 
   await audit({
     actorType: 'user',
@@ -46,7 +35,7 @@ export async function POST(req: Request) {
     actionType: 'auth',
     targetType: 'Session',
     targetId: result.userId,
-    metadata: { event: 'sign_in', method: 'passkey' },
+    metadata: { event: 'sign_in', method: 'passkey', remember },
   });
 
   return NextResponse.json({

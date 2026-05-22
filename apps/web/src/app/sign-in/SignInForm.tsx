@@ -29,6 +29,7 @@ export function SignInForm({ callbackUrl, sendMagicLink }: Props) {
   const [passkeyBusy, setPasskeyBusy] = useState(false);
   const [passkeyError, setPasskeyError] = useState<string | null>(null);
   const [email, setEmail] = useState(state.values?.email ?? '');
+  const [remember, setRemember] = useState(true);
 
   useEffect(() => {
     setPasskeySupported(browserSupportsWebAuthn());
@@ -51,7 +52,11 @@ export function SignInForm({ callbackUrl, sendMagicLink }: Props) {
       const verifyRes = await fetch('/api/auth/webauthn/authentication/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ response: assertion, redirectTo: callbackUrl }),
+        body: JSON.stringify({
+          response: assertion,
+          redirectTo: callbackUrl,
+          remember,
+        }),
       });
       const body = await verifyRes.json().catch(() => ({}));
       if (!verifyRes.ok || !body.ok) {
@@ -159,6 +164,17 @@ export function SignInForm({ callbackUrl, sendMagicLink }: Props) {
         </label>
 
         <input type="hidden" name="redirectTo" value={callbackUrl} />
+
+        <label className="flex items-center gap-2 text-charcoal text-[0.875rem] cursor-pointer mt-1">
+          <input
+            type="checkbox"
+            name="rememberMe"
+            checked={remember}
+            onChange={(e) => setRemember(e.target.checked)}
+            className="w-4 h-4 rounded border-moss/30 text-moss focus:ring-moss/30"
+          />
+          Remember this device for 60 days
+        </label>
 
         {state.error ? (
           <p className="bg-terracotta/10 border-l-4 border-terracotta px-4 py-3 rounded-r text-[0.9375rem] text-charcoal">

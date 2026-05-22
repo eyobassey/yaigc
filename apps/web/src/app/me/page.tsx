@@ -7,7 +7,9 @@ import { PageShell } from '@/components/marketing/PageShell';
 import { Button } from '@/components/ui/Button';
 import { PasswordSection } from '@/components/account/PasswordSection';
 import { PasskeySection } from '@/components/account/PasskeySection';
+import { DeviceListSection } from '@/components/account/DeviceListSection';
 import { listUserPasskeys } from '@/lib/passkey';
+import { listUserSessions } from '@/lib/session';
 
 // /me is the post-sign-in router. Magic-link sign-ins land here when no
 // explicit callbackUrl was given, and we forward them to the portal that
@@ -32,12 +34,13 @@ export default async function MePage() {
     redirect(landing);
   }
 
-  const [passwordInfo, passkeys] = await Promise.all([
+  const [passwordInfo, passkeys, sessions] = await Promise.all([
     prisma.user.findUnique({
       where: { id: user.id },
       select: { passwordHash: true, passwordSetAt: true },
     }),
     listUserPasskeys(user.id),
+    listUserSessions(user.id),
   ]);
 
   return (
@@ -83,6 +86,16 @@ export default async function MePage() {
                 credentialBackedUp: p.credentialBackedUp,
                 createdAt: p.createdAt.toISOString(),
                 lastUsedAt: p.lastUsedAt ? p.lastUsedAt.toISOString() : null,
+              }))}
+            />
+            <DeviceListSection
+              devices={sessions.map((s) => ({
+                id: s.id,
+                label: s.label,
+                createdAt: s.createdAt.toISOString(),
+                lastActiveAt: s.lastActiveAt.toISOString(),
+                expires: s.expires.toISOString(),
+                isCurrent: s.isCurrent,
               }))}
             />
           </div>

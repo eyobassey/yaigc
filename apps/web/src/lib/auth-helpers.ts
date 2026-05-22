@@ -73,7 +73,34 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       lastName: true,
     },
   });
+  if (user) {
+    // Touch lastActiveAt on the live session (best-effort). Throttled
+    // to once every 5 minutes per token so we don't update on every
+    // server-rendered page hit.
+    touchActiveSession().catch(() => {});
+  }
   return user;
+}
+
+const TOUCH_THROTTLE_MS = 5 * 60 * 1000;
+const SESSION_COOKIE_NAME =
+  process.env.NODE_ENV === 'production'
+    ? '__Secure-authjs.session-token'
+    : 'authjs.session-token';
+const lastTouch = new Map<string, number>();
+
+async function touchActiveSession(): Promise<void> {
+  const { cookies } = await import('next/headers');
+  const token = cookies().get(SESSION_COOKIE_NAME)?.value;
+  if (!token) return;
+  const now = Date.now();
+  const prev = lastTouch.get(token) ?? 0;
+  if (now - prev < TOUCH_THROTTLE_MS) return;
+  lastTouch.set(token, now);
+  await prisma.session.updateMany({
+    where: { sessionToken: token },
+    data: { lastActiveAt: new Date() },
+  });
 }
 
 /**

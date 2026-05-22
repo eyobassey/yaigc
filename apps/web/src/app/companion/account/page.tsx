@@ -5,7 +5,9 @@ import { requireCompanion } from '@/lib/auth-helpers';
 import { signOut } from '@/lib/auth';
 import { PasswordSection } from '@/components/account/PasswordSection';
 import { PasskeySection } from '@/components/account/PasskeySection';
+import { DeviceListSection } from '@/components/account/DeviceListSection';
 import { listUserPasskeys } from '@/lib/passkey';
+import { listUserSessions } from '@/lib/session';
 
 export const metadata = { title: 'Account' };
 
@@ -50,7 +52,7 @@ export default async function CompanionAccountPage() {
   // columns that aren't on requireCompanion's narrower context.
   // Also fetch the most recent sign-in from the audit log (Auth.js
   // writes actionType=auth on every magic-link callback).
-  const [full, lastSignIn, passwordInfo, passkeys] = await Promise.all([
+  const [full, lastSignIn, passwordInfo, passkeys, sessions] = await Promise.all([
     prisma.companion.findUnique({
       where: { id: companion.id },
       select: {
@@ -78,6 +80,7 @@ export default async function CompanionAccountPage() {
       select: { passwordHash: true, passwordSetAt: true },
     }),
     listUserPasskeys(user.id),
+    listUserSessions(user.id),
   ]);
 
   const joinedAt = full?.user.createdAt ?? full?.createdAt ?? null;
@@ -195,6 +198,17 @@ export default async function CompanionAccountPage() {
           credentialBackedUp: p.credentialBackedUp,
           createdAt: p.createdAt.toISOString(),
           lastUsedAt: p.lastUsedAt ? p.lastUsedAt.toISOString() : null,
+        }))}
+      />
+
+      <DeviceListSection
+        devices={sessions.map((s) => ({
+          id: s.id,
+          label: s.label,
+          createdAt: s.createdAt.toISOString(),
+          lastActiveAt: s.lastActiveAt.toISOString(),
+          expires: s.expires.toISOString(),
+          isCurrent: s.isCurrent,
         }))}
       />
 
