@@ -266,6 +266,21 @@ export async function sendMessage(
     if (!isActorFamily && !isActorCompanion) {
       return { ok: false, error: 'You are not a participant in this thread.' };
     }
+    // M.2.5: lifecycle gate. A direct thread is writable only while
+    // an accepted, non-ended Match exists between these participants
+    // AND the companion still has the operator_admin gate enabled.
+    // Match ends + admin disabling both flip the thread to read-only
+    // without deleting any history.
+    const writable = await isDirectThreadWritable(
+      thread.familyUserId,
+      thread.companionUserId,
+    );
+    if (!writable) {
+      return {
+        ok: false,
+        error: 'This thread is read-only. The match is no longer active.',
+      };
+    }
   } else {
     if (
       !thread.operator ||
@@ -423,28 +438,49 @@ export async function sendMessage(
     d.body || (attachmentsForBind.length > 0 ? '[attachment]' : '');
 
   // Notify the OTHER side, respecting the 5-min debounce.
-  // M.2.3 deliberately skips email for direct threads; email + WS
-  // fan-out to ops admins both land in M.2.5.
-  if (!isDirect) {
-    if (isActorOperator) {
-      await notifyPartyOfMessage({
+  if (isDirect) {
+    // M.2.5: email the counterpart on a direct thread. Ops gets no
+    // per-message email - they monitor via the oversight dashboard
+    // and the audit log records every read.
+    if (isActorFamily) {
+      await notifyDirectThreadCounterpart({
         threadId: thread.id,
-        partyId: thread.party!.id,
-        partyFirstName: thread.party!.firstName,
-        partyEmail: thread.party!.email,
-        partyRole: thread.partyRole!,
+        side: 'companion',
+        recipientUserId: thread.companionUserId!,
+        recipientFirstName: thread.companionUser!.firstName,
+        recipientEmail: thread.companionUser!.email,
+        senderLabel: thread.familyUser!.firstName ?? 'the family',
         preview: emailPreview,
-        fromOperator: true,
       });
     } else {
-      await notifyOperatorOfMessage({
+      await notifyDirectThreadCounterpart({
         threadId: thread.id,
-        operatorId: thread.operator!.id,
-        operatorFirstName: thread.operator!.firstName,
-        operatorEmail: thread.operator!.email,
+        side: 'family',
+        recipientUserId: thread.familyUserId!,
+        recipientFirstName: thread.familyUser!.firstName,
+        recipientEmail: thread.familyUser!.email,
+        senderLabel: thread.companionUser!.firstName ?? 'your companion',
         preview: emailPreview,
       });
     }
+  } else if (isActorOperator) {
+    await notifyPartyOfMessage({
+      threadId: thread.id,
+      partyId: thread.party!.id,
+      partyFirstName: thread.party!.firstName,
+      partyEmail: thread.party!.email,
+      partyRole: thread.partyRole!,
+      preview: emailPreview,
+      fromOperator: true,
+    });
+  } else {
+    await notifyOperatorOfMessage({
+      threadId: thread.id,
+      operatorId: thread.operator!.id,
+      operatorFirstName: thread.operator!.firstName,
+      operatorEmail: thread.operator!.email,
+      preview: emailPreview,
+    });
   }
 
   revalidatePath(`/ops/messages/${thread.id}`);
@@ -698,5 +734,99 @@ async function notifyOperatorOfMessage(input: {
     });
   } catch (err) {
     console.error('[messaging] operator notification failed', { threadId: input.threadId, err });
+  }
+}
+
+// ---------------------------------------------------------------
+// DIRECT-THREAD HELPERS (M.2.5)
+// ---------------------------------------------------------------
+//
+// Lifecycle gate. A FAMILY_COMPANION thread is writable only while
+// the underlying pairing is still live - meaning an accepted Match
+// exists between the two participants AND the companion has the
+// operator_admin gate still enabled. Either condition flipping (match
+// ends, gate toggled off) renders the thread read-only without
+// deleting history. There is no Thread.endedAt column; the truth is
+// derived from Match + Companion at read/write time.
+
+export async function isDirectThreadWritable(
+  familyUserId: string,
+  companionUserId: string,
+): Promise<boolean> {
+  const match = await prisma.match.findFirst({
+    where: {
+      status: 'accepted',
+      endedAt: null,
+      companion: {
+        userId: companionUserId,
+        directMessagingEnabled: true,
+      },
+      family: {
+        members: {
+          some: { userId: familyUserId, role: 'payer', deletedAt: null },
+        },
+      },
+    },
+    select: { id: true },
+  });
+  return Boolean(match);
+}
+
+async function notifyDirectThreadCounterpart(input: {
+  threadId: string;
+  side: 'family' | 'companion';
+  recipientUserId: string;
+  recipientFirstName: string | null;
+  recipientEmail: string;
+  senderLabel: string;
+  preview: string;
+}): Promise<void> {
+  const debounceField =
+    input.side === 'family' ? 'familyLastNotifiedAt' : 'companionLastNotifiedAt';
+  const thread = await prisma.thread.findUnique({
+    where: { id: input.threadId },
+    select: {
+      familyLastNotifiedAt: input.side === 'family',
+      companionLastNotifiedAt: input.side === 'companion',
+    } as { familyLastNotifiedAt: true; companionLastNotifiedAt: true },
+  });
+  if (!thread) return;
+  const lastNotifiedAt =
+    input.side === 'family'
+      ? thread.familyLastNotifiedAt
+      : thread.companionLastNotifiedAt;
+  const now = Date.now();
+  if (
+    lastNotifiedAt &&
+    now - lastNotifiedAt.getTime() < NOTIFICATION_DEBOUNCE_MS
+  ) {
+    return;
+  }
+  await prisma.thread.update({
+    where: { id: input.threadId },
+    data: { [debounceField]: new Date() },
+  });
+  try {
+    const transport = buildTransport();
+    const payload = {
+      recipientFirstName: input.recipientFirstName,
+      recipientRoleHint: input.side,
+      threadId: input.threadId,
+      preview: previewOf(input.preview),
+      fromOperator: false,
+      senderLabel: input.senderLabel,
+    };
+    await transport.sendMail({
+      to: input.recipientEmail,
+      from: `${brand.fullName} <${process.env.EMAIL_SENDER}>`,
+      subject: newMessageSubject(payload),
+      text: newMessageText(payload),
+      html: newMessageHtml(payload),
+    });
+  } catch (err) {
+    console.error('[messaging] direct-thread notification failed', {
+      threadId: input.threadId,
+      err,
+    });
   }
 }

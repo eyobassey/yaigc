@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ChevronLeft, MessageSquare, Eye } from 'lucide-react';
+import { ChevronLeft, MessageSquare, Eye, Lock } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { requireCompanion } from '@/lib/auth-helpers';
-import { markThreadRead } from '@/lib/messaging';
+import { markThreadRead, isDirectThreadWritable } from '@/lib/messaging';
 import { ThreadView } from '@/components/messaging/ThreadView';
 
 export const metadata = { title: 'Thread' };
@@ -48,6 +48,15 @@ export default async function CompanionThreadDetailPage({
     if (thread.partyId !== user.id || !thread.operator) notFound();
   }
 
+  // M.2.5: read-only when the match has ended or the operator has
+  // turned the gate off. History stays visible.
+  const directReadOnly =
+    isDirect &&
+    !(await isDirectThreadWritable(
+      thread.familyUserId!,
+      thread.companionUserId!,
+    ));
+
   await markThreadRead(thread.id);
 
   const otherPartyLabel = isDirect
@@ -79,12 +88,15 @@ export default async function CompanionThreadDetailPage({
         </h1>
       </header>
 
-      {isDirect ? <OversightBanner /> : null}
+      {isDirect ? (
+        directReadOnly ? <EndedBanner /> : <OversightBanner />
+      ) : null}
 
       <ThreadView
         threadId={thread.id}
         otherPartyLabel={otherPartyLabel}
         currentUserId={user.id}
+        readOnly={directReadOnly}
         messages={thread.messages.map((m) => ({
           id: m.id,
           body: m.body,
@@ -115,6 +127,25 @@ function OversightBanner() {
       <p className="text-charcoal text-[0.875rem] leading-[1.55]">
         The office can read messages in this thread. They are there if
         anything ever needs flagging.
+      </p>
+    </div>
+  );
+}
+
+// M.2.5 - mirror of the family side. Match ended OR the office turned
+// the gate off. History stays visible.
+function EndedBanner() {
+  return (
+    <div className="mb-5 rounded-md border border-stone/30 bg-stone/[0.06] px-4 py-3 flex items-start gap-3">
+      <Lock
+        size={18}
+        strokeWidth={1.75}
+        aria-hidden="true"
+        className="text-stone flex-shrink-0 mt-0.5"
+      />
+      <p className="text-charcoal text-[0.875rem] leading-[1.55]">
+        This thread is now read-only. Reach the office through the
+        operator thread under Messages if you need anything.
       </p>
     </div>
   );

@@ -16,6 +16,11 @@ export interface NewMessageInput {
   threadId: string;
   preview: string; // first ~120 chars of the message body
   fromOperator: boolean;
+  // M.2.5: for FAMILY_COMPANION threads neither side is the office.
+  // Pass the sender's display name and we render "From {senderLabel}."
+  // Operator-mediated threads leave this unset and keep the existing
+  // "From the office." / "A reply on your thread." copy.
+  senderLabel?: string;
 }
 
 function blocks(input: NewMessageInput): EmailBlocks {
@@ -27,13 +32,16 @@ function blocks(input: NewMessageInput): EmailBlocks {
       ? '/companion/messages'
       : '/ops/messages';
   const url = `${SITE_URL}${portal}/${input.threadId}`;
+  const subline = input.senderLabel
+    ? `From ${input.senderLabel}.`
+    : input.fromOperator
+    ? `From the office.`
+    : `A reply on your thread.`;
   return {
     preheader: input.preview,
     titleTag: `New message  ·  ${brand.fullName}`,
     heading: `A message for you, ${name}.`,
-    italicSubline: input.fromOperator
-      ? `From the office.`
-      : `A reply on your thread.`,
+    italicSubline: subline,
     lead: input.preview,
     cta: {
       label: 'Open the thread',
