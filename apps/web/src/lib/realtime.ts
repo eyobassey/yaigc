@@ -24,6 +24,18 @@ async function getPublisher(): Promise<RedisClientType> {
   return cached;
 }
 
+// M.1.2: attachments ride alongside each message in the envelope so
+// the client can render them inline as soon as they land, without a
+// second round trip to fetch metadata.
+export interface MessageEnvelopeAttachment {
+  id: string;
+  contentType: string;
+  sizeBytes: number;
+  width: number | null;
+  height: number | null;
+  originalFilename: string | null;
+}
+
 export interface MessageEnvelope {
   kind: 'message';
   threadId: string;
@@ -32,6 +44,7 @@ export interface MessageEnvelope {
     body: string;
     senderId: string;
     createdAt: string;
+    attachments?: MessageEnvelopeAttachment[];
   };
 }
 

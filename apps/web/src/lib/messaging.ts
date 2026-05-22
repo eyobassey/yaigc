@@ -169,9 +169,14 @@ export async function createThread(
 // SEND MESSAGE (operator or party)
 // ---------------------------------------------------------------
 
+// M.1.2: body OR at least one attachment is required. We accept a
+// comma-separated list of MessageAttachment ids the composer already
+// pre-uploaded via /api/message-attachments. They are bound to the
+// new Message inside the same transaction.
 const SendMessageSchema = z.object({
   threadId: z.string().min(1),
-  body: z.string().trim().min(1, 'Type a message.').max(MESSAGE_MAX_LEN),
+  body: z.string().trim().max(MESSAGE_MAX_LEN),
+  attachmentIds: z.array(z.string().min(1)).max(5),
 });
 
 export type SendMessageState = {
@@ -187,9 +192,14 @@ export async function sendMessage(
   const actor = await getSessionUser();
   if (!actor) return { ok: false, error: 'Sign in first.' };
 
+  const rawAttachmentIds = String(formData.get('attachmentIds') ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
   const parsed = SendMessageSchema.safeParse({
     threadId: String(formData.get('threadId') ?? ''),
     body: String(formData.get('body') ?? '').trim(),
+    attachmentIds: rawAttachmentIds,
   });
   if (!parsed.success) {
     return {
@@ -199,6 +209,13 @@ export async function sendMessage(
     };
   }
   const d = parsed.data;
+  if (!d.body && d.attachmentIds.length === 0) {
+    return {
+      ok: false,
+      error: 'Type a message or attach something.',
+      values: { body: '' },
+    };
+  }
 
   const thread = await prisma.thread.findUnique({
     where: { id: d.threadId },
@@ -218,11 +235,56 @@ export async function sendMessage(
     return { ok: false, error: 'You are not a participant in this thread.' };
   }
 
+  // Validate any attachment ids: must belong to THIS thread, must
+  // have been uploaded by THIS user, must still be unbound (not yet
+  // attached to another Message). Anything off, reject - we never
+  // want one user to steal another user's pre-uploaded attachment.
+  let attachmentsForBind: Array<{
+    id: string;
+    contentType: string;
+    sizeBytes: number;
+    width: number | null;
+    height: number | null;
+    originalFilename: string | null;
+  }> = [];
+  if (d.attachmentIds.length > 0) {
+    const rows = await prisma.messageAttachment.findMany({
+      where: {
+        id: { in: d.attachmentIds },
+        threadId: thread.id,
+        uploadedById: actor.id,
+        messageId: null,
+      },
+      select: {
+        id: true,
+        contentType: true,
+        sizeBytes: true,
+        width: true,
+        height: true,
+        originalFilename: true,
+      },
+    });
+    if (rows.length !== d.attachmentIds.length) {
+      return {
+        ok: false,
+        error: 'One or more attachments are no longer available; try re-attaching.',
+        values: { body: d.body },
+      };
+    }
+    attachmentsForBind = rows;
+  }
+
   const newMessage = await prisma.$transaction(async (tx) => {
     const created = await tx.message.create({
       data: { threadId: thread.id, senderId: actor.id, body: d.body },
       select: { id: true, body: true, senderId: true, createdAt: true },
     });
+    if (attachmentsForBind.length > 0) {
+      await tx.messageAttachment.updateMany({
+        where: { id: { in: attachmentsForBind.map((a) => a.id) } },
+        data: { messageId: created.id },
+      });
+    }
     await tx.thread.update({
       where: { id: thread.id },
       data: {
@@ -235,6 +297,15 @@ export async function sendMessage(
     return created;
   });
 
+  const attachmentsForEnvelope = attachmentsForBind.map((a) => ({
+    id: a.id,
+    contentType: a.contentType,
+    sizeBytes: a.sizeBytes,
+    width: a.width,
+    height: a.height,
+    originalFilename: a.originalFilename,
+  }));
+
   await publishMessageToUsers([thread.operatorId, thread.partyId], {
     kind: 'message',
     threadId: thread.id,
@@ -243,6 +314,7 @@ export async function sendMessage(
       body: newMessage.body,
       senderId: newMessage.senderId,
       createdAt: newMessage.createdAt.toISOString(),
+      attachments: attachmentsForEnvelope,
     },
   });
 
@@ -257,8 +329,14 @@ export async function sendMessage(
       event: 'message_sent',
       threadId: thread.id,
       senderRole: isActorOperator ? 'operator' : thread.partyRole,
+      attachmentCount: attachmentsForBind.length,
     },
   });
+
+  // For email preview: fall back to "[attachment]" when the body is
+  // empty so the recipient sees something useful in the notification.
+  const emailPreview =
+    d.body || (attachmentsForBind.length > 0 ? '[attachment]' : '');
 
   // Notify the OTHER side, respecting the 5-min debounce.
   if (isActorOperator) {
@@ -268,7 +346,7 @@ export async function sendMessage(
       partyFirstName: thread.party.firstName,
       partyEmail: thread.party.email,
       partyRole: thread.partyRole,
-      preview: d.body,
+      preview: emailPreview,
       fromOperator: true,
     });
   } else {
@@ -277,7 +355,7 @@ export async function sendMessage(
       operatorId: thread.operator.id,
       operatorFirstName: thread.operator.firstName,
       operatorEmail: thread.operator.email,
-      preview: d.body,
+      preview: emailPreview,
     });
   }
 

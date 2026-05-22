@@ -23,6 +23,17 @@ export default async function CompanionThreadDetailPage({
         orderBy: { createdAt: 'asc' },
         include: {
           sender: { select: { id: true, firstName: true, lastName: true } },
+          attachments: {
+            orderBy: { createdAt: 'asc' },
+            select: {
+              id: true,
+              contentType: true,
+              sizeBytes: true,
+              width: true,
+              height: true,
+              originalFilename: true,
+            },
+          },
         },
       },
     },
@@ -67,6 +78,7 @@ export default async function CompanionThreadDetailPage({
               ? 'You'
               : [m.sender.firstName, m.sender.lastName].filter(Boolean).join(' ') ||
                 operatorLabel,
+          attachments: m.attachments,
         }))}
       />
     </div>

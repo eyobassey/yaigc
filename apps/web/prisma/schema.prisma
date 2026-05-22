@@ -67,6 +67,7 @@ model User {
   threadsAsOperator       Thread[]               @relation("ThreadsAsOperator")
   threadsAsParty          Thread[]               @relation("ThreadsAsParty")
   messagesSent            Message[]
+  attachmentsUploaded     MessageAttachment[]    @relation("AttachmentUploadedBy")
 
   @@index([email])
   @@index([role])
@@ -908,9 +909,10 @@ model Thread {
   operatorLastNotifiedAt DateTime?
   partyLastNotifiedAt    DateTime?
 
-  operator User      @relation("ThreadsAsOperator", fields: [operatorId], references: [id])
-  party    User      @relation("ThreadsAsParty",   fields: [partyId],    references: [id])
-  messages Message[]
+  operator    User                @relation("ThreadsAsOperator", fields: [operatorId], references: [id])
+  party       User                @relation("ThreadsAsParty",   fields: [partyId],    references: [id])
+  messages    Message[]
+  attachments MessageAttachment[] @relation("ThreadAttachments")
 
   @@index([operatorId, lastMessageAt(sort: Desc)])
   @@index([partyId, lastMessageAt(sort: Desc)])
@@ -923,10 +925,38 @@ model Message {
   body      String   @db.Text
   createdAt DateTime @default(now())
 
-  thread Thread @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  sender User   @relation(fields: [senderId], references: [id])
+  thread      Thread              @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender      User                @relation(fields: [senderId], references: [id])
+  attachments MessageAttachment[]
 
   @@index([threadId, createdAt(sort: Desc)])
+}
+
+// M.1.2 - File / photo / video attachments hung off a Message. Two
+// upload paths land here: a pre-upload via /api/message-attachments
+// (returning an unbound row with messageId = null), and a bind step
+// inside sendMessage that sets messageId once the parent Message is
+// created. Cascade-delete with the Message because attachments without
+// a parent message are not useful on their own.
+model MessageAttachment {
+  id               String   @id @default(cuid())
+  threadId         String   // scope for the auth-gate; never changes
+  messageId        String?  // null until the bind step in sendMessage
+  uploadedById     String   // user who initiated the upload
+  filename         String   // server-generated random hex + extension
+  originalFilename String?  // best-effort client-supplied label
+  contentType      String
+  sizeBytes        Int
+  width            Int?     // images only
+  height           Int?     // images only
+  createdAt        DateTime @default(now())
+
+  thread     Thread   @relation("ThreadAttachments", fields: [threadId], references: [id], onDelete: Cascade)
+  message    Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  uploadedBy User     @relation("AttachmentUploadedBy", fields: [uploadedById], references: [id])
+
+  @@index([threadId])
+  @@index([messageId])
 }
 
 // Internal-only descriptive labels operators attach to a companion -

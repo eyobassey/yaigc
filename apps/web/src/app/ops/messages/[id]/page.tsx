@@ -25,6 +25,17 @@ export default async function OpsThreadDetailPage({
         orderBy: { createdAt: 'asc' },
         include: {
           sender: { select: { id: true, firstName: true, lastName: true, role: true } },
+          attachments: {
+            orderBy: { createdAt: 'asc' },
+            select: {
+              id: true,
+              contentType: true,
+              sizeBytes: true,
+              width: true,
+              height: true,
+              originalFilename: true,
+            },
+          },
         },
       },
     },
@@ -79,6 +90,7 @@ export default async function OpsThreadDetailPage({
             createdAt: m.createdAt.toISOString(),
             fromCurrentUser: m.senderId === actor.id,
             senderLabel: senderName,
+            attachments: m.attachments,
           };
         })}
       />
