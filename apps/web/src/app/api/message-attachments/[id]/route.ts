@@ -31,12 +31,27 @@ export async function GET(
       contentType: true,
       sizeBytes: true,
       originalFilename: true,
-      thread: { select: { operatorId: true, partyId: true } },
+      thread: {
+        select: {
+          operatorId: true,
+          partyId: true,
+          familyUserId: true,
+          companionUserId: true,
+        },
+      },
     },
   });
   if (!att) return new NextResponse('Not found', { status: 404 });
 
-  if (user.id !== att.thread.operatorId && user.id !== att.thread.partyId) {
+  // Matches the upload-route gate: any of the four participant
+  // columns (kind-dependent) may identify the caller. Operators
+  // outside this thread still don't get access.
+  const isParticipant =
+    user.id === att.thread.operatorId ||
+    user.id === att.thread.partyId ||
+    user.id === att.thread.familyUserId ||
+    user.id === att.thread.companionUserId;
+  if (!isParticipant) {
     return new NextResponse('Forbidden', { status: 403 });
   }
 

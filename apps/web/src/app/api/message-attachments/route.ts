@@ -48,16 +48,29 @@ export async function POST(req: Request) {
     );
   }
 
-  // Participant check. Operators and the named party are the only
-  // people who can upload to a thread - matches sendMessage's gate.
+  // Participant check. Matches sendMessage's gate: operator-mediated
+  // threads have operatorId + partyId; FAMILY_COMPANION threads
+  // (M.2.3) have familyUserId + companionUserId. The two pairs are
+  // mutually exclusive per the M.2.1 schema invariant.
   const thread = await prisma.thread.findUnique({
     where: { id: threadId },
-    select: { id: true, operatorId: true, partyId: true },
+    select: {
+      id: true,
+      operatorId: true,
+      partyId: true,
+      familyUserId: true,
+      companionUserId: true,
+    },
   });
   if (!thread) {
     return NextResponse.json({ error: 'Thread not found.' }, { status: 404 });
   }
-  if (user.id !== thread.operatorId && user.id !== thread.partyId) {
+  const isParticipant =
+    user.id === thread.operatorId ||
+    user.id === thread.partyId ||
+    user.id === thread.familyUserId ||
+    user.id === thread.companionUserId;
+  if (!isParticipant) {
     return NextResponse.json(
       { error: 'You are not a participant in this thread.' },
       { status: 403 },
