@@ -1,7 +1,8 @@
 import Link from 'next/link';
-import { MessageSquare, ChevronRight } from 'lucide-react';
+import { MessageSquare, ChevronRight, Plus } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { requireCompanion } from '@/lib/auth-helpers';
+import { openDirectThread } from '@/lib/messaging';
 import { Paginator } from '@/components/ui/Paginator';
 import { parsePagination, buildView } from '@/lib/pagination';
 
@@ -24,14 +25,14 @@ export default async function CompanionMessagesPage({
 }: {
   searchParams: Record<string, string | string[] | undefined>;
 }) {
-  const { user } = await requireCompanion('/companion/messages');
+  const { user, companion } = await requireCompanion('/companion/messages');
   const state = parsePagination(searchParams, { pageSize: 20 });
 
   // OPS_COMPANION (partyId) + FAMILY_COMPANION (companionUserId).
   const where = {
     OR: [{ partyId: user.id }, { companionUserId: user.id }],
   };
-  const [total, threads] = await Promise.all([
+  const [total, threads, startable] = await Promise.all([
     prisma.thread.count({ where }),
     prisma.thread.findMany({
       where,
@@ -48,6 +49,11 @@ export default async function CompanionMessagesPage({
         },
       },
     }),
+    // M.2.3: matches the office has cleared for direct messaging but
+    // that have no FAMILY_COMPANION thread yet.
+    companion.directMessagingEnabled
+      ? findStartableDirectThreadsForCompanion(companion.id, user.id)
+      : Promise.resolve([] as { matchId: string; label: string }[]),
   ]);
   const view = buildView(state, total);
 
@@ -63,6 +69,32 @@ export default async function CompanionMessagesPage({
         Threads with the office. We will start a thread when something
         comes up; you can reply on any open one.
       </p>
+
+      {startable.length > 0 ? (
+        <section className="mb-6 bg-paper border border-terracotta/20 rounded-[12px] p-5">
+          <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-2">
+            Start a direct thread
+          </h2>
+          <p className="text-charcoal text-[0.875rem] leading-[1.55] mb-4 max-w-[60ch]">
+            The office has cleared you to message these families directly.
+            Every message is still visible to them.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {startable.map((s) => (
+              <form action={openDirectThread} key={s.matchId}>
+                <input type="hidden" name="matchId" value={s.matchId} />
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-md bg-moss text-cream text-sm font-medium hover:bg-moss-deep transition-colors"
+                >
+                  <Plus size={14} strokeWidth={1.75} aria-hidden="true" />
+                  Message {s.label}
+                </button>
+              </form>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {threads.length === 0 ? (
         <div className="bg-paper border border-moss/[0.08] rounded-[12px] px-6 py-12 text-center text-stone">
@@ -140,4 +172,55 @@ export default async function CompanionMessagesPage({
       />
     </div>
   );
+}
+
+// M.2.3: families this companion can open a direct thread with, minus
+// the ones that already have one. The companion's directMessagingEnabled
+// gate is checked by the caller before invoking this.
+async function findStartableDirectThreadsForCompanion(
+  companionId: string,
+  userId: string,
+): Promise<{ matchId: string; label: string }[]> {
+  const eligible = await prisma.match.findMany({
+    where: {
+      candidateCompanionId: companionId,
+      status: 'accepted',
+      endedAt: null,
+    },
+    select: {
+      id: true,
+      family: {
+        select: {
+          billingName: true,
+          members: {
+            where: { role: 'payer', deletedAt: null },
+            select: { userId: true },
+            take: 1,
+          },
+        },
+      },
+    },
+  });
+  const counterpartUserIds = eligible
+    .map((m) => m.family.members[0]?.userId)
+    .filter((id): id is string => Boolean(id));
+  if (counterpartUserIds.length === 0) return [];
+
+  const existing = await prisma.thread.findMany({
+    where: {
+      kind: 'FAMILY_COMPANION',
+      companionUserId: userId,
+      familyUserId: { in: counterpartUserIds },
+    },
+    select: { familyUserId: true },
+  });
+  const taken = new Set(existing.map((t) => t.familyUserId));
+
+  return eligible
+    .map((m) => {
+      const payerUserId = m.family.members[0]?.userId;
+      if (!payerUserId || taken.has(payerUserId)) return null;
+      return { matchId: m.id, label: m.family.billingName };
+    })
+    .filter((x): x is { matchId: string; label: string } => x !== null);
 }
