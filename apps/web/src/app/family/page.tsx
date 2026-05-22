@@ -13,7 +13,7 @@ export const metadata = { title: 'Today' };
 export default async function FamilyHomePage() {
   const { user, family } = await requireFamilyMember('/family');
 
-  const [nextVisit, recipientCount, activeSub] = await Promise.all([
+  const [nextVisit, recipientCount, activeSub, openMatch] = await Promise.all([
     prisma.visit.findFirst({
       where: {
         familyId: family.id,
@@ -31,6 +31,11 @@ export default async function FamilyHomePage() {
       where: { familyId: family.id, status: { in: ['active', 'paused'] } },
       select: { id: true, status: true },
     }),
+    prisma.match.findFirst({
+      where: { familyId: family.id, status: 'proposed', familyResponseAt: null },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, companion: { select: { firstName: true } } },
+    }),
   ]);
 
   return (
@@ -47,17 +52,34 @@ export default async function FamilyHomePage() {
         </p>
       </header>
 
-      <div className="mb-8 bg-amber-50 border-l-4 border-amber-400 px-5 py-4 rounded-r">
-        <p className="font-body text-[0.7rem] font-medium uppercase tracking-[0.12em] text-amber-700 mb-1 flex items-center gap-2">
-          <AlertTriangle size={14} strokeWidth={2} aria-hidden="true" />
-          Early access
-        </p>
-        <p className="text-charcoal text-[0.9375rem] leading-[1.55]">
-          The visits, companion, subscription and account sections are
-          coming online over the next few days. For anything urgent,
-          email or call us and we will sort it.
-        </p>
-      </div>
+      {openMatch ? (
+        <div className="mb-8 bg-moss/5 border-l-4 border-moss px-5 py-4 rounded-r">
+          <p className="font-body text-[0.7rem] font-medium uppercase tracking-[0.12em] text-moss mb-1">
+            A match awaiting your reply
+          </p>
+          <p className="text-charcoal text-[0.9375rem] leading-[1.55] mb-2">
+            We have <strong>{openMatch.companion.firstName}</strong> in mind. Have a look and let us know.
+          </p>
+          <Link
+            href={`/family/matches/${openMatch.id}`}
+            className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-moss text-cream text-[0.875rem] font-medium hover:bg-moss-dark transition-colors"
+          >
+            See the match
+          </Link>
+        </div>
+      ) : (
+        <div className="mb-8 bg-amber-50 border-l-4 border-amber-400 px-5 py-4 rounded-r">
+          <p className="font-body text-[0.7rem] font-medium uppercase tracking-[0.12em] text-amber-700 mb-1 flex items-center gap-2">
+            <AlertTriangle size={14} strokeWidth={2} aria-hidden="true" />
+            Early access
+          </p>
+          <p className="text-charcoal text-[0.9375rem] leading-[1.55]">
+            The visits, companion, subscription and account sections are
+            coming online over the next few days. For anything urgent,
+            email or call us and we will sort it.
+          </p>
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5">

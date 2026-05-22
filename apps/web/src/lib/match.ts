@@ -24,6 +24,14 @@ import {
   matchEndedToCompanionText,
   matchEndedToCompanionSubject,
 } from '@/lib/email/match-ended';
+import {
+  matchProposedToFamilyHtml,
+  matchProposedToFamilyText,
+  matchProposedToFamilySubject,
+  matchProposedToCompanionHtml,
+  matchProposedToCompanionText,
+  matchProposedToCompanionSubject,
+} from '@/lib/email/match-proposed';
 
 // -------------------------------------------------------------------------
 // PROPOSE A MATCH
@@ -94,20 +102,25 @@ export async function proposeMatch(
     };
   }
 
-  // Avoid duplicate open proposals: a Family should not have two open
-  // proposals against the same Companion at once.
-  const existingOpen = await prisma.match.findFirst({
-    where: {
-      familyId: d.familyId,
-      candidateCompanionId: d.candidateCompanionId,
-      status: 'proposed',
-    },
+  // Single-match-at-a-time per family. Curated, not a marketplace -
+  // operator picks one companion and presents them; if declined,
+  // operator withdraws and proposes the next one. The check rejects
+  // any open Match (proposed status, not yet resolved) on the family,
+  // regardless of which companion. Operator can withdraw on the
+  // existing match detail page to free the slot.
+  const existingOpenForFamily = await prisma.match.findFirst({
+    where: { familyId: d.familyId, status: 'proposed' },
+    select: { id: true, candidateCompanionId: true },
   });
-  if (existingOpen) {
+  if (existingOpenForFamily) {
+    const sameCompanion =
+      existingOpenForFamily.candidateCompanionId === d.candidateCompanionId;
     return {
       ok: false,
       errors: {
-        _form: 'There is already an open proposal between this family and this companion.',
+        _form: sameCompanion
+          ? 'There is already an open proposal between this family and this companion.'
+          : 'This family already has an open proposal. Withdraw it before proposing another candidate.',
       },
     };
   }
@@ -137,6 +150,11 @@ export async function proposeMatch(
     },
     metadata: { event: 'match_proposed' },
   });
+
+  // Fire match-proposed emails to family + companion so they know to
+  // sign in and respond. Best-effort - failures log but do not unwind
+  // the proposal itself.
+  await sendMatchProposedEmails(match.id);
 
   revalidatePath('/ops');
   revalidatePath('/ops/matches');
@@ -754,6 +772,256 @@ export async function respondToMatchByCompanion(
 
   revalidatePath('/companion/matches');
   revalidatePath(`/companion/matches/${d.matchId}`);
+  revalidatePath('/ops/matches');
+  revalidatePath(`/ops/matches/${d.matchId}`);
+  revalidatePath(`/ops/families/${before.familyId}`);
+  return { ok: true };
+}
+
+// -------------------------------------------------------------------------
+// EMAIL: when a Match is proposed, notify family + companion so they
+// know to sign in and respond.
+// -------------------------------------------------------------------------
+
+async function sendMatchProposedEmails(matchId: string): Promise<void> {
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    include: {
+      family: {
+        select: {
+          billingName: true,
+          members: {
+            where: { deletedAt: null },
+            include: { user: { select: { email: true } } },
+          },
+        },
+      },
+      recipient: { select: { firstName: true, preferredName: true } },
+      companion: {
+        select: {
+          firstName: true,
+          lastName: true,
+          borough: true,
+          bio: true,
+          user: { select: { email: true } },
+        },
+      },
+    },
+  });
+  if (!match || !match.recipient) return;
+
+  const transport = createTransport({
+    host: process.env.SMTP_HOST!,
+    port: Number(process.env.SMTP_PORT ?? 587),
+    auth: { user: process.env.SMTP_USER!, pass: process.env.SMTP_PASSWORD! },
+  });
+  const from = `${brand.fullName} <${process.env.EMAIL_SENDER}>`;
+
+  const familyEmails = Array.from(
+    new Set(
+      match.family.members
+        .map((m) => m.user.email)
+        .filter((e): e is string => Boolean(e)),
+    ),
+  );
+  const familyInput = {
+    matchId: match.id,
+    recipientFirstName: match.recipient.firstName,
+    recipientPreferredName: match.recipient.preferredName,
+    companionFirstName: match.companion.firstName,
+    companionLastName: match.companion.lastName,
+    companionBorough: match.companion.borough,
+    companionBio: match.companion.bio,
+    rationale: match.rationale,
+  };
+  for (const to of familyEmails) {
+    try {
+      await transport.sendMail({
+        to,
+        from,
+        subject: matchProposedToFamilySubject(familyInput),
+        text: matchProposedToFamilyText(familyInput),
+        html: matchProposedToFamilyHtml(familyInput),
+      });
+      await audit({
+        actorType: 'system',
+        actorId: null,
+        actionType: 'state_change',
+        targetType: 'Match',
+        targetId: matchId,
+        metadata: { event: 'match_proposed_email_sent', audience: 'family', to },
+      });
+    } catch (err) {
+      console.error('[match] proposed email to family failed', { to, matchId, err });
+    }
+  }
+
+  const companionEmail = match.companion.user.email;
+  if (companionEmail) {
+    const companionInput = {
+      matchId: match.id,
+      companionFirstName: match.companion.firstName,
+      familyBillingName: match.family.billingName,
+      recipientFirstName: match.recipient.firstName,
+      recipientPreferredName: match.recipient.preferredName,
+      rationale: match.rationale,
+    };
+    try {
+      await transport.sendMail({
+        to: companionEmail,
+        from,
+        subject: matchProposedToCompanionSubject(companionInput),
+        text: matchProposedToCompanionText(companionInput),
+        html: matchProposedToCompanionHtml(companionInput),
+      });
+      await audit({
+        actorType: 'system',
+        actorId: null,
+        actionType: 'state_change',
+        targetType: 'Match',
+        targetId: matchId,
+        metadata: {
+          event: 'match_proposed_email_sent',
+          audience: 'companion',
+          to: companionEmail,
+        },
+      });
+    } catch (err) {
+      console.error('[match] proposed email to companion failed', {
+        to: companionEmail,
+        matchId,
+        err,
+      });
+    }
+  }
+}
+
+// -------------------------------------------------------------------------
+// FAMILY-DRIVEN match response. Mirror of the companion path; family
+// payer accepts or declines from /family/matches/[id].
+// -------------------------------------------------------------------------
+
+const FamilyRespondSchema = z
+  .object({
+    matchId: z.string().min(1),
+    action: z.enum(['accept', 'decline']),
+    note: z.string().trim().max(2000).optional(),
+  })
+  .refine((d) => d.action !== 'decline' || (d.note && d.note.length >= 10), {
+    message: 'A short reason is required for decline.',
+    path: ['note'],
+  });
+
+export type FamilyRespondState = {
+  ok: boolean;
+  errors?: Record<string, string>;
+};
+
+export async function respondToMatchByFamily(
+  _prev: FamilyRespondState,
+  formData: FormData,
+): Promise<FamilyRespondState> {
+  const { requireFamilyPayer } = await import('@/lib/auth-helpers');
+  const { user, family } = await requireFamilyPayer('/family/matches');
+
+  const parsed = FamilyRespondSchema.safeParse({
+    matchId: String(formData.get('matchId') ?? ''),
+    action: String(formData.get('action') ?? ''),
+    note: String(formData.get('note') ?? '').trim() || undefined,
+  });
+  if (!parsed.success) {
+    return {
+      ok: false,
+      errors: Object.fromEntries(
+        parsed.error.issues.flatMap((i) => {
+          const k = i.path[0];
+          return typeof k === 'string' ? [[k, i.message]] : [];
+        }),
+      ),
+    };
+  }
+  const d = parsed.data;
+
+  const before = await prisma.match.findUnique({
+    where: { id: d.matchId },
+    select: {
+      status: true,
+      familyId: true,
+      familyResponseAt: true,
+      companionResponseAt: true,
+    },
+  });
+  if (!before) return { ok: false, errors: { _form: 'Match not found.' } };
+  if (before.familyId !== family.id) {
+    return { ok: false, errors: { _form: 'Not authorised.' } };
+  }
+  if (before.status !== 'proposed') {
+    return { ok: false, errors: { _form: 'Match is no longer open.' } };
+  }
+
+  const now = new Date();
+
+  if (d.action === 'decline') {
+    await prisma.match.update({
+      where: { id: d.matchId },
+      data: {
+        status: 'declined',
+        familyResponseAt: before.familyResponseAt ?? now,
+        declineReason: d.note,
+      },
+    });
+    await audit({
+      actorType: 'user',
+      actorId: user.id,
+      actorRole: user.role,
+      actionType: 'state_change',
+      targetType: 'Match',
+      targetId: d.matchId,
+      beforeState: { status: 'proposed' },
+      afterState: { status: 'declined' },
+      metadata: { event: 'match_status_change', via: 'family_portal', note: d.note },
+    });
+    revalidatePath('/family/matches');
+    revalidatePath(`/family/matches/${d.matchId}`);
+    revalidatePath('/ops/matches');
+    revalidatePath(`/ops/matches/${d.matchId}`);
+    revalidatePath(`/ops/families/${before.familyId}`);
+    return { ok: true };
+  }
+
+  // Accept: stamp familyResponseAt. Flip to accepted if companion also
+  // responded.
+  const bothNowAccepted = before.companionResponseAt != null;
+  await prisma.match.update({
+    where: { id: d.matchId },
+    data: {
+      familyResponseAt: now,
+      ...(bothNowAccepted ? { status: 'accepted' } : {}),
+    },
+  });
+
+  await audit({
+    actorType: 'user',
+    actorId: user.id,
+    actorRole: user.role,
+    actionType: bothNowAccepted ? 'state_change' : 'update',
+    targetType: 'Match',
+    targetId: d.matchId,
+    ...(bothNowAccepted
+      ? { beforeState: { status: 'proposed' }, afterState: { status: 'accepted' } }
+      : {}),
+    metadata: {
+      event: bothNowAccepted ? 'match_status_change' : 'match_family_accepted',
+      via: 'family_portal',
+    },
+  });
+
+  if (bothNowAccepted) {
+    await sendMatchConfirmationEmails(d.matchId);
+  }
+
+  revalidatePath('/family/matches');
+  revalidatePath(`/family/matches/${d.matchId}`);
   revalidatePath('/ops/matches');
   revalidatePath(`/ops/matches/${d.matchId}`);
   revalidatePath(`/ops/families/${before.familyId}`);
