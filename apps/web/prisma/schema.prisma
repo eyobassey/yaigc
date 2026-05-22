@@ -263,9 +263,12 @@ model Match {
   status               MatchStatus @default(proposed)
   rationale            String      @db.Text
 
-  familyResponseAt    DateTime?
-  companionResponseAt DateTime?
-  declineReason       String?  @db.Text
+  familyResponseAt        DateTime?
+  companionResponseAt     DateTime?
+  declineReason           String?   @db.Text
+  // Action-reminder cron idempotency (single-shot nudges).
+  familyReminderSentAt    DateTime?
+  companionReminderSentAt DateTime?
 
   // Un-match (after acceptance). status=ended means a confirmed pairing
   // was separated. Distinct from declined/withdrawn which are
@@ -402,8 +405,10 @@ model Visit {
   cancellationReason       String?    @db.Text
   cancellationActor        CancellationActor?
 
-  stateChangedAt           DateTime   @default(now())
-  reminderSentAt           DateTime?  // 24h-before reminder; null until the cron fires
+  stateChangedAt              DateTime   @default(now())
+  reminderSentAt              DateTime?  // 24h-before reminder; null until the cron fires
+  confirmationReminderSentAt  DateTime?  // single-fire nudge for unconfirmed visits ~4h out
+  reportReminderSentAt        DateTime?  // single-fire nudge for completed visits without a report
 
   subscription      Subscription       @relation(fields: [subscriptionId], references: [id])
   family            Family             @relation(fields: [familyId], references: [id])

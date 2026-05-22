@@ -1,0 +1,15 @@
+[Unit]
+Description=YAIGC: action reminders (matches, visit confirmation, overdue reports)
+# See deploy/systemd/ in the YAIGC repo for context (Stage O.4.4).
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=username
+EnvironmentFile=/home/username/secrets/yaigc-production.env
+ExecStart=/usr/bin/curl --fail --silent --show-error --max-time 60 -X POST \
+  -H "Authorization: Bearer ${CRON_TOKEN}" \
+  "https://youareingoodcompany.co.uk/api/cron/action-reminders"
+Restart=on-failure
+RestartSec=30

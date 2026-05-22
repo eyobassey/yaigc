@@ -1,0 +1,13 @@
+[Unit]
+Description=YAIGC action reminders (hourly)
+# See deploy/systemd/ in the YAIGC repo for context (Stage O.4.4).
+
+[Timer]
+# Offset 30 minutes after the top of the hour so visit-reminders.timer
+# and this one are not hammering the box back-to-back.
+OnCalendar=*-*-* *:30:00
+Persistent=true
+Unit=yaigc-action-reminders.service
+
+[Install]
+WantedBy=timers.target
