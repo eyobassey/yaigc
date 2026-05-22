@@ -200,7 +200,7 @@ export default async function CompanionMatchDetailPage({
                 <li className="flex items-center gap-2 bg-cream rounded-md px-3 py-2">
                   <Bus size={16} strokeWidth={1.75} className="text-moss" aria-hidden="true" />
                   <span className="text-charcoal">
-                    <span className="font-medium">~{travel.transitMinutes} min</span> by transit
+                    <span className="font-medium">~{travel.transitMinutes} min</span> by public transport
                   </span>
                 </li>
                 {travel.walkableMinutes ? (
