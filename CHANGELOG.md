@@ -8,6 +8,20 @@ Format: `<sha> · <date> · <stage> — <summary>`
 
 ## 2026-05-22
 
+- `f37f98e` · **M.1.2** — message attachments (images, documents, videos up to 100 MB) + emoji picker. Magic-byte validation, EXIF preserved on images, HEIC→JPEG transcode, auth-gated S3 streaming. `nginx` body limit bumped to 110 MB on the upload route only
+- `7c9492f` · fix — point `igc-prod-realtime` at the `tsx` ESM entry instead of the `.bin` wrapper so PM2 can boot the WebSocket server reliably
+- `3140ea1` · **M.1.1** — real-time message delivery via WebSockets. New `igc-prod-realtime` PM2 process on `:3004` (`scripts/realtime-server.ts`), nginx `/realtime/` upgrade location, Redis pub/sub fan-out from server actions, client hook that hydrates `ThreadView` without a refresh
+- `8c94ba1` · **M.1** — operator-mediated messaging: `/ops/messages`, `/family/messages`, `/companion/messages` with one thread per party (Ops ↔ Family, Ops ↔ Companion). New `Thread`, `Message`, `ThreadReadState` models, unread counts in nav, every transition audit-logged
+- `c670079` · **O.15** — operator analytics dashboard at `/ops/analytics`: five charts (enquiries, matches, visits, reports, safeguarding) rendered as inline SVG with no new dependency
+- `5ab57fe` · fix — drop stale Stage O.1 placeholder copy on the operator Today dashboard
+- `ba59142` · **O.14.4** — user soft-delete + restore (operator_admin only); "Sign in" link added to the marketing home page
+- `b3cd520` · **O.14.3** — user security actions: force sign-out, force-reset password, revoke passkey (operator_admin only)
+- `b0596bd` · **O.14.2** — operator_admin can edit user role + name from `/ops/users/[id]`
+- `2b1175b` · **O.14.1** — `/ops/users` section: list + detail, read-only, with role + last-sign-in
+- `a792060` · **P.3.1** — operator account page at `/ops/account` (security overview + sign-out card)
+- `7e984c3` · **P.3** — session polish: 60-day cookies, "remember me", device list with per-session revoke
+- `bd26e33` · **P.2** — passkeys (WebAuthn) alongside password + magic-link, registration + sign-in flows under `/api/auth/webauthn/`
+- `a5981ff` · **P.1** — email + password sign-in alongside magic-link, with rate-limit and audit hooks
 - `489bb5f` · ops polish — show tier pill + visit count + manual badges on the `/ops/companions` list rows, across every status filter
 - `a0f818a` · **O.13** — internal companion badging: live-computed tier (Bronze 5+ / Silver 25+ / Gold 100+) plus a closed catalogue of operator-assigned descriptive tags (skills, context, languages) in a new `CompanionBadge` table
 - `704df14` · **O.12** — full home address on the Companion record (operator-only PII) + optional `maxTravelMiles`. Pre-accept travel estimate now prefers the Companion's own postcode

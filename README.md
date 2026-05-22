@@ -16,7 +16,9 @@ contexts.
 production at [youareingoodcompany.co.uk](https://youareingoodcompany.co.uk)
 (marketing + family + companion) and
 [ops.youareingoodcompany.co.uk](https://ops.youareingoodcompany.co.uk)
-(operator). Stripe payments are the next major block. See
+(operator). Sign-in covers magic-link, password, and passkeys (WebAuthn).
+Operator-mediated messaging is live with real-time WebSocket delivery and
+attachments. Stripe payments are the next major block. See
 [Where things are](#where-things-are) below for the honest list of what is
 built versus what is queued.
 
@@ -176,21 +178,26 @@ igc-platform/
 │       │   │   ├── companion/      # Companion portal (apex)
 │       │   │   ├── family/         # Family portal (apex)
 │       │   │   ├── ops/            # Operator console (served at ops.* via middleware host check)
-│       │   │   ├── api/            # Auth callbacks, photo / document streaming routes, cron endpoints
+│       │   │   ├── api/            # Auth callbacks (incl. WebAuthn), photo / document / message-attachment streaming routes, cron endpoints
 │       │   │   ├── styleguide/     # Renders design tokens for QA
 │       │   │   └── layout.tsx
 │       │   ├── components/
+│       │   │   ├── messaging/      # ThreadView (client) + emoji picker glue
 │       │   │   └── ui/             # Shared primitives (Button, Paginator)
 │       │   ├── lib/                # Server-side libraries (one file per concern)
-│       │   │   ├── auth.ts, auth-helpers.ts
+│       │   │   ├── auth.ts, auth-helpers.ts, webauthn.ts
 │       │   │   ├── prisma.ts, audit.ts
 │       │   │   ├── companion*.ts, family*.ts, match.ts, subscription.ts, visit.ts
 │       │   │   ├── safeguarding.ts, enquiry.ts, post-visit-report.ts
+│       │   │   ├── messaging.ts, realtime.ts (Redis pub/sub publisher)
+│       │   │   ├── message-attachment-storage.ts (S3 + magic-byte validation)
 │       │   │   ├── badges.ts, pagination.ts, postcode-distance.ts
 │       │   │   ├── visit-schedule.ts (BST-correct day boundaries)
 │       │   │   ├── companion-photo-storage.ts, companion-document-storage.ts, visit-photo-storage.ts (S3)
 │       │   │   └── email/          # Per-template builders, all using lib/email/_chrome.ts
 │       │   └── middleware.ts       # Subdomain + role-based gate
+│       ├── scripts/
+│       │   └── realtime-server.ts  # Standalone WebSocket server; PM2 process igc-prod-realtime on :3004
 │       ├── next.config.mjs
 │       ├── tailwind.config.ts
 │       └── package.json
@@ -240,7 +247,8 @@ surrounding ADRs. Summary:
 | Validation | Zod | Single source of truth for runtime validation and TypeScript types |
 | Database | PostgreSQL 16+ | Host-installed on the IONOS box for Phase 1. Managed Postgres (Neon EU or RDS eu-west-2) at Phase 2 scale. See [ADR 0010](docs/adr/0010-hosting-ionos.md) for the trigger |
 | ORM | Prisma | See [ADR 0006](docs/adr/0006-prisma-over-typeorm.md) for why not TypeORM |
-| Auth | Auth.js v5 (NextAuth) | Magic link + password + optional SMS 2FA, database sessions |
+| Auth | Auth.js v5 (NextAuth) | Magic link + email/password + passkeys (WebAuthn), 60-day database sessions, per-session device revoke |
+| Realtime | `ws` + Redis pub/sub | Standalone Node process (`scripts/realtime-server.ts`) fronted by nginx `/realtime/` upgrade location. Server actions publish to `messaging:user:<id>` channels, the WS server fans out to connected sockets |
 | Background jobs | BullMQ on Redis | Self-hosted Redis on the same box. Bull-board pinned behind operator auth for queue inspection |
 | Email | Brevo | EU data residency. Transactional in v1, marketing email in Phase 2 |
 | SMS | Twilio (UK) | Visit reminders, 2FA, urgent operator notifications |
@@ -439,6 +447,7 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 - [x] `ops.youareingoodcompany.co.uk` subdomain served from same nginx, same origin cert (ADR 0001)
 - [x] AWS S3 (`igc-app-files-prod`, eu-west-2) for visit photos, companion documents, and profile photos. Files are auth-gated via Next.js API routes — bucket itself stays private
 - [x] systemd timers for cron: hourly visit reminders + hourly action reminders (matches / confirmations / overdue reports), with `Persistent=true` for missed-run catch-up
+- [x] Standalone WebSocket realtime server (`apps/web/scripts/realtime-server.ts`) on `:3004`, fronted by nginx `/realtime/` upgrade location; PM2 process `igc-prod-realtime`. Redis pub/sub (`messaging:user:<id>`) fans out from server actions
 - [ ] CI/CD pipeline (currently `pnpm build` + `pm2 restart igc-prod-web` on the box)
 - [ ] Local development environment (Docker stack)
 
@@ -471,6 +480,9 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 
 - [x] Auth.js v5 with `@auth/prisma-adapter`, database session strategy
 - [x] Magic link via Brevo SMTP, branded HTML email
+- [x] Email + password sign-in (P.1) with rate-limit and audit hooks
+- [x] Passkeys / WebAuthn (P.2) — registration + sign-in flows under `/api/auth/webauthn/*`, can be revoked by operator_admin
+- [x] 60-day sessions with "remember me", per-session device list with revoke from the account page (P.3)
 - [x] Cross-subdomain cookie (`.youareingoodcompany.co.uk`) so the same session covers apex + ops + future `app.*`
 - [x] `UserRole` enum at SDD spec: `family_payer`, `family_viewer`, `companion`, `operator`, `operator_admin`, `safeguarding_lead`, `finance`, `support`
 - [x] Role-aware helpers in `lib/auth-helpers.ts`: `requireOperator`, `requireFamilyMember`, `requireFamilyPayer`, `requireCompanion`
@@ -492,6 +504,10 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 - [x] Safeguarding cases: severity triage, escalation workflow, case notes, auto-open hooks
 - [x] Compliance dashboard at `/ops/compliance` — DBS, insurance, driver's licence expired / ≤30 days / ≤90 days / missing, per-companion flag badges
 - [x] Audit log viewer with offset pagination
+- [x] Users section at `/ops/users` (O.14.x): list + detail; operator_admin can edit role + name, force sign-out, force-reset password, revoke passkey, soft-delete + restore
+- [x] Analytics dashboard at `/ops/analytics` (O.15) — five inline-SVG charts (enquiries, matches, visits, reports, safeguarding), no new dependency
+- [x] Operator account page at `/ops/account` (P.3.1) — security overview + sign-out
+- [x] Messaging at `/ops/messages` (M.1) — operator-mediated threads with each family and each companion; unread counts in nav; every transition audit-logged
 - [x] Pagination across every list page (offset, page=N) and every detail-page history feed (`hp=N`)
 
 **Family portal (`/family`)**
@@ -503,6 +519,7 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 - [x] Subscription pause / cancel request flow
 - [x] Match visibility: family sees proposed match, can accept or decline, with disambiguated "Accepted / Declined / Awaiting reply" labels
 - [x] Account: name, relationship-to-recipient edit, self-serve "invite a family member"
+- [x] Messaging at `/family/messages` (M.1) — single thread with the office, real-time delivery, attachments
 
 **Companion portal (`/companion`)**
 
@@ -514,11 +531,18 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 - [x] Pre-accept travel-time estimate (postcodes.io + haversine) shown as "~25 min by car / ~40 by public transport / ~30 on foot" — no postcode leaked pre-accept
 - [x] Profile edit: bio, photo (with live preview), interests, availability grid, driver's licence number + expiry, full home address, optional `maxTravelMiles`
 - [x] Account view: read-only admin fields + sign-out card
+- [x] Messaging at `/companion/messages` (M.1) — single thread with the office, real-time delivery, attachments
 
 **Cron / scheduled jobs**
 
 - [x] Hourly visit reminders (24h before scheduled start, single-fire via `reminderSentAt`)
 - [x] Hourly action reminders (24h after match proposal with no response from each side; 4h before unconfirmed visits; 4h after a completed visit with no report) — all single-fire via column flags
+
+**Messaging + realtime**
+
+- [x] Operator-mediated threads (M.1): Ops ↔ Family and Ops ↔ Companion, one thread per party, with `Thread` / `Message` / `ThreadReadState` models and unread badges across the nav
+- [x] Real-time delivery (M.1.1): standalone WebSocket server on `:3004`, nginx `/realtime/` upgrade location, Redis pub/sub (`messaging:user:<id>`) fanning out from server actions; client hydrates `ThreadView` without refresh
+- [x] Attachments + emoji picker (M.1.2): images (JPEG/PNG/WebP/HEIC, max 10 MB, EXIF preserved, HEIC→JPEG transcode), documents (PDF / Office / TXT / CSV, max 25 MB), videos (MP4/MOV/WebM, max 100 MB). Magic-byte validation, per-thread S3 prefix, auth-gated streaming, lazy-loaded emoji picker
 
 **Performance + caching**
 
@@ -539,16 +563,18 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 - [ ] Stripe Connect integration (companion payouts)
 - [ ] Family billing surface (`/family/subscription` payments tab)
 - [ ] Companion payouts surface (`/companion/payouts`)
+- [ ] Brevo webhooks (delivery / open / click) feeding the operator audit log
 - [ ] SMS reminders (Twilio) alongside the existing email cron
 - [ ] DBS uCheck API integration (today the dashboard tracks expiry dates manually)
 - [ ] Identity verification (Stripe Identity)
-- [ ] Credential rotations: burned Brevo SMTP, AWS access key, AUTH_SECRET
+- [ ] Cookie consent + PostHog (EU region) once consent banner ships
+- [ ] Credential rotations: burned Brevo SMTP, AWS access key, AUTH_SECRET, DB + Redis passwords
 
 ### Not yet started (Phase 2+)
 
 - [ ] Public companion ratings (gated, moderated)
 - [ ] Direct Payment invoicing (Care Act 2014)
-- [ ] Family-companion structured messaging
+- [ ] Direct family ↔ companion messaging (today all threads go through the office)
 - [ ] Gift vouchers
 - [ ] Multi-language support
 - [ ] Native mobile apps
@@ -685,11 +711,11 @@ pool, port, and Cloudflare-routed hostname. The dev workflow uses Docker on
 the same box to keep the dev database completely separate from
 staging-on-the-box.
 
-| Environment | Hostname | Database | Redis | Port | Process namespace |
-|-------------|----------|----------|-------|------|---------|
-| Local (dev) | `localhost:3000` (loopback only) | Docker Postgres (`igc_dev`) | Docker Redis | 3000 | `pnpm dev`, no PM2 |
-| Staging | `staging.youareingoodcompany.co.uk` | Host Postgres (`igc_staging`) | Host Redis DB 1 | 3001 | `igc-staging-*` |
-| Production | `youareingoodcompany.co.uk` | Host Postgres (`igc_prod`) | Host Redis DB 0 | 3002 | `igc-prod-*` |
+| Environment | Hostname | Database | Redis | Port(s) | Process namespace |
+|-------------|----------|----------|-------|---------|---------|
+| Local (dev) | `localhost:3000` (loopback only) | Docker Postgres (`igc_dev`) | Docker Redis | 3000 web, 3004 realtime | `pnpm dev`, no PM2 |
+| Staging | `staging.youareingoodcompany.co.uk` | Host Postgres (`igc_staging`) | Host Redis DB 1 | 3001 web | `igc-staging-*` |
+| Production | `youareingoodcompany.co.uk` | Host Postgres (`igc_prod`) | Host Redis DB 0 | 3002 web, 3004 realtime | `igc-prod-web`, `igc-prod-realtime` |
 
 Cloudflare sits in front of every public hostname. Staging is additionally
 protected by a Cloudflare Access policy (allowlist by email or IP) so it does
@@ -762,10 +788,10 @@ The headlines:
 
 ### Authentication
 
-- Auth.js v5 with database sessions (not JWT).
-- Magic link or password, both delivered via Brevo.
-- SMS-based 2FA available; mandatory for operator-console roles.
-- Failed sign-in attempts are rate-limited and audit-logged.
+- Auth.js v5 with database sessions (not JWT), 60-day cookie when "remember me" is selected.
+- Sign-in methods: magic link, email + password, passkeys (WebAuthn). All sign-ins are audit-logged; failed attempts are rate-limited.
+- Per-session device list with self-serve revoke. Operator_admin can force sign-out, force-reset password, or revoke a passkey on any user.
+- SMS-based 2FA remains a Phase 2 option for operator-console roles once Twilio is integrated.
 
 ### Authorisation
 
