@@ -8,6 +8,7 @@ import {
   Monitor,
   Users as UsersIcon,
   Heart,
+  Pencil,
 } from 'lucide-react';
 // Monitor is used in the Active sessions section below.
 import type { UserRole } from '@prisma/client';
@@ -69,7 +70,7 @@ export default async function OpsUserDetailPage({
   params: { id: string };
   searchParams: Record<string, string | string[] | undefined>;
 }) {
-  await requireOperator(`/ops/users/${params.id}`);
+  const actor = await requireOperator(`/ops/users/${params.id}`);
 
   const historyState = parsePagination(searchParams, {
     pageSize: 20,
@@ -159,13 +160,24 @@ export default async function OpsUserDetailPage({
 
   return (
     <div className="max-w-[960px]">
-      <Link
-        href="/ops/users"
-        className="inline-flex items-center gap-1 text-stone hover:text-moss text-sm mb-4 transition-colors"
-      >
-        <ChevronLeft size={14} strokeWidth={1.75} aria-hidden="true" />
-        All users
-      </Link>
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <Link
+          href="/ops/users"
+          className="inline-flex items-center gap-1 text-stone hover:text-moss text-sm transition-colors"
+        >
+          <ChevronLeft size={14} strokeWidth={1.75} aria-hidden="true" />
+          All users
+        </Link>
+        {actor.role === 'operator_admin' && !user?.deletedAt ? (
+          <Link
+            href={`/ops/users/${params.id}/edit`}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-moss/20 text-moss text-sm hover:bg-moss/5 transition-colors"
+          >
+            <Pencil size={14} strokeWidth={1.75} aria-hidden="true" />
+            Edit
+          </Link>
+        ) : null}
+      </div>
 
       <header className="mb-6">
         <div className="flex items-center gap-2 flex-wrap mb-2">
