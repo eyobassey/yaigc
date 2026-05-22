@@ -16,6 +16,8 @@ import { RightToWorkPanel } from './RightToWorkPanel';
 import { DocumentList } from './DocumentList';
 import { Paginator } from '@/components/ui/Paginator';
 import { parsePagination, buildView } from '@/lib/pagination';
+import { companionPhotoSrc } from '@/lib/companion-photo-src';
+import { Heart, Pencil as PencilIcon } from 'lucide-react';
 
 export const metadata = { title: 'Application' };
 
@@ -30,7 +32,14 @@ export default async function CompanionApplicationDetailPage({
     where: { id: params.id },
     include: {
       companion: {
-        select: { id: true, status: true, borough: true, hourlyRate: true },
+        select: {
+          id: true,
+          status: true,
+          borough: true,
+          hourlyRate: true,
+          photoUrl: true,
+          photoFilename: true,
+        },
       },
       rightToWorkVerifiedBy: { select: { firstName: true, lastName: true, email: true } },
       documents: {
@@ -40,6 +49,14 @@ export default async function CompanionApplicationDetailPage({
     },
   });
   if (!application) notFound();
+
+  const companionPhotoUrl = application.companion
+    ? companionPhotoSrc({
+        id: application.companion.id,
+        photoFilename: application.companion.photoFilename,
+        photoUrl: application.companion.photoUrl,
+      })
+    : null;
 
   const historyWhere = {
     OR: [
@@ -135,21 +152,42 @@ export default async function CompanionApplicationDetailPage({
 
       {application.companion ? (
         <div className="mb-6 bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <div className="font-body text-[0.7rem] uppercase tracking-[0.1em] text-stone mb-1">
-              Linked companion
+          <div className="flex items-center gap-4 min-w-0">
+            <div className="flex-shrink-0">
+              {companionPhotoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={companionPhotoUrl}
+                  alt={`Photo of ${application.firstName}`}
+                  width="64"
+                  height="64"
+                  className="w-[64px] h-[64px] rounded-full object-cover border border-moss/15"
+                />
+              ) : (
+                <div className="w-[64px] h-[64px] rounded-full bg-moss/10 flex items-center justify-center">
+                  <Heart size={24} strokeWidth={1.5} className="text-moss/40" aria-hidden="true" />
+                </div>
+              )}
             </div>
-            <div className="font-head text-moss text-[1.0625rem] font-medium">
-              {application.firstName} {application.lastName}
-            </div>
-            <div className="text-stone text-[0.875rem] mt-1">
-              {application.companion.status} · {application.companion.borough.replace('_', ' ')} · £{Number(application.companion.hourlyRate).toFixed(2)}/hr
+            <div className="min-w-0">
+              <div className="font-body text-[0.7rem] uppercase tracking-[0.1em] text-stone mb-1">
+                Linked companion
+              </div>
+              <div className="font-head text-moss text-[1.0625rem] font-medium">
+                {application.firstName} {application.lastName}
+              </div>
+              <div className="text-stone text-[0.875rem] mt-1">
+                {application.companion.status} · {application.companion.borough.replace('_', ' ')} · £{Number(application.companion.hourlyRate).toFixed(2)}/hr
+              </div>
             </div>
           </div>
-          <span className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-moss/5 text-stone text-[0.875rem] whitespace-nowrap">
-            Companion edit (Stage O.6.1)
-            <ChevronRight size={14} strokeWidth={1.75} aria-hidden="true" />
-          </span>
+          <Link
+            href={`/ops/companions/${application.id}/edit`}
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-moss text-cream text-[0.875rem] hover:bg-moss-deep transition-colors whitespace-nowrap"
+          >
+            <PencilIcon size={14} strokeWidth={1.75} aria-hidden="true" />
+            Edit companion
+          </Link>
         </div>
       ) : null}
 

@@ -8,6 +8,7 @@ import type {
   CompanionApplicationStatus,
   CompanionBorough,
   CompanionEngagementType,
+  CompanionStatus,
 } from '@prisma/client';
 import { brand } from '@igc/content';
 import { prisma } from '@/lib/prisma';
@@ -787,4 +788,225 @@ export async function archiveCompanionDocument(formData: FormData): Promise<void
 
   revalidatePath(`/ops/companions/${before.companionApplicationId}`);
   revalidatePath('/companion/documents');
+}
+
+// -------------------------------------------------------------------------
+// OPERATOR: edit Companion profile + admin fields (Stage O.10).
+// Covers what the companion can edit themselves (bio, interests,
+// availability, photo) PLUS the operator-only admin fields (name,
+// borough, hourly rate, engagement type, status, max concurrent
+// matches). Photo upload reuses the companion-photo-storage helper.
+// -------------------------------------------------------------------------
+
+const EditCompanionSchema = z.object({
+  firstName: z.string().trim().min(1, 'First name required').max(80),
+  lastName: z.string().trim().min(1, 'Last name required').max(80),
+  borough: z.enum(['south_manchester', 'trafford', 'stockport', 'salford']),
+  engagementType: z.enum(['self_employed', 'worker', 'employed']),
+  status: z.enum(['onboarding', 'active', 'suspended', 'archived']),
+  hourlyRate: z.coerce.number().min(10).max(60),
+  maxConcurrentMatches: z.coerce.number().int().min(1).max(20),
+  bio: z.string().trim().max(4000).optional(),
+  interests: z.string().trim().max(2000).optional(),
+});
+
+export type EditCompanionState = {
+  ok: boolean;
+  errors?: Record<string, string>;
+  values?: Record<string, string | undefined>;
+};
+
+export async function editCompanionByOperator(
+  _prev: EditCompanionState,
+  formData: FormData,
+): Promise<EditCompanionState> {
+  const operator = await getSessionUser();
+  if (!operator) return { ok: false, errors: { _form: 'Not signed in.' } };
+
+  const companionId = String(formData.get('companionId') ?? '');
+  if (!companionId) {
+    return { ok: false, errors: { _form: 'Missing companion id.' } };
+  }
+
+  const raw = {
+    firstName: String(formData.get('firstName') ?? '').trim(),
+    lastName: String(formData.get('lastName') ?? '').trim(),
+    borough: String(formData.get('borough') ?? ''),
+    engagementType: String(formData.get('engagementType') ?? 'worker'),
+    status: String(formData.get('status') ?? 'onboarding'),
+    hourlyRate: formData.get('hourlyRate'),
+    maxConcurrentMatches: formData.get('maxConcurrentMatches'),
+    bio: String(formData.get('bio') ?? '').trim() || undefined,
+    interests: String(formData.get('interests') ?? '').trim() || undefined,
+  };
+  const parsed = EditCompanionSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      errors: Object.fromEntries(
+        parsed.error.issues.flatMap((i) => {
+          const k = i.path[0];
+          return typeof k === 'string' ? [[k, i.message]] : [];
+        }),
+      ),
+      values: {
+        firstName: raw.firstName,
+        lastName: raw.lastName,
+        borough: raw.borough,
+        engagementType: raw.engagementType,
+        status: raw.status,
+        hourlyRate: String(raw.hourlyRate ?? ''),
+        maxConcurrentMatches: String(raw.maxConcurrentMatches ?? ''),
+        bio: raw.bio,
+        interests: raw.interests,
+      },
+    };
+  }
+  const d = parsed.data;
+
+  const slots = parseAvailabilityFormData(formData);
+  if (!hasAnyAvailability(slots)) {
+    return {
+      ok: false,
+      errors: { availability: 'Pick at least one time slot.' },
+      values: {
+        firstName: d.firstName,
+        lastName: d.lastName,
+        borough: d.borough,
+        engagementType: d.engagementType,
+        status: d.status,
+        hourlyRate: String(d.hourlyRate),
+        maxConcurrentMatches: String(d.maxConcurrentMatches),
+        bio: d.bio,
+        interests: d.interests,
+      },
+    };
+  }
+
+  const before = await prisma.companion.findUnique({
+    where: { id: companionId },
+    select: {
+      applicationId: true,
+      photoFilename: true,
+      firstName: true,
+      lastName: true,
+      borough: true,
+      status: true,
+      engagementType: true,
+      hourlyRate: true,
+      maxConcurrentMatches: true,
+      bio: true,
+      interests: true,
+      availability: true,
+    },
+  });
+  if (!before) {
+    return { ok: false, errors: { _form: 'Companion not found.' } };
+  }
+
+  // Photo upload is optional. Save first, update row, then delete the
+  // previous file - same fault-tolerance pattern as the companion's
+  // own profile edit.
+  const photoFile = formData.get('photo');
+  const hasNewPhoto = photoFile instanceof File && photoFile.size > 0;
+
+  let newFilename: string | null = null;
+  if (hasNewPhoto) {
+    const { saveProfilePhoto, ProfilePhotoValidationError } = await import(
+      '@/lib/companion-photo-storage'
+    );
+    try {
+      const saved = await saveProfilePhoto(companionId, photoFile as File);
+      newFilename = saved.filename;
+    } catch (err) {
+      if (err instanceof ProfilePhotoValidationError) {
+        return {
+          ok: false,
+          errors: { photo: err.message },
+          values: {
+            firstName: d.firstName,
+            lastName: d.lastName,
+            borough: d.borough,
+            engagementType: d.engagementType,
+            status: d.status,
+            hourlyRate: String(d.hourlyRate),
+            maxConcurrentMatches: String(d.maxConcurrentMatches),
+            bio: d.bio,
+            interests: d.interests,
+          },
+        };
+      }
+      console.error('[companion-edit] photo save failed', {
+        companionId,
+        err,
+      });
+      return {
+        ok: false,
+        errors: { photo: 'Could not save the photo. Try again.' },
+      };
+    }
+  }
+
+  await prisma.companion.update({
+    where: { id: companionId },
+    data: {
+      firstName: d.firstName,
+      lastName: d.lastName,
+      borough: d.borough as CompanionBorough,
+      engagementType: d.engagementType as CompanionEngagementType,
+      status: d.status as CompanionStatus,
+      hourlyRate: d.hourlyRate,
+      maxConcurrentMatches: d.maxConcurrentMatches,
+      bio: d.bio ?? null,
+      interests: d.interests ?? null,
+      availability: slots as object,
+      ...(newFilename ? { photoFilename: newFilename } : {}),
+    },
+  });
+
+  if (newFilename && before.photoFilename) {
+    const { deleteProfilePhoto } = await import(
+      '@/lib/companion-photo-storage'
+    );
+    await deleteProfilePhoto(companionId, before.photoFilename);
+  }
+
+  await audit({
+    actorType: 'user',
+    actorId: operator.id,
+    actorRole: operator.role,
+    actionType: 'update',
+    targetType: 'Companion',
+    targetId: companionId,
+    beforeState: {
+      firstName: before.firstName,
+      lastName: before.lastName,
+      borough: before.borough,
+      status: before.status,
+      engagementType: before.engagementType,
+      hourlyRate: String(before.hourlyRate),
+      maxConcurrentMatches: before.maxConcurrentMatches,
+    },
+    afterState: {
+      firstName: d.firstName,
+      lastName: d.lastName,
+      borough: d.borough,
+      status: d.status,
+      engagementType: d.engagementType,
+      hourlyRate: String(d.hourlyRate),
+      maxConcurrentMatches: d.maxConcurrentMatches,
+    },
+    metadata: {
+      event: 'companion_edited_by_operator',
+      photoReplaced: Boolean(newFilename),
+    },
+  });
+
+  revalidatePath(`/ops/companions/${before.applicationId}`);
+  revalidatePath('/ops/companions');
+  revalidatePath('/ops/compliance');
+  revalidatePath('/companion');
+  revalidatePath('/companion/profile');
+  redirect(`/ops/companions/${before.applicationId}`);
+  return { ok: true };
 }
