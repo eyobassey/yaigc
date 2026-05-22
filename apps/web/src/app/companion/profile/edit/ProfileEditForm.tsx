@@ -17,6 +17,8 @@ interface Props {
   initialAvailability: Record<string, unknown> | null;
   initialDriverLicenceNumber: string;
   initialDriverLicenceExpiresAt: string;
+  initialAddress: { line1: string; line2: string; city: string; postcode: string };
+  initialMaxTravelMiles: string;
   currentPhotoSrc: string | null;
 }
 
@@ -26,6 +28,8 @@ export function ProfileEditForm({
   initialAvailability,
   initialDriverLicenceNumber,
   initialDriverLicenceExpiresAt,
+  initialAddress,
+  initialMaxTravelMiles,
   currentPhotoSrc,
 }: Props) {
   const [state, action] = useFormState(editCompanionProfile, initial);
@@ -177,6 +181,41 @@ export function ProfileEditForm({
           defaultValue={interests}
           error={state.errors?.interests}
           hint="Gardening, crosswords, music, a long chat over tea - whatever you bring to a visit."
+        />
+      </Section>
+
+      <Section title="Your home address">
+        <p className="text-stone text-[0.875rem] leading-[1.55] -mt-1">
+          We keep this private. We use it to work out travel time when we
+          propose visits, and it sits on file with the office.
+        </p>
+        <PlainField
+          name="addressLine1"
+          label="Address line 1"
+          defaultValue={initialAddress.line1}
+        />
+        <PlainField
+          name="addressLine2"
+          label="Address line 2 (optional)"
+          defaultValue={initialAddress.line2}
+        />
+        <div className="grid gap-5 sm:grid-cols-2">
+          <PlainField
+            name="addressCity"
+            label="Town / city"
+            defaultValue={initialAddress.city}
+          />
+          <PlainField
+            name="addressPostcode"
+            label="Postcode"
+            defaultValue={initialAddress.postcode}
+          />
+        </div>
+        <PlainField
+          name="maxTravelMiles"
+          label="How far you are happy to travel (miles, optional)"
+          type="number"
+          defaultValue={initialMaxTravelMiles}
         />
       </Section>
 

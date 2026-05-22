@@ -789,6 +789,21 @@ model Companion {
   driverLicenceNumber    String?
   driverLicenceExpiresAt DateTime? @db.Date
 
+  // Full home address. The application captures postcode only; once
+  // approved we keep a proper address on the Companion record. Used
+  // for the pre-accept travel-time estimate, future routing, and the
+  // operator-facing summary. PII - operator-only.
+  addressLine1     String?
+  addressLine2     String?
+  addressCity      String?
+  addressPostcode  String?
+  addressCountry   String  @default("GB")
+
+  // Optional preference - how far the companion is happy to travel
+  // from home for a visit. Surfaced as a soft filter when proposing
+  // matches; null means "no preference stated".
+  maxTravelMiles   Int?
+
   // Payments. Stripe Connect onboarding is deferred to Stage O.7+.
   stripeConnectedAccountId String?
   engagementType           CompanionEngagementType @default(worker)

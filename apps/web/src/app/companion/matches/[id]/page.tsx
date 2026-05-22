@@ -44,21 +44,24 @@ export default async function CompanionMatchDetailPage({
   // Defensive: this match must be assigned to the signed-in companion.
   if (!match || match.candidateCompanionId !== companion.id) notFound();
 
-  // Pre-accept travel estimate. We use the postcode the companion put
-  // on their application (own row, off the linked CompanionApplication)
-  // and the recipient's postcode, falling back to the family's billing
-  // postcode if the recipient address isn't on file yet. Pre-accept we
-  // intentionally show a coarse band only - no postcode is rendered.
-  const application = await prisma.companionApplication.findUnique({
-    where: { id: companion.applicationId },
-    select: { postcode: true },
+  // Pre-accept travel estimate. Prefer the Companion's own
+  // addressPostcode (added in O.12); fall back to the application
+  // postcode for older records that don't have it yet. Recipient
+  // side prefers the recipient address, falling back to the family
+  // billing address. Pre-accept we intentionally show a coarse band
+  // only - no postcode is rendered.
+  const companionRow = await prisma.companion.findUnique({
+    where: { id: companion.id },
+    select: {
+      addressPostcode: true,
+      application: { select: { postcode: true } },
+    },
   });
+  const companionPostcode =
+    companionRow?.addressPostcode ?? companionRow?.application.postcode ?? null;
   const recipientPostcode =
     match.recipient?.addressPostcode ?? match.family.billingPostcode ?? null;
-  const travel = await estimateTravel(
-    application?.postcode,
-    recipientPostcode,
-  );
+  const travel = await estimateTravel(companionPostcode, recipientPostcode);
 
   const responded = Boolean(match.companionResponseAt);
   const canRespond = match.status === 'proposed' && !responded;

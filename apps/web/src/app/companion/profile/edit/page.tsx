@@ -19,6 +19,11 @@ export default async function EditCompanionProfilePage() {
     select: {
       driverLicenceNumber: true,
       driverLicenceExpiresAt: true,
+      addressLine1: true,
+      addressLine2: true,
+      addressCity: true,
+      addressPostcode: true,
+      maxTravelMiles: true,
     },
   });
 
@@ -60,6 +65,15 @@ export default async function EditCompanionProfilePage() {
           extras?.driverLicenceExpiresAt
             ? extras.driverLicenceExpiresAt.toISOString().slice(0, 10)
             : ''
+        }
+        initialAddress={{
+          line1: extras?.addressLine1 ?? '',
+          line2: extras?.addressLine2 ?? '',
+          city: extras?.addressCity ?? '',
+          postcode: extras?.addressPostcode ?? '',
+        }}
+        initialMaxTravelMiles={
+          extras?.maxTravelMiles != null ? String(extras.maxTravelMiles) : ''
         }
         currentPhotoSrc={photoSrc}
       />

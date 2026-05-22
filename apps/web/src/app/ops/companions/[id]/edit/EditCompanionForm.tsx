@@ -44,6 +44,11 @@ interface InitialValues {
   availability: Record<string, unknown> | null;
   driverLicenceNumber: string;
   driverLicenceExpiresAt: string;
+  addressLine1: string;
+  addressLine2: string;
+  addressCity: string;
+  addressPostcode: string;
+  maxTravelMiles: string;
 }
 
 interface Props {
@@ -276,6 +281,45 @@ export function EditCompanionForm({
           rows={4}
           defaultValue={v('interests')}
           error={state.errors?.interests}
+        />
+      </Section>
+
+      <Section title="Home address">
+        <p className="text-stone text-[0.875rem] leading-[1.55] -mt-1">
+          Operator-only PII. Used by the pre-accept travel estimate.
+        </p>
+        <Field
+          name="addressLine1"
+          label="Address line 1"
+          defaultValue={v('addressLine1')}
+          error={state.errors?.addressLine1}
+        />
+        <Field
+          name="addressLine2"
+          label="Address line 2"
+          defaultValue={v('addressLine2')}
+          error={state.errors?.addressLine2}
+        />
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field
+            name="addressCity"
+            label="Town / city"
+            defaultValue={v('addressCity')}
+            error={state.errors?.addressCity}
+          />
+          <Field
+            name="addressPostcode"
+            label="Postcode"
+            defaultValue={v('addressPostcode')}
+            error={state.errors?.addressPostcode}
+          />
+        </div>
+        <Field
+          name="maxTravelMiles"
+          label="Max travel distance (miles, optional)"
+          type="number"
+          defaultValue={v('maxTravelMiles')}
+          error={state.errors?.maxTravelMiles}
         />
       </Section>
 

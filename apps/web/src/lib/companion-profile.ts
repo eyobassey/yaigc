@@ -24,6 +24,11 @@ const EditSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD.')
     .optional(),
+  addressLine1: z.string().trim().max(200).optional(),
+  addressLine2: z.string().trim().max(200).optional(),
+  addressCity: z.string().trim().max(100).optional(),
+  addressPostcode: z.string().trim().max(20).optional(),
+  maxTravelMiles: z.coerce.number().int().min(1).max(200).optional(),
 });
 
 export type EditProfileState = {
@@ -45,6 +50,13 @@ export async function editCompanionProfile(
       String(formData.get('driverLicenceNumber') ?? '').trim() || undefined,
     driverLicenceExpiresAt:
       String(formData.get('driverLicenceExpiresAt') ?? '').trim() || undefined,
+    addressLine1: String(formData.get('addressLine1') ?? '').trim() || undefined,
+    addressLine2: String(formData.get('addressLine2') ?? '').trim() || undefined,
+    addressCity: String(formData.get('addressCity') ?? '').trim() || undefined,
+    addressPostcode:
+      String(formData.get('addressPostcode') ?? '').trim().toUpperCase() || undefined,
+    maxTravelMiles:
+      String(formData.get('maxTravelMiles') ?? '').trim() || undefined,
   };
   const parsed = EditSchema.safeParse(raw);
   if (!parsed.success) {
@@ -115,6 +127,11 @@ export async function editCompanionProfile(
       driverLicenceExpiresAt: d.driverLicenceExpiresAt
         ? new Date(`${d.driverLicenceExpiresAt}T00:00:00Z`)
         : null,
+      addressLine1: d.addressLine1 ?? null,
+      addressLine2: d.addressLine2 ?? null,
+      addressCity: d.addressCity ?? null,
+      addressPostcode: d.addressPostcode ?? null,
+      maxTravelMiles: d.maxTravelMiles ?? null,
       ...(newFilename ? { photoFilename: newFilename } : {}),
     },
   });

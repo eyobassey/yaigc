@@ -73,6 +73,14 @@ export default async function OpsCompanionEditPage({
           driverLicenceExpiresAt: companion.driverLicenceExpiresAt
             ? companion.driverLicenceExpiresAt.toISOString().slice(0, 10)
             : '',
+          addressLine1: companion.addressLine1 ?? '',
+          addressLine2: companion.addressLine2 ?? '',
+          addressCity: companion.addressCity ?? '',
+          addressPostcode: companion.addressPostcode ?? '',
+          maxTravelMiles:
+            companion.maxTravelMiles != null
+              ? String(companion.maxTravelMiles)
+              : '',
         }}
         currentPhotoSrc={photoSrc}
       />
