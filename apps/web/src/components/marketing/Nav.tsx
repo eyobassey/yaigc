@@ -96,6 +96,15 @@ export function Nav() {
               <span>{brand.supportPhone}</span>
             </a>
 
+            {/* Quiet sign-in link for returning users. Hidden below sm
+                because the drawer carries it. */}
+            <Link
+              href="/sign-in"
+              className="hidden sm:inline-flex items-center text-[0.95rem] text-charcoal font-medium hover:text-moss transition-colors"
+            >
+              Sign in
+            </Link>
+
             {/* CTA hidden on the smallest viewports — the drawer carries it. */}
             <Link
               href="/contact"
@@ -187,6 +196,13 @@ export function Nav() {
               />
               <span>{brand.supportPhone}</span>
             </a>
+            <Link
+              href="/sign-in"
+              className="inline-flex items-center justify-center px-6 py-3 rounded-full border border-moss/30 text-moss text-[0.95rem] font-medium hover:bg-moss/5 transition-colors"
+              onClick={() => setMenuOpen(false)}
+            >
+              Sign in
+            </Link>
             <Link
               href="/contact"
               className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-moss text-cream text-[0.95rem] font-medium hover:bg-moss-dark transition-colors"

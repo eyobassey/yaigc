@@ -69,6 +69,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   // Trust X-Forwarded-* headers because the chain is CF -> nginx -> Next.js
   trustHost: true,
 
+  callbacks: {
+    // Reject sign-in for soft-deleted users. The magic-link flow does
+    // not otherwise know about deletedAt; without this callback an
+    // operator could close an account and the user could still sign
+    // back in via email link.
+    async signIn({ user }) {
+      if (!user?.email) return true;
+      const row = await prisma.user.findUnique({
+        where: { email: user.email },
+        select: { deletedAt: true },
+      });
+      if (row?.deletedAt) return false;
+      return true;
+    },
+  },
+
   // Audit hooks. Every authentication state change is recorded via the
   // append-only AuditLogEntry table. Failures inside audit() are swallowed
   // (it logs to stderr) so a DB hiccup never blocks a sign-in.

@@ -71,8 +71,12 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       role: true,
       firstName: true,
       lastName: true,
+      deletedAt: true,
     },
   });
+  // Belt + braces: even if the per-path sign-in checks miss someone,
+  // a soft-deleted user reads as signed out everywhere.
+  if (user?.deletedAt) return null;
   if (user) {
     // Touch lastActiveAt on the live session (best-effort). Throttled
     // to once every 5 minutes per token so we don't update on every

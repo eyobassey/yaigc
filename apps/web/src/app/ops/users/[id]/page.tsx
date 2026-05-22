@@ -18,6 +18,7 @@ import { deviceLabel } from '@/lib/session';
 import { Paginator } from '@/components/ui/Paginator';
 import { parsePagination, buildView } from '@/lib/pagination';
 import { SecurityActionsPanel } from './SecurityActionsPanel';
+import { DeletePanel } from './DeletePanel';
 
 export const metadata = { title: 'User' };
 
@@ -406,6 +407,14 @@ export default async function OpsUserDetailPage({
               nickname: a.nickname,
               lastUsedAt: a.lastUsedAt ? a.lastUsedAt.toISOString() : null,
             }))}
+          />
+
+          <DeletePanel
+            userId={user.id}
+            actorRole={actor.role}
+            isSelf={actor.id === user.id}
+            isDeleted={Boolean(user.deletedAt)}
+            deletedAt={user.deletedAt ? user.deletedAt.toISOString() : null}
           />
 
           <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">

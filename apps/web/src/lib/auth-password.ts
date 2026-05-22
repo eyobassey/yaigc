@@ -60,8 +60,25 @@ export async function signInWithPassword(
 
   const user = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, email: true, passwordHash: true },
+    select: { id: true, email: true, passwordHash: true, deletedAt: true },
   });
+  if (user?.deletedAt) {
+    // Soft-deleted accounts cannot sign in. Same generic message as
+    // wrong-password to avoid leaking account state.
+    await audit({
+      actorType: 'system',
+      actorId: null,
+      actionType: 'auth',
+      targetType: 'User',
+      targetId: user.id,
+      metadata: { event: 'sign_in_failed', method: 'password', email, reason: 'deleted' },
+    });
+    return {
+      ok: false,
+      error: 'That email and password do not match. Check the spelling, or ring the office if you think this is wrong.',
+      values: { email },
+    };
+  }
 
   // Always do an argon2 verify against SOMETHING when the email looks
   // valid - either the real hash or a dummy - so timing differences

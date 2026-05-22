@@ -24,6 +24,11 @@ import {
   userPasswordForceResetText,
   userPasswordForceResetSubject,
 } from '@/lib/email/user-password-force-reset';
+import {
+  userSoftDeletedHtml,
+  userSoftDeletedText,
+  userSoftDeletedSubject,
+} from '@/lib/email/user-soft-deleted';
 
 // O.14.2: operator_admin can update another user's role, first name,
 // and last name. Email is locked in this stage (changing email needs a
@@ -480,5 +485,170 @@ export async function revokePasskeyAsAdmin(
   });
 
   revalidatePath(`/ops/users/${d.userId}`);
+  redirect(`/ops/users/${d.userId}`);
+}
+
+// ====================================================================
+// O.14.4 - Soft-delete + restore
+//
+// Soft-delete is a tombstone. The User row stays in the database for
+// the audit trail; deletedAt is set; all sessions are revoked;
+// passwordHash is cleared so they can never sign in again even if a
+// future bug ignored deletedAt. Restore unwinds deletedAt (we do NOT
+// restore the password - the user must set a new one).
+//
+// Hard rules:
+//   - operator_admin only.
+//   - Cannot soft-delete yourself.
+//   - Cannot soft-delete the only remaining operator_admin.
+//   - Already-deleted users cannot be deleted again.
+//   - Already-active users cannot be restored.
+// ====================================================================
+
+export async function softDeleteUser(
+  _prev: SecurityActionState,
+  formData: FormData,
+): Promise<SecurityActionState> {
+  const actor = await getSessionUser();
+  if (!actor) return { ok: false, error: 'Sign in first.' };
+  if (actor.role !== 'operator_admin') {
+    return { ok: false, error: 'Only admins can close user accounts.' };
+  }
+
+  const parsed = ReasonSchema.safeParse({
+    userId: String(formData.get('userId') ?? ''),
+    reason: String(formData.get('reason') ?? '').trim(),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid input.' };
+  }
+  const d = parsed.data;
+
+  if (d.userId === actor.id) {
+    return { ok: false, error: 'You cannot close your own account from here.' };
+  }
+
+  const target = await prisma.user.findUnique({
+    where: { id: d.userId },
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+      role: true,
+      deletedAt: true,
+      passwordHash: true,
+    },
+  });
+  if (!target) return { ok: false, error: 'User not found.' };
+  if (target.deletedAt) {
+    return { ok: false, error: 'This account is already closed.' };
+  }
+
+  if (target.role === 'operator_admin') {
+    const count = await prisma.user.count({
+      where: { role: 'operator_admin', deletedAt: null },
+    });
+    if (count <= 1) {
+      return {
+        ok: false,
+        error:
+          'This is the only admin on the platform. Promote a second admin first, then close this account.',
+      };
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: d.userId },
+      data: {
+        deletedAt: new Date(),
+        passwordHash: null,
+        passwordSetAt: null,
+      },
+    });
+    await tx.session.deleteMany({ where: { userId: d.userId } });
+  });
+
+  await audit({
+    actorType: 'user',
+    actorId: actor.id,
+    actorRole: actor.role,
+    actionType: 'delete',
+    targetType: 'User',
+    targetId: d.userId,
+    beforeState: { deletedAt: null, role: target.role },
+    afterState: { deletedAt: new Date().toISOString() },
+    metadata: {
+      event: 'user_soft_deleted_by_admin',
+      hadPassword: Boolean(target.passwordHash),
+      reason: d.reason,
+    },
+  });
+
+  try {
+    const transport = buildTransport();
+    await transport.sendMail({
+      to: target.email,
+      from: `${brand.fullName} <${process.env.EMAIL_SENDER}>`,
+      subject: userSoftDeletedSubject(),
+      text: userSoftDeletedText({ firstName: target.firstName }),
+      html: userSoftDeletedHtml({ firstName: target.firstName }),
+    });
+  } catch (err) {
+    console.error('[user-admin] soft-delete email failed', { to: target.email, err });
+  }
+
+  revalidatePath(`/ops/users/${d.userId}`);
+  revalidatePath('/ops/users');
+  redirect(`/ops/users/${d.userId}`);
+}
+
+export async function restoreUser(
+  _prev: SecurityActionState,
+  formData: FormData,
+): Promise<SecurityActionState> {
+  const actor = await getSessionUser();
+  if (!actor) return { ok: false, error: 'Sign in first.' };
+  if (actor.role !== 'operator_admin') {
+    return { ok: false, error: 'Only admins can restore user accounts.' };
+  }
+
+  const parsed = ReasonSchema.safeParse({
+    userId: String(formData.get('userId') ?? ''),
+    reason: String(formData.get('reason') ?? '').trim(),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid input.' };
+  }
+  const d = parsed.data;
+
+  const target = await prisma.user.findUnique({
+    where: { id: d.userId },
+    select: { id: true, deletedAt: true, role: true },
+  });
+  if (!target) return { ok: false, error: 'User not found.' };
+  if (!target.deletedAt) {
+    return { ok: false, error: 'This account is already active.' };
+  }
+
+  await prisma.user.update({
+    where: { id: d.userId },
+    data: { deletedAt: null },
+  });
+
+  await audit({
+    actorType: 'user',
+    actorId: actor.id,
+    actorRole: actor.role,
+    actionType: 'update',
+    targetType: 'User',
+    targetId: d.userId,
+    beforeState: { deletedAt: target.deletedAt.toISOString() },
+    afterState: { deletedAt: null },
+    metadata: { event: 'user_restored_by_admin', reason: d.reason },
+  });
+
+  revalidatePath(`/ops/users/${d.userId}`);
+  revalidatePath('/ops/users');
   redirect(`/ops/users/${d.userId}`);
 }

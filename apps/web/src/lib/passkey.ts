@@ -227,10 +227,16 @@ export async function verifyAuthentication(
       credentialPublicKey: true,
       counter: true,
       transports: true,
+      user: { select: { deletedAt: true } },
     },
   });
   if (!authenticator) {
     return { ok: false, reason: 'Unknown passkey.' };
+  }
+
+  // Soft-deleted users can't sign in even with a valid passkey.
+  if (authenticator.user.deletedAt) {
+    return { ok: false, reason: 'This account is no longer active.' };
   }
 
   // If the user typed an email, the credential must belong to them.
