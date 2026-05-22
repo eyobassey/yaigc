@@ -97,11 +97,20 @@ export default async function OpsVisitsPage({
 
   return (
     <div>
-      <header className="mb-6 flex items-center gap-3">
-        <Calendar size={22} strokeWidth={1.75} className="text-moss" aria-hidden="true" />
-        <h1 className="font-head font-normal text-moss text-[clamp(1.75rem,3vw,2.25rem)] leading-[1.1]">
-          Visits
-        </h1>
+      <header className="mb-6 flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <Calendar size={22} strokeWidth={1.75} className="text-moss" aria-hidden="true" />
+          <h1 className="font-head font-normal text-moss text-[clamp(1.75rem,3vw,2.25rem)] leading-[1.1]">
+            Visits
+          </h1>
+        </div>
+        <Link
+          href="/ops/visits/calendar"
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-moss/20 text-moss text-sm hover:bg-moss/5 transition-colors"
+        >
+          <Calendar size={14} strokeWidth={1.75} aria-hidden="true" />
+          Week view
+        </Link>
       </header>
 
       <nav aria-label="Visit filter" className="mb-6 flex flex-wrap gap-2">
