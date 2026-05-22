@@ -15,6 +15,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: PrismaAdapter(prisma),
 
   // Database sessions per README. Required when using an adapter.
+  // Password sign-in (P.1) creates Session rows directly via the
+  // PrismaAdapter rather than going through a Credentials provider
+  // (which would force JWT sessions and break the magic-link flow).
+  // See lib/auth-password.ts.
   session: { strategy: 'database' },
 
   providers: [

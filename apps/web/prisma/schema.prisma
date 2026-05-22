@@ -35,6 +35,13 @@ model User {
   lastName  String?
   role      UserRole @default(family_payer)
 
+  // Password (optional, P.1). argon2id hash. NULL means the user is
+  // magic-link only - they can set a password from /account/security.
+  // passwordSetAt also acts as the "last changed" marker because we
+  // never store a separate "last changed" column.
+  passwordHash  String?
+  passwordSetAt DateTime?
+
   // Audit
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

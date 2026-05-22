@@ -3,6 +3,7 @@ import { Settings, LogOut, FileText, ShieldCheck, Wallet } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { requireCompanion } from '@/lib/auth-helpers';
 import { signOut } from '@/lib/auth';
+import { PasswordSection } from '@/components/account/PasswordSection';
 
 export const metadata = { title: 'Account' };
 
@@ -47,7 +48,7 @@ export default async function CompanionAccountPage() {
   // columns that aren't on requireCompanion's narrower context.
   // Also fetch the most recent sign-in from the audit log (Auth.js
   // writes actionType=auth on every magic-link callback).
-  const [full, lastSignIn] = await Promise.all([
+  const [full, lastSignIn, passwordInfo] = await Promise.all([
     prisma.companion.findUnique({
       where: { id: companion.id },
       select: {
@@ -69,6 +70,10 @@ export default async function CompanionAccountPage() {
       where: { actorType: 'user', actorId: user.id, actionType: 'auth' },
       orderBy: { id: 'desc' },
       select: { occurredAt: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: user.id },
+      select: { passwordHash: true, passwordSetAt: true },
     }),
   ]);
 
@@ -171,6 +176,13 @@ export default async function CompanionAccountPage() {
           </Link>
         </div>
       </Section>
+
+      <PasswordSection
+        hasPassword={Boolean(passwordInfo?.passwordHash)}
+        passwordSetAt={
+          passwordInfo?.passwordSetAt ? passwordInfo.passwordSetAt.toISOString() : null
+        }
+      />
 
       <section className="bg-cream-deep/40 border border-moss/[0.08] rounded-[12px] p-5 sm:p-6 mb-6">
         <h2 className="font-body text-[0.7rem] font-medium uppercase tracking-[0.1em] text-stone mb-2">

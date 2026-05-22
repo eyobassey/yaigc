@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { signOut } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
 import { getSessionUser, defaultLandingForRole } from '@/lib/auth-helpers';
 import { PageShell } from '@/components/marketing/PageShell';
 import { Button } from '@/components/ui/Button';
+import { PasswordSection } from '@/components/account/PasswordSection';
 
 // /me is the post-sign-in router. Magic-link sign-ins land here when no
 // explicit callbackUrl was given, and we forward them to the portal that
@@ -27,6 +29,11 @@ export default async function MePage() {
   if (landing !== '/me') {
     redirect(landing);
   }
+
+  const passwordInfo = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { passwordHash: true, passwordSetAt: true },
+  });
 
   return (
     <PageShell>
@@ -54,12 +61,23 @@ export default async function MePage() {
             <dd className="text-charcoal font-mono text-[0.875rem]">{user.role}</dd>
           </dl>
 
+          <div className="mt-10">
+            <PasswordSection
+              hasPassword={Boolean(passwordInfo?.passwordHash)}
+              passwordSetAt={
+                passwordInfo?.passwordSetAt
+                  ? passwordInfo.passwordSetAt.toISOString()
+                  : null
+              }
+            />
+          </div>
+
           <form
             action={async () => {
               'use server';
               await signOut({ redirectTo: '/' });
             }}
-            className="mt-10"
+            className="mt-6"
           >
             <Button type="submit" variant="outline" size="small">
               Sign out

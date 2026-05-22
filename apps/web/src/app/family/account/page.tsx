@@ -3,6 +3,7 @@ import { User, Users, Plus } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { requireFamilyMember } from '@/lib/auth-helpers';
 import { AccountForm } from './AccountForm';
+import { PasswordSection } from '@/components/account/PasswordSection';
 
 export const metadata = { title: 'Account' };
 
@@ -30,7 +31,7 @@ export default async function FamilyAccountPage({
   // Latest sign-in for this user (audit log is the source of truth -
   // Auth.js logs every successful magic-link callback as actionType=auth,
   // metadata.event=sign_in).
-  const [lastSignIn, otherMembers] = await Promise.all([
+  const [lastSignIn, otherMembers, passwordInfo] = await Promise.all([
     prisma.auditLogEntry.findFirst({
       where: {
         actorType: 'user',
@@ -44,6 +45,10 @@ export default async function FamilyAccountPage({
       where: { familyId: family.id, id: { not: member.id }, deletedAt: null },
       include: { user: { select: { firstName: true, lastName: true, email: true } } },
       orderBy: { addedAt: 'asc' },
+    }),
+    prisma.user.findUnique({
+      where: { id: user.id },
+      select: { passwordHash: true, passwordSetAt: true },
     }),
   ]);
 
@@ -165,6 +170,17 @@ export default async function FamilyAccountPage({
           directly.
         </p>
       )}
+
+      <div className="mt-6">
+        <PasswordSection
+          hasPassword={Boolean(passwordInfo?.passwordHash)}
+          passwordSetAt={
+            passwordInfo?.passwordSetAt
+              ? passwordInfo.passwordSetAt.toISOString()
+              : null
+          }
+        />
+      </div>
     </div>
   );
 }

@@ -11,6 +11,9 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '25mb',
     },
+    // @node-rs/argon2 ships a native .node binary that webpack can't
+    // bundle. Mark it server-external so Next imports it at runtime.
+    serverComponentsExternalPackages: ['@node-rs/argon2'],
   },
 
   // Long-lived cache for stable brand assets. Lighthouse audit flagged the
