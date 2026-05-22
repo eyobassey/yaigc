@@ -1087,3 +1087,57 @@ export async function editCompanionByOperator(
   redirect(`/ops/companions/${before.applicationId}`);
   return { ok: true };
 }
+
+// -------------------------------------------------------------------------
+// OPERATOR_ADMIN: toggle direct family <-> companion messaging (M.2.2)
+// -------------------------------------------------------------------------
+//
+// Companion-wide gate for the FAMILY_COMPANION thread kind. When false
+// (default), the only place a family and their matched companion can
+// exchange messages is through the operator. When true, every accepted
+// Match this companion has unlocks a direct thread. Ops always sees
+// every direct thread read-only via /ops/messages (M.2.4).
+
+export async function setCompanionDirectMessaging(
+  formData: FormData,
+): Promise<void> {
+  'use server';
+  const operator = await getSessionUser();
+  if (!operator) return;
+  if (operator.role !== 'operator_admin') return;
+
+  const companionId = String(formData.get('companionId') ?? '');
+  const enabled = String(formData.get('enabled') ?? '') === 'true';
+  if (!companionId) return;
+
+  const before = await prisma.companion.findUnique({
+    where: { id: companionId },
+    select: {
+      id: true,
+      applicationId: true,
+      directMessagingEnabled: true,
+    },
+  });
+  if (!before) return;
+  if (before.directMessagingEnabled === enabled) return; // no-op
+
+  await prisma.companion.update({
+    where: { id: companionId },
+    data: { directMessagingEnabled: enabled },
+  });
+
+  await audit({
+    actorType: 'user',
+    actorId: operator.id,
+    actorRole: operator.role,
+    actionType: 'update',
+    targetType: 'Companion',
+    targetId: companionId,
+    beforeState: { directMessagingEnabled: before.directMessagingEnabled },
+    afterState: { directMessagingEnabled: enabled },
+    metadata: { event: 'direct_messaging_toggled' },
+  });
+
+  revalidatePath(`/ops/companions/${before.applicationId}`);
+  revalidatePath(`/ops/companions/${before.applicationId}/edit`);
+}

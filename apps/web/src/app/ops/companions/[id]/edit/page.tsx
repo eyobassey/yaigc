@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ChevronLeft, Pencil } from 'lucide-react';
+import { ChevronLeft, MessageSquare, Pencil } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { requireOperator } from '@/lib/auth-helpers';
+import { setCompanionDirectMessaging } from '@/lib/companion';
 import { companionPhotoSrc } from '@/lib/companion-photo-src';
 import { EditCompanionForm } from './EditCompanionForm';
 
@@ -13,7 +14,7 @@ export default async function OpsCompanionEditPage({
 }: {
   params: { id: string };
 }) {
-  await requireOperator(`/ops/companions/${params.id}/edit`);
+  const actor = await requireOperator(`/ops/companions/${params.id}/edit`);
 
   const application = await prisma.companionApplication.findUnique({
     where: { id: params.id },
@@ -88,6 +89,82 @@ export default async function OpsCompanionEditPage({
         }}
         currentPhotoSrc={photoSrc}
       />
+
+      {actor.role === 'operator_admin' ? (
+        <DirectMessagingCard
+          companionId={companion.id}
+          enabled={companion.directMessagingEnabled}
+        />
+      ) : null}
     </div>
+  );
+}
+
+// M.2.2 - operator_admin only. Surfaces the per-companion gate for
+// direct family <-> companion messaging. The toggle is destructive in
+// one direction (turning it on widens who can reach this companion),
+// so the wording and button copy stay deliberately explicit.
+function DirectMessagingCard({
+  companionId,
+  enabled,
+}: {
+  companionId: string;
+  enabled: boolean;
+}) {
+  return (
+    <section className="mt-10 bg-paper border border-moss/[0.08] rounded-[12px] p-6">
+      <header className="flex items-center gap-3 mb-3">
+        <MessageSquare
+          size={20}
+          strokeWidth={1.75}
+          className="text-moss"
+          aria-hidden="true"
+        />
+        <h2 className="font-head font-normal text-moss text-[1.25rem]">
+          Direct messaging
+        </h2>
+        <span
+          className={
+            'ml-auto inline-flex items-center gap-1.5 text-[0.75rem] font-medium px-2 py-0.5 rounded-full ' +
+            (enabled
+              ? 'bg-moss/10 text-moss'
+              : 'bg-stone/10 text-stone')
+          }
+        >
+          <span
+            className={
+              'inline-block w-1.5 h-1.5 rounded-full ' +
+              (enabled ? 'bg-moss' : 'bg-stone')
+            }
+            aria-hidden="true"
+          />
+          {enabled ? 'Enabled' : 'Disabled'}
+        </span>
+      </header>
+      <p className="text-charcoal text-[0.9375rem] leading-[1.55] mb-2">
+        When enabled, this companion can exchange messages directly with
+        any family they have an accepted match with. The office can still
+        read every message; both sides see a banner saying so.
+      </p>
+      <p className="text-stone text-[0.875rem] leading-[1.55] mb-5">
+        When disabled, the only messaging channel is the operator-mediated
+        thread under <span className="font-medium">Messages</span>.
+      </p>
+      <form action={setCompanionDirectMessaging}>
+        <input type="hidden" name="companionId" value={companionId} />
+        <input type="hidden" name="enabled" value={enabled ? 'false' : 'true'} />
+        <button
+          type="submit"
+          className={
+            'inline-flex items-center gap-2 px-3.5 py-2 rounded-md text-sm font-medium transition-colors ' +
+            (enabled
+              ? 'bg-paper border border-stone/30 text-charcoal hover:bg-stone/5'
+              : 'bg-moss text-cream hover:bg-moss-deep')
+          }
+        >
+          {enabled ? 'Disable direct messaging' : 'Enable direct messaging'}
+        </button>
+      </form>
+    </section>
   );
 }
