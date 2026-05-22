@@ -17,11 +17,14 @@ export default async function OpsCompanionEditPage({
 
   const application = await prisma.companionApplication.findUnique({
     where: { id: params.id },
-    include: { companion: true },
+    include: {
+      companion: { include: { badges: { select: { slug: true } } } },
+    },
   });
   if (!application || !application.companion) notFound();
 
   const companion = application.companion;
+  const currentBadgeSlugs = companion.badges.map((b) => b.slug);
   const photoSrc = companionPhotoSrc({
     id: companion.id,
     photoFilename: companion.photoFilename,
@@ -81,6 +84,7 @@ export default async function OpsCompanionEditPage({
             companion.maxTravelMiles != null
               ? String(companion.maxTravelMiles)
               : '',
+          badgeSlugs: currentBadgeSlugs,
         }}
         currentPhotoSrc={photoSrc}
       />

@@ -822,6 +822,10 @@ const EditCompanionSchema = z.object({
   addressCity: z.string().trim().max(100).optional(),
   addressPostcode: z.string().trim().max(20).optional(),
   maxTravelMiles: z.coerce.number().int().min(1).max(200).optional(),
+  // Badge slugs submitted as a single CSV string ("drives,first_aid_trained")
+  // so we don't have to fight FormData multi-value handling. Validation
+  // against the catalogue happens after parsing.
+  badgesCsv: z.string().trim().max(2000).optional(),
 });
 
 export type EditCompanionState = {
@@ -863,6 +867,7 @@ export async function editCompanionByOperator(
       String(formData.get('addressPostcode') ?? '').trim().toUpperCase() || undefined,
     maxTravelMiles:
       String(formData.get('maxTravelMiles') ?? '').trim() || undefined,
+    badgesCsv: String(formData.get('badgesCsv') ?? '').trim() || undefined,
   };
   const parsed = EditCompanionSchema.safeParse(raw);
   if (!parsed.success) {
@@ -972,30 +977,68 @@ export async function editCompanionByOperator(
     }
   }
 
-  await prisma.companion.update({
-    where: { id: companionId },
-    data: {
-      firstName: d.firstName,
-      lastName: d.lastName,
-      borough: d.borough as CompanionBorough,
-      engagementType: d.engagementType as CompanionEngagementType,
-      status: d.status as CompanionStatus,
-      hourlyRate: d.hourlyRate,
-      maxConcurrentMatches: d.maxConcurrentMatches,
-      bio: d.bio ?? null,
-      interests: d.interests ?? null,
-      availability: slots as object,
-      driverLicenceNumber: d.driverLicenceNumber ?? null,
-      driverLicenceExpiresAt: d.driverLicenceExpiresAt
-        ? new Date(`${d.driverLicenceExpiresAt}T00:00:00Z`)
-        : null,
-      addressLine1: d.addressLine1 ?? null,
-      addressLine2: d.addressLine2 ?? null,
-      addressCity: d.addressCity ?? null,
-      addressPostcode: d.addressPostcode ?? null,
-      maxTravelMiles: d.maxTravelMiles ?? null,
-      ...(newFilename ? { photoFilename: newFilename } : {}),
-    },
+  // Reconcile badge set: parse the CSV against the catalogue and
+  // compute add/remove deltas vs. what's currently stored.
+  const { BADGE_BY_SLUG } = await import('@/lib/badges');
+  const requestedSlugs = d.badgesCsv
+    ? Array.from(
+        new Set(
+          d.badgesCsv
+            .split(',')
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0 && BADGE_BY_SLUG[s]),
+        ),
+      )
+    : [];
+  const currentBadges = await prisma.companionBadge.findMany({
+    where: { companionId },
+    select: { slug: true },
+  });
+  const currentSet = new Set(currentBadges.map((b) => b.slug));
+  const requestedSet = new Set(requestedSlugs);
+  const toAdd = requestedSlugs.filter((s) => !currentSet.has(s));
+  const toRemove = [...currentSet].filter((s) => !requestedSet.has(s));
+
+  await prisma.$transaction(async (tx) => {
+    await tx.companion.update({
+      where: { id: companionId },
+      data: {
+        firstName: d.firstName,
+        lastName: d.lastName,
+        borough: d.borough as CompanionBorough,
+        engagementType: d.engagementType as CompanionEngagementType,
+        status: d.status as CompanionStatus,
+        hourlyRate: d.hourlyRate,
+        maxConcurrentMatches: d.maxConcurrentMatches,
+        bio: d.bio ?? null,
+        interests: d.interests ?? null,
+        availability: slots as object,
+        driverLicenceNumber: d.driverLicenceNumber ?? null,
+        driverLicenceExpiresAt: d.driverLicenceExpiresAt
+          ? new Date(`${d.driverLicenceExpiresAt}T00:00:00Z`)
+          : null,
+        addressLine1: d.addressLine1 ?? null,
+        addressLine2: d.addressLine2 ?? null,
+        addressCity: d.addressCity ?? null,
+        addressPostcode: d.addressPostcode ?? null,
+        maxTravelMiles: d.maxTravelMiles ?? null,
+        ...(newFilename ? { photoFilename: newFilename } : {}),
+      },
+    });
+    if (toRemove.length > 0) {
+      await tx.companionBadge.deleteMany({
+        where: { companionId, slug: { in: toRemove } },
+      });
+    }
+    if (toAdd.length > 0) {
+      await tx.companionBadge.createMany({
+        data: toAdd.map((slug) => ({
+          companionId,
+          slug,
+          awardedByOperatorId: operator.id,
+        })),
+      });
+    }
   });
 
   if (newFilename && before.photoFilename) {

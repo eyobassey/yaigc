@@ -18,6 +18,12 @@ import { Paginator } from '@/components/ui/Paginator';
 import { parsePagination, buildView } from '@/lib/pagination';
 import { companionPhotoSrc } from '@/lib/companion-photo-src';
 import { Heart, Pencil as PencilIcon } from 'lucide-react';
+import {
+  BADGE_BY_SLUG,
+  tierFromVisits,
+  tierToneClass,
+  tenureLabel,
+} from '@/lib/badges';
 
 export const metadata = { title: 'Application' };
 
@@ -39,6 +45,13 @@ export default async function CompanionApplicationDetailPage({
           hourlyRate: true,
           photoUrl: true,
           photoFilename: true,
+          createdAt: true,
+          badges: { select: { slug: true }, orderBy: { awardedAt: 'asc' } },
+          _count: {
+            select: {
+              visits: { where: { state: { in: ['completed', 'reported'] } } },
+            },
+          },
         },
       },
       rightToWorkVerifiedBy: { select: { firstName: true, lastName: true, email: true } },
@@ -57,6 +70,18 @@ export default async function CompanionApplicationDetailPage({
         photoUrl: application.companion.photoUrl,
       })
     : null;
+
+  const tier = application.companion
+    ? tierFromVisits(application.companion._count.visits)
+    : null;
+  const tenure = application.companion
+    ? tenureLabel(application.companion.createdAt)
+    : null;
+  const badgeLabels = application.companion
+    ? application.companion.badges
+        .map((b) => BADGE_BY_SLUG[b.slug])
+        .filter((b): b is NonNullable<typeof b> => Boolean(b))
+    : [];
 
   const historyWhere = {
     OR: [
@@ -173,12 +198,39 @@ export default async function CompanionApplicationDetailPage({
               <div className="font-body text-[0.7rem] uppercase tracking-[0.1em] text-stone mb-1">
                 Linked companion
               </div>
-              <div className="font-head text-moss text-[1.0625rem] font-medium">
-                {application.firstName} {application.lastName}
+              <div className="font-head text-moss text-[1.0625rem] font-medium flex items-center gap-2 flex-wrap">
+                <span>
+                  {application.firstName} {application.lastName}
+                </span>
+                {tier?.label ? (
+                  <span
+                    className={`inline-flex items-center font-body text-[0.7rem] font-medium uppercase tracking-[0.08em] px-2 py-0.5 rounded ${tierToneClass(tier.tier)}`}
+                    title={`${tier.visits} completed visits`}
+                  >
+                    {tier.label} · {tier.visits}
+                  </span>
+                ) : tier ? (
+                  <span className="inline-flex items-center font-body text-[0.7rem] uppercase tracking-[0.08em] text-stone">
+                    {tier.visits} {tier.visits === 1 ? 'visit' : 'visits'}
+                  </span>
+                ) : null}
               </div>
               <div className="text-stone text-[0.875rem] mt-1">
                 {application.companion.status} · {application.companion.borough.replace('_', ' ')} · £{Number(application.companion.hourlyRate).toFixed(2)}/hr
+                {tenure ? ` · ${tenure}` : ''}
               </div>
+              {badgeLabels.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {badgeLabels.map((b) => (
+                    <span
+                      key={b.slug}
+                      className="inline-flex items-center font-body text-[0.7rem] text-charcoal bg-moss/10 rounded-full px-2 py-0.5"
+                    >
+                      {b.label}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
           <Link

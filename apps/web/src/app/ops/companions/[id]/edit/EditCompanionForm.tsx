@@ -8,6 +8,7 @@ import {
   type EditCompanionState,
 } from '@/lib/companion';
 import { DAYS, PERIODS } from '@/lib/availability';
+import { BADGE_CATALOGUE } from '@/lib/badges';
 
 const initial: EditCompanionState = { ok: false };
 
@@ -49,6 +50,7 @@ interface InitialValues {
   addressCity: string;
   addressPostcode: string;
   maxTravelMiles: string;
+  badgeSlugs: string[];
 }
 
 interface Props {
@@ -67,7 +69,19 @@ export function EditCompanionForm({
   const [state, action] = useFormState(editCompanionByOperator, initial);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [selectedBadges, setSelectedBadges] = useState<Set<string>>(
+    () => new Set(init.badgeSlugs),
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function toggleBadge(slug: string) {
+    setSelectedBadges((prev) => {
+      const next = new Set(prev);
+      if (next.has(slug)) next.delete(slug);
+      else next.add(slug);
+      return next;
+    });
+  }
 
   useEffect(() => {
     return () => {
@@ -132,6 +146,11 @@ export function EditCompanionForm({
       className="bg-paper border border-moss/[0.08] rounded-[20px] p-[clamp(1.5rem,3vw,2.25rem)] flex flex-col gap-7"
     >
       <input type="hidden" name="companionId" value={companionId} />
+      <input
+        type="hidden"
+        name="badgesCsv"
+        value={Array.from(selectedBadges).join(',')}
+      />
 
       {state.errors?._form ? (
         <p className="text-terracotta text-sm">{state.errors._form}</p>
@@ -282,6 +301,45 @@ export function EditCompanionForm({
           defaultValue={v('interests')}
           error={state.errors?.interests}
         />
+      </Section>
+
+      <Section title="Internal badges">
+        <p className="text-stone text-[0.875rem] leading-[1.55] -mt-1">
+          Tags for matching and ops notes. Internal only - families do
+          not see these. Tier (Bronze / Silver / Gold) is computed from
+          completed visits and lives on the detail page automatically.
+        </p>
+        {(['skill', 'context', 'language'] as const).map((g) => {
+          const groupBadges = BADGE_CATALOGUE.filter((b) => b.group === g);
+          if (groupBadges.length === 0) return null;
+          return (
+            <div key={g}>
+              <div className="font-body text-[0.65rem] font-medium uppercase tracking-[0.1em] text-stone mb-2">
+                {g === 'skill' ? 'Skills' : g === 'context' ? 'Context / experience' : 'Languages'}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {groupBadges.map((b) => {
+                  const on = selectedBadges.has(b.slug);
+                  return (
+                    <button
+                      key={b.slug}
+                      type="button"
+                      onClick={() => toggleBadge(b.slug)}
+                      className={`inline-flex items-center px-3 py-1 rounded-full border text-[0.8125rem] transition-colors ${
+                        on
+                          ? 'bg-moss text-cream border-moss'
+                          : 'bg-cream text-charcoal border-moss/20 hover:border-moss/40'
+                      }`}
+                      aria-pressed={on}
+                    >
+                      {b.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </Section>
 
       <Section title="Home address">

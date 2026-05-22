@@ -52,6 +52,7 @@ model User {
   assignedCases           SafeguardingCase[]     @relation("CaseAssignedTo")
   caseNotes               SafeguardingCaseNote[]
   rightToWorkVerified     CompanionApplication[] @relation("RightToWorkVerifiedBy")
+  badgesAwarded           CompanionBadge[]       @relation("BadgeAwardedBy")
 
   @@index([email])
   @@index([role])
@@ -820,9 +821,30 @@ model Companion {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
+  badges        CompanionBadge[]
+
   @@index([status])
   @@index([borough, status])
   @@index([dbsRenewalDueAt])
+}
+
+// Internal-only descriptive labels operators attach to a companion -
+// languages spoken, skills, contexts (dementia experience, drives,
+// first-aid trained). Not visible to families. They eventually feed
+// match scoring. Tiers based on visit count are NOT stored here -
+// they are derived live from Visit history.
+model CompanionBadge {
+  id                  String   @id @default(cuid())
+  companionId         String
+  slug                String   // matches a key in lib/badges.ts catalogue
+  awardedAt           DateTime @default(now())
+  awardedByOperatorId String?
+
+  companion   Companion @relation(fields: [companionId], references: [id], onDelete: Cascade)
+  awardedBy   User?     @relation("BadgeAwardedBy", fields: [awardedByOperatorId], references: [id])
+
+  @@unique([companionId, slug])
+  @@index([slug])
 }
 
 enum CompanionApplicationStatus {
