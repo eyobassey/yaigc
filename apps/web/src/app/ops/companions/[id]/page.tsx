@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ChevronLeft, ChevronRight, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowRight, CheckCircle2, FileText, ShieldCheck } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import {
   DAYS,
@@ -12,6 +12,8 @@ import {
 import { ApplicationStatusPill } from '../page';
 import { TransitionPanel } from './TransitionPanel';
 import { TriageNotesForm } from './TriageNotesForm';
+import { RightToWorkPanel } from './RightToWorkPanel';
+import { DocumentList } from './DocumentList';
 
 export const metadata = { title: 'Application' };
 
@@ -27,6 +29,11 @@ export default async function CompanionApplicationDetailPage({
     include: {
       companion: {
         select: { id: true, status: true, borough: true, hourlyRate: true },
+      },
+      rightToWorkVerifiedBy: { select: { firstName: true, lastName: true, email: true } },
+      documents: {
+        where: { archivedAt: null },
+        orderBy: { uploadedAt: 'desc' },
       },
     },
   });
@@ -193,12 +200,47 @@ export default async function CompanionApplicationDetailPage({
           />
 
           <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
+            <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-3 inline-flex items-center gap-2">
+              <ShieldCheck size={14} strokeWidth={1.75} className="text-moss" aria-hidden="true" />
+              Right to work
+            </h2>
+            <RightToWorkPanel
+              applicationId={application.id}
+              attestation={application.rightToWork}
+              type={application.rightToWorkType}
+              shareCode={application.rightToWorkShareCode}
+              expiresAt={application.rightToWorkExpiresAt}
+              dateOfBirth={application.dateOfBirth}
+              verifiedAt={application.rightToWorkVerifiedAt}
+              verifiedBy={application.rightToWorkVerifiedBy}
+              verificationNote={application.rightToWorkVerificationNote}
+            />
+          </section>
+
+          <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
+            <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-3 inline-flex items-center gap-2">
+              <FileText size={14} strokeWidth={1.75} className="text-moss" aria-hidden="true" />
+              Documents ({application.documents.length})
+            </h2>
+            <DocumentList
+              applicationId={application.id}
+              documents={application.documents.map((d) => ({
+                id: d.id,
+                kind: d.kind,
+                filename: d.filename,
+                contentType: d.contentType,
+                sizeBytes: d.sizeBytes,
+                description: d.description,
+                uploadedAt: d.uploadedAt.toISOString(),
+              }))}
+            />
+          </section>
+
+          <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
             <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-3">
-              Compliance signals
+              Other compliance signals
             </h2>
             <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-2 text-[0.875rem]">
-              <dt className="text-stone">Right to work</dt>
-              <dd className="text-charcoal">{application.rightToWork ? 'Confirmed' : 'Not confirmed'}</dd>
               <dt className="text-stone">DBS consent</dt>
               <dd className="text-charcoal">
                 {application.backgroundCheckConsent ? 'Given' : 'Withheld'}

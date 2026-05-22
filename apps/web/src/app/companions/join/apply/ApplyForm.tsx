@@ -58,15 +58,27 @@ export function ApplyForm() {
             error={state.errors?.phone}
           />
         </div>
-        <Field
-          name="postcode"
-          label="Home postcode"
-          required
-          autoComplete="postal-code"
-          defaultValue={state.values?.postcode}
-          error={state.errors?.postcode}
-          hint="We look for South Manchester, Trafford, Stockport, Salford."
-        />
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field
+            name="postcode"
+            label="Home postcode"
+            required
+            autoComplete="postal-code"
+            defaultValue={state.values?.postcode}
+            error={state.errors?.postcode}
+            hint="We look for South Manchester, Trafford, Stockport, Salford."
+          />
+          <Field
+            name="dateOfBirth"
+            type="date"
+            label="Date of birth"
+            required
+            autoComplete="bday"
+            defaultValue={state.values?.dateOfBirth}
+            error={state.errors?.dateOfBirth}
+            hint="Required for the right-to-work check."
+          />
+        </div>
       </Section>
 
       <Section title="When you are free">
@@ -113,10 +125,92 @@ export function ApplyForm() {
         />
       </Section>
 
+      <Section title="Right to work in the UK">
+        <p className="text-stone text-[0.875rem] leading-[1.55] -mt-1">
+          UK law requires us to check this before you can take on visits. We will run the check using the details and document you upload here.
+        </p>
+        <fieldset className="flex flex-col gap-2">
+          <legend className="font-body text-sm font-medium text-stone uppercase tracking-[0.08em] mb-1">
+            Which best matches you{' '}
+            <span aria-hidden="true" className="text-terracotta">*</span>
+          </legend>
+          {[
+            { value: 'british_irish_passport', label: 'British or Irish citizen (passport)' },
+            { value: 'settled_status', label: 'Settled status (EU Settlement Scheme)' },
+            { value: 'pre_settled_status', label: 'Pre-settled status (EU Settlement Scheme)' },
+            { value: 'skilled_worker_visa', label: 'Skilled Worker visa' },
+            { value: 'graduate_visa', label: 'Graduate visa' },
+            { value: 'student_visa', label: 'Student visa (with right to work)' },
+            { value: 'dependant_visa', label: 'Dependant visa' },
+            { value: 'indefinite_leave_to_remain', label: 'Indefinite Leave to Remain' },
+            { value: 'other', label: 'Other (tell us in the box below)' },
+          ].map((opt) => (
+            <label
+              key={opt.value}
+              htmlFor={`rtw-${opt.value}`}
+              className="flex items-start gap-3 cursor-pointer text-charcoal text-[0.9375rem] leading-[1.4] p-3 rounded-md border border-moss/10 hover:border-moss/30 hover:bg-cream-deep/40 transition-colors has-[:checked]:border-moss has-[:checked]:bg-moss/5"
+            >
+              <input
+                id={`rtw-${opt.value}`}
+                type="radio"
+                name="rightToWorkType"
+                value={opt.value}
+                defaultChecked={state.values?.rightToWorkType === opt.value}
+                required
+                className="mt-0.5 w-4 h-4 text-moss focus:ring-moss/30 flex-shrink-0"
+              />
+              <span>{opt.label}</span>
+            </label>
+          ))}
+        </fieldset>
+        {state.errors?.rightToWorkType ? (
+          <p className="text-terracotta text-[0.8125rem]">{state.errors.rightToWorkType}</p>
+        ) : null}
+
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field
+            name="rightToWorkShareCode"
+            label="Share code (if you have one)"
+            defaultValue={state.values?.rightToWorkShareCode}
+            error={state.errors?.rightToWorkShareCode}
+            hint="9 characters, from gov.uk/prove-right-to-work."
+          />
+          <Field
+            name="rightToWorkExpiresAt"
+            type="date"
+            label="Visa expiry (if applicable)"
+            defaultValue={state.values?.rightToWorkExpiresAt}
+            error={state.errors?.rightToWorkExpiresAt}
+            hint="Skip if not on a time-limited visa."
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor="rightToWorkDocs"
+            className="font-body text-sm font-medium text-stone uppercase tracking-[0.08em]"
+          >
+            Upload supporting documents
+          </label>
+          <input
+            id="rightToWorkDocs"
+            type="file"
+            name="rightToWorkDocs"
+            accept="image/jpeg,image/png,application/pdf"
+            multiple
+            className="text-charcoal text-[0.9375rem] file:mr-3 file:rounded-md file:border file:border-moss/20 file:bg-cream file:px-3 file:py-2 file:text-[0.875rem] file:text-moss hover:file:bg-moss hover:file:text-cream file:transition-colors file:cursor-pointer"
+          />
+          <p className="text-stone text-[0.8125rem]">
+            Passport scan, BRP, or the PDF from gov.uk/prove-right-to-work.
+            JPEG, PNG or PDF up to 10MB each. You can also upload later.
+          </p>
+        </div>
+      </Section>
+
       <Section title="Confirmations">
         <Checkbox
           name="rightToWork"
-          label="I have the right to work in the UK."
+          label="I confirm I have the right to work in the UK."
           required
           error={state.errors?.rightToWork}
         />

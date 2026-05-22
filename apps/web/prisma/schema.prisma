@@ -40,17 +40,18 @@ model User {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  accounts          Account[]
-  sessions          Session[]
-  familyMembers     FamilyMember[]
-  companion         Companion?
-  proposedMatches   Match[]                  @relation("MatchProposedBy")
-  endedMatches      Match[]                  @relation("MatchEndedBy")
-  submittedReports  PostVisitReport[]        @relation("ReportSubmittedBy")
-  openedCases       SafeguardingCase[]       @relation("CaseOpenedBy")
-  closedCases       SafeguardingCase[]       @relation("CaseClosedBy")
-  assignedCases     SafeguardingCase[]       @relation("CaseAssignedTo")
-  caseNotes         SafeguardingCaseNote[]
+  accounts                Account[]
+  sessions                Session[]
+  familyMembers           FamilyMember[]
+  companion               Companion?
+  proposedMatches         Match[]                @relation("MatchProposedBy")
+  endedMatches            Match[]                @relation("MatchEndedBy")
+  submittedReports        PostVisitReport[]      @relation("ReportSubmittedBy")
+  openedCases             SafeguardingCase[]     @relation("CaseOpenedBy")
+  closedCases             SafeguardingCase[]     @relation("CaseClosedBy")
+  assignedCases           SafeguardingCase[]     @relation("CaseAssignedTo")
+  caseNotes               SafeguardingCaseNote[]
+  rightToWorkVerified     CompanionApplication[] @relation("RightToWorkVerifiedBy")
 
   @@index([email])
   @@index([role])
@@ -662,15 +663,31 @@ model CompanionApplication {
   whyJoinReason       String @db.Text
   aboutYou            String @db.Text
 
-  rightToWork            Boolean
+  rightToWork            Boolean // self-attestation by applicant
   backgroundCheckConsent Boolean
+
+  // Right-to-work compliance (SDD §5.4). The applicant declares the
+  // type of right they have (UK national, settled, visa, etc.) and
+  // submits supporting evidence (passport scan, BRP, gov.uk share-code
+  // PDF). The operator runs the share code at
+  // gov.uk/view-right-to-work and captures the verification result
+  // below. dateOfBirth is required for the share-code check.
+  dateOfBirth                     DateTime?       @db.Date
+  rightToWorkType                 RightToWorkType?
+  rightToWorkShareCode            String?
+  rightToWorkExpiresAt            DateTime?       @db.Date
+  rightToWorkVerifiedAt           DateTime?
+  rightToWorkVerifiedByOperatorId String?
+  rightToWorkVerificationNote     String?         @db.Text
 
   // Operator pipeline metadata
   triageNotes          String? @db.Text
   declineReason        String? @db.Text
   assignedToOperatorId String?
 
-  companion Companion?
+  companion         Companion?
+  rightToWorkVerifiedBy User?               @relation("RightToWorkVerifiedBy", fields: [rightToWorkVerifiedByOperatorId], references: [id])
+  documents         CompanionDocument[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -678,6 +695,58 @@ model CompanionApplication {
 
   @@index([status, createdAt(sort: Desc)])
   @@index([email])
+  @@index([rightToWorkVerifiedAt])
+}
+
+// CompanionDocument — uploaded evidence for right-to-work, DBS, and
+// other compliance artefacts. Lives on the application so a single FK
+// covers both pre-approval (file uploaded at intake) and post-approval
+// (Companion uploads a replacement after expiry). Files are stored in
+// S3 under companion-documents/<applicationId>/<filename>; bucket is
+// private and the /api/companion-documents/[id] route auth-gates each
+// fetch to operator + the owning companion.
+model CompanionDocument {
+  id                  String                @id @default(cuid())
+  companionApplicationId String
+  kind                CompanionDocumentKind
+  filename            String                // server-generated; original client filename discarded
+  contentType         String
+  sizeBytes           Int
+  description         String?               @db.Text
+  uploadedAt          DateTime              @default(now())
+  uploadedByActorType ActorType
+  uploadedByActorId   String?
+  // Soft delete - operator-controlled. Audit trail rules out hard delete.
+  archivedAt          DateTime?
+  archivedByOperatorId String?
+  archivedReason      String?               @db.Text
+
+  application CompanionApplication @relation(fields: [companionApplicationId], references: [id], onDelete: Cascade)
+
+  @@index([companionApplicationId, uploadedAt(sort: Desc)])
+  @@index([kind, uploadedAt(sort: Desc)])
+}
+
+enum RightToWorkType {
+  british_irish_passport
+  settled_status
+  pre_settled_status
+  skilled_worker_visa
+  graduate_visa
+  student_visa
+  dependant_visa
+  indefinite_leave_to_remain
+  other
+}
+
+enum CompanionDocumentKind {
+  passport
+  brp                  // Biometric Residence Permit
+  share_code_pdf
+  visa_letter
+  ilr_document
+  dbs_certificate
+  other
 }
 
 model Companion {
