@@ -361,9 +361,25 @@ export async function sendMessage(
     originalFilename: a.originalFilename,
   }));
 
-  const recipientUserIds = isDirect
-    ? [thread.familyUserId!, thread.companionUserId!]
-    : [thread.operatorId!, thread.partyId!];
+  let recipientUserIds: string[];
+  if (isDirect) {
+    // M.2.4: ops oversight subscribers. Any operator_admin sitting on
+    // the /ops/messages oversight tab gets the new message live in
+    // their WebSocket stream alongside the two participants.
+    const adminIds = await prisma.user.findMany({
+      where: { role: 'operator_admin', deletedAt: null },
+      select: { id: true },
+    });
+    recipientUserIds = Array.from(
+      new Set<string>([
+        thread.familyUserId!,
+        thread.companionUserId!,
+        ...adminIds.map((u) => u.id),
+      ]),
+    );
+  } else {
+    recipientUserIds = [thread.operatorId!, thread.partyId!];
+  }
 
   await publishMessageToUsers(recipientUserIds, {
     kind: 'message',
@@ -434,6 +450,7 @@ export async function sendMessage(
   revalidatePath(`/ops/messages/${thread.id}`);
   revalidatePath(`/family/messages/${thread.id}`);
   revalidatePath(`/companion/messages/${thread.id}`);
+  revalidatePath('/ops/messages');
   revalidatePath('/family/messages');
   revalidatePath('/companion/messages');
   return { ok: true };

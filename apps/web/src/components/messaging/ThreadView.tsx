@@ -90,6 +90,11 @@ interface Props {
   otherPartyLabel: string;
   currentUserId: string;
   messages: MessageRow[];
+  // M.2.4: ops oversight surface. When true, render the messages
+  // (incl. live WS updates) but hide the composer entirely. The
+  // ops_admin role uses this to monitor direct threads without
+  // posting into them.
+  readOnly?: boolean;
 }
 
 export function ThreadView({
@@ -97,6 +102,7 @@ export function ThreadView({
   otherPartyLabel,
   currentUserId,
   messages: initialMessages,
+  readOnly = false,
 }: Props) {
   const [state, action] = useFormState(sendMessage, initial);
   const [live, setLive] = useState<MessageRow[]>([]);
@@ -386,6 +392,11 @@ export function ThreadView({
         )}
       </ul>
 
+      {readOnly ? (
+        <p className="text-stone text-[0.8125rem] italic">
+          Read-only view. You are not a participant in this thread.
+        </p>
+      ) : (
       <form
         ref={formRef}
         action={action}
@@ -511,6 +522,7 @@ export function ThreadView({
           <SubmitButton disabled={anyUploading} />
         </div>
       </form>
+      )}
     </div>
   );
 }
