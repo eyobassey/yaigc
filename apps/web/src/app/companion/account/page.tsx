@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma';
 import { requireCompanion } from '@/lib/auth-helpers';
 import { signOut } from '@/lib/auth';
 import { PasswordSection } from '@/components/account/PasswordSection';
+import { PasskeySection } from '@/components/account/PasskeySection';
+import { listUserPasskeys } from '@/lib/passkey';
 
 export const metadata = { title: 'Account' };
 
@@ -48,7 +50,7 @@ export default async function CompanionAccountPage() {
   // columns that aren't on requireCompanion's narrower context.
   // Also fetch the most recent sign-in from the audit log (Auth.js
   // writes actionType=auth on every magic-link callback).
-  const [full, lastSignIn, passwordInfo] = await Promise.all([
+  const [full, lastSignIn, passwordInfo, passkeys] = await Promise.all([
     prisma.companion.findUnique({
       where: { id: companion.id },
       select: {
@@ -75,6 +77,7 @@ export default async function CompanionAccountPage() {
       where: { id: user.id },
       select: { passwordHash: true, passwordSetAt: true },
     }),
+    listUserPasskeys(user.id),
   ]);
 
   const joinedAt = full?.user.createdAt ?? full?.createdAt ?? null;
@@ -182,6 +185,17 @@ export default async function CompanionAccountPage() {
         passwordSetAt={
           passwordInfo?.passwordSetAt ? passwordInfo.passwordSetAt.toISOString() : null
         }
+      />
+
+      <PasskeySection
+        passkeys={passkeys.map((p) => ({
+          id: p.id,
+          nickname: p.nickname,
+          credentialDeviceType: p.credentialDeviceType,
+          credentialBackedUp: p.credentialBackedUp,
+          createdAt: p.createdAt.toISOString(),
+          lastUsedAt: p.lastUsedAt ? p.lastUsedAt.toISOString() : null,
+        }))}
       />
 
       <section className="bg-cream-deep/40 border border-moss/[0.08] rounded-[12px] p-5 sm:p-6 mb-6">

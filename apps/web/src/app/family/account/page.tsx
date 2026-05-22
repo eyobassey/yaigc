@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma';
 import { requireFamilyMember } from '@/lib/auth-helpers';
 import { AccountForm } from './AccountForm';
 import { PasswordSection } from '@/components/account/PasswordSection';
+import { PasskeySection } from '@/components/account/PasskeySection';
+import { listUserPasskeys } from '@/lib/passkey';
 
 export const metadata = { title: 'Account' };
 
@@ -31,7 +33,7 @@ export default async function FamilyAccountPage({
   // Latest sign-in for this user (audit log is the source of truth -
   // Auth.js logs every successful magic-link callback as actionType=auth,
   // metadata.event=sign_in).
-  const [lastSignIn, otherMembers, passwordInfo] = await Promise.all([
+  const [lastSignIn, otherMembers, passwordInfo, passkeys] = await Promise.all([
     prisma.auditLogEntry.findFirst({
       where: {
         actorType: 'user',
@@ -50,6 +52,7 @@ export default async function FamilyAccountPage({
       where: { id: user.id },
       select: { passwordHash: true, passwordSetAt: true },
     }),
+    listUserPasskeys(user.id),
   ]);
 
   return (
@@ -179,6 +182,16 @@ export default async function FamilyAccountPage({
               ? passwordInfo.passwordSetAt.toISOString()
               : null
           }
+        />
+        <PasskeySection
+          passkeys={passkeys.map((p) => ({
+            id: p.id,
+            nickname: p.nickname,
+            credentialDeviceType: p.credentialDeviceType,
+            credentialBackedUp: p.credentialBackedUp,
+            createdAt: p.createdAt.toISOString(),
+            lastUsedAt: p.lastUsedAt ? p.lastUsedAt.toISOString() : null,
+          }))}
         />
       </div>
     </div>

@@ -42,6 +42,10 @@ model User {
   passwordHash  String?
   passwordSetAt DateTime?
 
+  // Passkeys (P.2). A user can register multiple authenticators
+  // (iPhone, work laptop, hardware key) and use any to sign in.
+  authenticators Authenticator[]
+
   // Audit
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -63,6 +67,44 @@ model User {
 
   @@index([email])
   @@index([role])
+}
+
+// Passkey / WebAuthn authenticator. One row per registered credential.
+// Aligns with simplewebauthn's PublicKeyCredential shape: credentialID
+// is the binary credential identifier returned by the device; counter
+// is the signature counter we track for replay detection.
+model Authenticator {
+  id                   String    @id @default(cuid())
+  userId               String
+  // Stored as base64url text so we can use it in @@unique without
+  // running into Postgres bytea index quirks.
+  credentialID         String    @unique
+  credentialPublicKey  Bytes
+  counter              BigInt    @default(0)
+  credentialDeviceType String    // 'singleDevice' | 'multiDevice'
+  credentialBackedUp   Boolean
+  transports           String?   // CSV: usb,ble,nfc,internal,hybrid
+  nickname             String?   // user-given name e.g. "iPhone"
+  createdAt            DateTime  @default(now())
+  lastUsedAt           DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Short-lived challenge for WebAuthn registration + authentication.
+// Single-use, single TTL (~5 min). Cleaned up on verify or expiry.
+model WebAuthnChallenge {
+  id        String   @id @default(cuid())
+  challenge String   @unique
+  userId    String?  // set for registration; may be null for auth before email known
+  email     String?  // captured for auth flow when user typed email
+  purpose   String   // 'registration' | 'authentication'
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
 }
 
 model Account {

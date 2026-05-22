@@ -6,6 +6,8 @@ import { getSessionUser, defaultLandingForRole } from '@/lib/auth-helpers';
 import { PageShell } from '@/components/marketing/PageShell';
 import { Button } from '@/components/ui/Button';
 import { PasswordSection } from '@/components/account/PasswordSection';
+import { PasskeySection } from '@/components/account/PasskeySection';
+import { listUserPasskeys } from '@/lib/passkey';
 
 // /me is the post-sign-in router. Magic-link sign-ins land here when no
 // explicit callbackUrl was given, and we forward them to the portal that
@@ -30,10 +32,13 @@ export default async function MePage() {
     redirect(landing);
   }
 
-  const passwordInfo = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: { passwordHash: true, passwordSetAt: true },
-  });
+  const [passwordInfo, passkeys] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: user.id },
+      select: { passwordHash: true, passwordSetAt: true },
+    }),
+    listUserPasskeys(user.id),
+  ]);
 
   return (
     <PageShell>
@@ -69,6 +74,16 @@ export default async function MePage() {
                   ? passwordInfo.passwordSetAt.toISOString()
                   : null
               }
+            />
+            <PasskeySection
+              passkeys={passkeys.map((p) => ({
+                id: p.id,
+                nickname: p.nickname,
+                credentialDeviceType: p.credentialDeviceType,
+                credentialBackedUp: p.credentialBackedUp,
+                createdAt: p.createdAt.toISOString(),
+                lastUsedAt: p.lastUsedAt ? p.lastUsedAt.toISOString() : null,
+              }))}
             />
           </div>
 

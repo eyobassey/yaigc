@@ -16,6 +16,8 @@
     "@igc/design-tokens": "workspace:*",
     "@node-rs/argon2": "^2.0.2",
     "@prisma/client": "^6.19.3",
+    "@simplewebauthn/browser": "^13.3.0",
+    "@simplewebauthn/server": "^13.3.0",
     "lucide-react": "^1.16.0",
     "next": "14.2.18",
     "next-auth": "5.0.0-beta.31",

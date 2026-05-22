@@ -1,9 +1,13 @@
 'use client';
 
 import { useFormState, useFormStatus } from 'react-dom';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Fingerprint } from 'lucide-react';
+import {
+  startAuthentication,
+  browserSupportsWebAuthn,
+} from '@simplewebauthn/browser';
 import {
   signInWithPassword,
   type SignInState,
@@ -21,6 +25,54 @@ export function SignInForm({ callbackUrl, sendMagicLink }: Props) {
   const [mode, setMode] = useState<'password' | 'magic'>('password');
   const [showPassword, setShowPassword] = useState(false);
   const [state, action] = useFormState(signInWithPassword, initial);
+  const [passkeySupported, setPasskeySupported] = useState<boolean | null>(null);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+  const [passkeyError, setPasskeyError] = useState<string | null>(null);
+  const [email, setEmail] = useState(state.values?.email ?? '');
+
+  useEffect(() => {
+    setPasskeySupported(browserSupportsWebAuthn());
+  }, []);
+
+  async function handlePasskeySignIn() {
+    setPasskeyError(null);
+    setPasskeyBusy(true);
+    try {
+      const optsRes = await fetch('/api/auth/webauthn/authentication/options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email || undefined }),
+      });
+      if (!optsRes.ok) throw new Error('Could not start passkey sign-in.');
+      const options = await optsRes.json();
+
+      const assertion = await startAuthentication({ optionsJSON: options });
+
+      const verifyRes = await fetch('/api/auth/webauthn/authentication/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ response: assertion, redirectTo: callbackUrl }),
+      });
+      const body = await verifyRes.json().catch(() => ({}));
+      if (!verifyRes.ok || !body.ok) {
+        throw new Error(body.error || 'Could not verify the passkey.');
+      }
+      window.location.href = body.redirectTo || callbackUrl;
+    } catch (err) {
+      if (
+        err instanceof DOMException &&
+        ['AbortError', 'NotAllowedError'].includes(err.name)
+      ) {
+        // User cancelled or no eligible credential. Quiet.
+        setPasskeyBusy(false);
+        return;
+      }
+      const message =
+        err instanceof Error ? err.message : 'Could not sign in with a passkey.';
+      setPasskeyError(message);
+      setPasskeyBusy(false);
+    }
+  }
 
   if (mode === 'magic') {
     return (
@@ -76,9 +128,10 @@ export function SignInForm({ callbackUrl, sendMagicLink }: Props) {
             type="email"
             name="email"
             required
-            autoComplete="email"
+            autoComplete="email webauthn"
             placeholder="you@example.com"
-            defaultValue={state.values?.email}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             className="bg-paper border border-moss/15 rounded-lg px-4 py-3 text-charcoal text-base placeholder:text-stone/60 focus:border-moss focus:outline-none focus:ring-2 focus:ring-moss/20"
           />
         </label>
@@ -131,6 +184,29 @@ export function SignInForm({ callbackUrl, sendMagicLink }: Props) {
           </Link>
         </div>
       </form>
+
+      {passkeySupported ? (
+        <div className="mt-6 pt-6 border-t border-moss/10">
+          <p className="text-stone text-[0.875rem] mb-3">
+            Already set up a passkey? Use Face ID / Touch ID / Windows Hello
+            / your security key.
+          </p>
+          {passkeyError ? (
+            <p className="bg-terracotta/10 border-l-4 border-terracotta px-4 py-3 rounded-r text-[0.9375rem] text-charcoal mb-3">
+              {passkeyError}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            onClick={handlePasskeySignIn}
+            disabled={passkeyBusy}
+            className="inline-flex items-center gap-2 font-body text-[0.9375rem] text-moss border border-moss/30 hover:bg-moss/5 disabled:opacity-60 rounded-full px-5 py-2.5 transition-colors"
+          >
+            <Fingerprint size={16} strokeWidth={1.75} aria-hidden="true" />
+            {passkeyBusy ? 'Waiting for your device…' : 'Sign in with a passkey'}
+          </button>
+        </div>
+      ) : null}
 
       <p className="mt-8 text-sm text-stone leading-[1.55]">
         Not signed up yet? Use the{' '}
