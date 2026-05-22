@@ -66,6 +66,8 @@ model User {
   badgesAwarded           CompanionBadge[]       @relation("BadgeAwardedBy")
   threadsAsOperator       Thread[]               @relation("ThreadsAsOperator")
   threadsAsParty          Thread[]               @relation("ThreadsAsParty")
+  directThreadsAsFamily    Thread[]              @relation("DirectThreadsAsFamily")
+  directThreadsAsCompanion Thread[]              @relation("DirectThreadsAsCompanion")
   messagesSent            Message[]
   attachmentsUploaded     MessageAttachment[]    @relation("AttachmentUploadedBy")
 
@@ -836,6 +838,14 @@ model Companion {
   availability         Json?
   maxConcurrentMatches Int  @default(4)
 
+  // M.2 - operator_admin gate for direct family <-> companion messaging.
+  // When false (default), the companion cannot be reached outside the
+  // operator-mediated thread. When true, every active/accepted Match
+  // unlocks a FAMILY_COMPANION thread between this companion's User
+  // record and the family_payer User on the other side of the match.
+  // Ops retains full read access to every direct thread.
+  directMessagingEnabled Boolean @default(false)
+
   // Compliance documents. dbsCertificateNumber stored as TEXT for now;
   // app-layer access gating only. DB-layer encryption is Stage O.6.2.
   dbsCertificateNumber String?
@@ -894,28 +904,60 @@ model Companion {
 // companion threads; the operator is always in the loop. Per-side
 // lastReadAt and lastNotifiedAt drive unread badges and the 5-minute
 // email-debounce.
+// M.2.1 - Threads come in three flavours, distinguished by `kind`:
+//   OPS_FAMILY        operator <-> family_member user      (M.1)
+//   OPS_COMPANION     operator <-> companion user          (M.1)
+//   FAMILY_COMPANION  family_member <-> companion user     (M.2)
+// The two participant pairs (operatorId/partyId vs familyUserId/companionUserId)
+// are mutually exclusive: operator-mediated threads use the first pair,
+// direct threads use the second. Prisma can't express that invariant in
+// the DSL, so it lives in messaging.ts on every read/write path.
 model Thread {
-  id            String   @id @default(cuid())
+  id            String     @id @default(cuid())
+  kind          ThreadKind
   subject       String?
-  operatorId    String
-  partyId       String
-  partyRole     String   // 'family_member' | 'companion' snapshot
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  lastMessageAt DateTime @default(now())
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  lastMessageAt DateTime   @default(now())
 
-  operatorLastReadAt    DateTime?
-  partyLastReadAt       DateTime?
-  operatorLastNotifiedAt DateTime?
-  partyLastNotifiedAt    DateTime?
+  // Operator-mediated participants (kind = OPS_FAMILY | OPS_COMPANION).
+  operatorId String?
+  partyId    String?
+  partyRole  String? // 'family_member' | 'companion' snapshot
 
-  operator    User                @relation("ThreadsAsOperator", fields: [operatorId], references: [id])
-  party       User                @relation("ThreadsAsParty",   fields: [partyId],    references: [id])
-  messages    Message[]
-  attachments MessageAttachment[] @relation("ThreadAttachments")
+  // Direct-thread participants (kind = FAMILY_COMPANION).
+  familyUserId    String?
+  companionUserId String?
 
+  // Per-side read + email-notification timestamps. The participant pair
+  // not in use for a given thread leaves its timestamps NULL.
+  operatorLastReadAt      DateTime?
+  partyLastReadAt         DateTime?
+  operatorLastNotifiedAt  DateTime?
+  partyLastNotifiedAt     DateTime?
+  familyLastReadAt        DateTime?
+  companionLastReadAt     DateTime?
+  familyLastNotifiedAt    DateTime?
+  companionLastNotifiedAt DateTime?
+
+  operator      User?               @relation("ThreadsAsOperator",        fields: [operatorId],      references: [id])
+  party         User?               @relation("ThreadsAsParty",           fields: [partyId],         references: [id])
+  familyUser    User?               @relation("DirectThreadsAsFamily",    fields: [familyUserId],    references: [id])
+  companionUser User?               @relation("DirectThreadsAsCompanion", fields: [companionUserId], references: [id])
+  messages      Message[]
+  attachments   MessageAttachment[] @relation("ThreadAttachments")
+
+  @@index([kind])
   @@index([operatorId, lastMessageAt(sort: Desc)])
   @@index([partyId, lastMessageAt(sort: Desc)])
+  @@index([familyUserId, lastMessageAt(sort: Desc)])
+  @@index([companionUserId, lastMessageAt(sort: Desc)])
+}
+
+enum ThreadKind {
+  OPS_FAMILY
+  OPS_COMPANION
+  FAMILY_COMPANION
 }
 
 model Message {

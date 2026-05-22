@@ -40,7 +40,7 @@ export default async function OpsThreadDetailPage({
       },
     },
   });
-  if (!thread) notFound();
+  if (!thread || !thread.party) notFound();
 
   // Mark read as soon as the operator opens the thread.
   await markThreadRead(thread.id);

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { MessageSquare, ChevronRight, Plus } from 'lucide-react';
+import { ThreadKind } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireOperator } from '@/lib/auth-helpers';
 import { Paginator } from '@/components/ui/Paginator';
@@ -27,9 +28,13 @@ export default async function OpsMessagesPage({
   await requireOperator('/ops/messages');
   const state = parsePagination(searchParams, { pageSize: 25 });
 
+  // M.2.1: this list is operator-mediated threads only. Direct
+  // FAMILY_COMPANION threads land on the oversight tab in M.2.4.
+  const opsKindFilter = { kind: { in: [ThreadKind.OPS_FAMILY, ThreadKind.OPS_COMPANION] } };
   const [total, threads] = await Promise.all([
-    prisma.thread.count(),
+    prisma.thread.count({ where: opsKindFilter }),
     prisma.thread.findMany({
+      where: opsKindFilter,
       orderBy: { lastMessageAt: 'desc' },
       skip: state.skip,
       take: state.pageSize,
@@ -86,9 +91,12 @@ export default async function OpsMessagesPage({
                 last && (!t.operatorLastReadAt || last.createdAt > t.operatorLastReadAt)
                   ? last.senderId !== t.operatorId
                   : false;
+              // party is non-null by construction (kind filter above
+              // restricts to OPS_* threads, which always have a party).
+              const party = t.party!;
               const partyName =
-                [t.party.firstName, t.party.lastName].filter(Boolean).join(' ') ||
-                t.party.email;
+                [party.firstName, party.lastName].filter(Boolean).join(' ') ||
+                party.email;
               return (
                 <li key={t.id}>
                   <Link

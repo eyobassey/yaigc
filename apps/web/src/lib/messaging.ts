@@ -97,8 +97,15 @@ export async function createThread(
     };
   }
 
+  // M.2.1: every thread now carries a kind. createThread is the
+  // operator-mediated entry point, so the kind is derived from the
+  // party's role on the other side. FAMILY_COMPANION threads are
+  // created elsewhere (M.2.3).
+  const kind = partyRole === 'companion' ? 'OPS_COMPANION' : 'OPS_FAMILY';
+
   const thread = await prisma.thread.create({
     data: {
+      kind,
       subject: d.subject ?? null,
       operatorId: actor.id,
       partyId: party.id,
@@ -225,6 +232,16 @@ export async function sendMessage(
     },
   });
   if (!thread) return { ok: false, error: 'Thread not found.' };
+  // M.2.1: this path handles operator-mediated threads only. Direct
+  // FAMILY_COMPANION threads land here once M.2.3 ships and will be
+  // routed via a dedicated send path. Until then, refuse early so the
+  // operator-mediated invariants below hold.
+  if (thread.kind === 'FAMILY_COMPANION') {
+    return { ok: false, error: 'Direct messaging is not available on this thread yet.' };
+  }
+  if (!thread.operator || !thread.party || !thread.operatorId || !thread.partyId || !thread.partyRole) {
+    return { ok: false, error: 'Thread is in an inconsistent state.' };
+  }
   if (thread.party.deletedAt) {
     return { ok: false, error: 'The other party is no longer available.' };
   }

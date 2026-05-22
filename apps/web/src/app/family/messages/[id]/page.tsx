@@ -38,7 +38,7 @@ export default async function FamilyThreadDetailPage({
       },
     },
   });
-  if (!thread || thread.partyId !== user.id) notFound();
+  if (!thread || thread.partyId !== user.id || !thread.operator) notFound();
 
   await markThreadRead(thread.id);
 
