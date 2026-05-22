@@ -6,6 +6,11 @@ import {
   type EditRecipientState,
 } from '@/lib/family-portal';
 import {
+  CANONICAL_INTERESTS,
+  parseStoredInterests,
+  tagToFormKey,
+} from '@/lib/recipient-interests';
+import {
   Field,
   TextArea,
   Section,
@@ -52,6 +57,8 @@ export function EditForm({
     if (typeof original === 'boolean') return undefined;
     return original ?? undefined;
   };
+
+  const parsed = parseStoredInterests(recipient.interests);
 
   return (
     <form action={action} noValidate className="flex flex-col gap-6">
@@ -151,17 +158,47 @@ export function EditForm({
       </Section>
 
       <Section
+        title="Interests"
+        description="Pick whatever sounds right; add anything else at the bottom. This helps the companion arrive with something to talk about."
+      >
+        <fieldset>
+          <legend className="sr-only">Common interests</legend>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {CANONICAL_INTERESTS.map((tag) => {
+              const key = tagToFormKey(tag);
+              return (
+                <label
+                  key={tag}
+                  htmlFor={`interest-${key}`}
+                  className="flex items-start gap-2 cursor-pointer text-charcoal text-[0.875rem] leading-[1.3] p-2.5 rounded-md border border-moss/10 hover:border-moss/30 hover:bg-cream-deep/40 transition-colors has-[:checked]:border-moss has-[:checked]:bg-moss/5"
+                >
+                  <input
+                    id={`interest-${key}`}
+                    type="checkbox"
+                    name={`interest_${key}`}
+                    defaultChecked={parsed.selectedTags.has(tag)}
+                    className="mt-0.5 w-4 h-4 rounded border-moss/30 text-moss focus:ring-moss/30 flex-shrink-0"
+                  />
+                  <span>{tag}</span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+        <TextArea
+          name="interestsOther"
+          label="Anything else (free text)"
+          rows={2}
+          defaultValue={state.values?.interestsOther ?? parsed.other}
+          error={state.errors?.interestsOther}
+          hint="Specific groups, programmes, songs, places, anything personal that does not fit the boxes above."
+        />
+      </Section>
+
+      <Section
         title="Helping the companion know them"
         description="Everything here is shared with the companion before they visit. Skip anything that does not feel relevant."
       >
-        <TextArea
-          name="interests"
-          label="Interests"
-          rows={2}
-          defaultValue={v('interests')}
-          error={state.errors?.interests}
-          hint="Things they enjoy talking about, hobbies, music, places."
-        />
         <TextArea
           name="thingsToKnow"
           label="Things to know"

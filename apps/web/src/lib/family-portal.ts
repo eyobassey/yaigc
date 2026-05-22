@@ -6,6 +6,11 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
 import { requireFamilyPayer } from '@/lib/auth-helpers';
+import {
+  CANONICAL_INTERESTS,
+  serialiseInterests,
+  tagToFormKey,
+} from '@/lib/recipient-interests';
 
 // -------------------------------------------------------------------------
 // EDIT RECIPIENT (family-side)
@@ -29,7 +34,7 @@ const EditRecipientSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD.')
     .optional()
     .or(z.literal('').transform(() => undefined)),
-  interests: z.string().trim().max(2000).optional(),
+  interestsOther: z.string().trim().max(2000).optional(),
   thingsToKnow: z.string().trim().max(2000).optional(),
   mobility: z.string().trim().max(2000).optional(),
   healthNotes: z.string().trim().max(2000).optional(),
@@ -69,7 +74,7 @@ export async function editFamilyRecipient(
     'pronouns',
     'phone',
     'dateOfBirth',
-    'interests',
+    'interestsOther',
     'thingsToKnow',
     'mobility',
     'healthNotes',
@@ -82,6 +87,13 @@ export async function editFamilyRecipient(
     'consentEvidence',
   ]) {
     raw[key] = String(formData.get(key) ?? '').trim() || undefined;
+  }
+  // Collect ticked interest tags via interest_<key> checkboxes.
+  const selectedTags = new Set<string>();
+  for (const tag of CANONICAL_INTERESTS) {
+    if (formData.get(`interest_${tagToFormKey(tag)}`) === 'on') {
+      selectedTags.add(tag);
+    }
   }
   // Checkboxes come back as 'on' or absent.
   raw.consentToVisits = formData.get('consentToVisits') === 'on' ? 'on' : undefined;
@@ -128,6 +140,7 @@ export async function editFamilyRecipient(
     consentToPhotos: d.consentToPhotos === 'on',
     consentToReportSharing: d.consentToReportSharing === 'on',
   };
+  const interestsCombined = serialiseInterests(selectedTags, d.interestsOther);
   const update: Record<string, unknown> = {
     firstName: d.firstName,
     lastName: d.lastName,
@@ -135,7 +148,7 @@ export async function editFamilyRecipient(
     pronouns: d.pronouns ?? null,
     phone: d.phone ?? null,
     dateOfBirth: d.dateOfBirth ? new Date(`${d.dateOfBirth}T00:00:00.000Z`) : null,
-    interests: d.interests ?? null,
+    interests: interestsCombined || null,
     thingsToKnow: d.thingsToKnow ?? null,
     mobility: d.mobility ?? null,
     healthNotes: d.healthNotes ?? null,
