@@ -7,7 +7,7 @@ import { createTransport } from 'nodemailer';
 import { brand } from '@igc/content';
 import { prisma } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
-import { getSessionUser } from '@/lib/auth-helpers';
+import { getSessionUser, requireCompanion } from '@/lib/auth-helpers';
 import {
   postVisitReportToFamilyHtml,
   postVisitReportToFamilyText,
@@ -377,4 +377,203 @@ async function sendFamilySummaryEmail(reportId: string): Promise<void> {
       data: { deliveredToFamilyAt: new Date() },
     });
   }
+}
+
+// -------------------------------------------------------------------------
+// COMPANION SELF-SUBMIT path. Mirrors submitPostVisitReport above but
+// authenticates via requireCompanion + scope-checks the visit. The
+// submittedByOperatorId column stays NULL so the report card on the
+// operator/family side can read "submitted by the companion" rather
+// than "submitted on behalf".
+// -------------------------------------------------------------------------
+
+export async function submitPostVisitReportByCompanion(
+  _prev: SubmitReportState,
+  formData: FormData,
+): Promise<SubmitReportState> {
+  const { user, companion } = await requireCompanion(
+    `/companion/visits/${String(formData.get('visitId') ?? '')}/report`,
+  );
+
+  const raw = {
+    visitId: String(formData.get('visitId') ?? ''),
+    actualDurationMinutes: String(formData.get('actualDurationMinutes') ?? ''),
+    whatHappened: String(formData.get('whatHappened') ?? '').trim(),
+    howWereThey: String(formData.get('howWereThey') ?? ''),
+    howWereTheyNote: String(formData.get('howWereTheyNote') ?? '').trim() || undefined,
+    thingsToFlag: String(formData.get('thingsToFlag') ?? '').trim() || undefined,
+  };
+
+  const parsed = SubmitSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      errors: Object.fromEntries(
+        parsed.error.issues.flatMap((i) => {
+          const k = i.path[0];
+          return typeof k === 'string' ? [[k, i.message]] : [];
+        }),
+      ),
+      values: raw,
+    };
+  }
+  const d = parsed.data;
+
+  const rawPhotos = formData
+    .getAll('photos')
+    .filter((p): p is File => p instanceof File && p.size > 0);
+  const photoConsent = formData.get('recipientConsentForPhotos') === 'on';
+  if (rawPhotos.length > MAX_PHOTOS_PER_REPORT) {
+    return {
+      ok: false,
+      errors: { photos: `Max ${MAX_PHOTOS_PER_REPORT} photos per report.` },
+      values: raw,
+    };
+  }
+  if (rawPhotos.length > 0 && !photoConsent) {
+    return {
+      ok: false,
+      errors: {
+        recipientConsentForPhotos:
+          'Confirm the recipient consented to these photos being shared with the family.',
+      },
+      values: raw,
+    };
+  }
+
+  // Scope: the visit must belong to this companion, must be 'completed',
+  // and must not already have a report.
+  const before = await prisma.visit.findUnique({
+    where: { id: d.visitId },
+    select: {
+      state: true,
+      companionId: true,
+      familyId: true,
+      subscriptionId: true,
+      report: { select: { id: true } },
+    },
+  });
+  if (!before || before.companionId !== companion.id) {
+    return { ok: false, errors: { _form: 'Visit not found.' }, values: raw };
+  }
+  if (before.state !== 'completed') {
+    return {
+      ok: false,
+      errors: { _form: 'Only completed visits accept a report.' },
+      values: raw,
+    };
+  }
+  if (before.report) {
+    return {
+      ok: false,
+      errors: { _form: 'This visit already has a report.' },
+      values: raw,
+    };
+  }
+
+  const report = await prisma.$transaction(async (tx) => {
+    const r = await tx.postVisitReport.create({
+      data: {
+        visitId: d.visitId,
+        companionId: companion.id,
+        actualDurationMinutes: d.actualDurationMinutes,
+        whatHappened: d.whatHappened,
+        howWereThey: d.howWereThey,
+        howWereTheyNote: d.howWereTheyNote ?? null,
+        thingsToFlag: d.thingsToFlag ?? null,
+        // submittedByOperatorId stays NULL - this is self-submitted.
+      },
+    });
+    await tx.visit.update({
+      where: { id: d.visitId },
+      data: { state: 'reported', stateChangedAt: new Date() },
+    });
+    return r;
+  });
+
+  const savedFiles: SavedPhoto[] = [];
+  try {
+    for (const file of rawPhotos) {
+      const saved = await savePhoto(report.id, file);
+      savedFiles.push(saved);
+    }
+    if (savedFiles.length > 0) {
+      await prisma.$transaction(
+        savedFiles.map((s) =>
+          prisma.postVisitReportPhoto.create({
+            data: {
+              postVisitReportId: report.id,
+              filename: s.filename,
+              contentType: s.contentType,
+              sizeBytes: s.sizeBytes,
+              recipientConsentConfirmed: true,
+            },
+          }),
+        ),
+      );
+    }
+  } catch (err) {
+    for (const s of savedFiles) {
+      await deletePhotoFile(report.id, s.filename);
+    }
+    if (err instanceof PhotoValidationError) {
+      return { ok: false, errors: { photos: err.message }, values: raw };
+    }
+    console.error('[report] companion photo persistence failed', {
+      reportId: report.id,
+      err,
+    });
+  }
+
+  await audit({
+    actorType: 'user',
+    actorId: user.id,
+    actorRole: user.role,
+    actionType: 'create',
+    targetType: 'PostVisitReport',
+    targetId: report.id,
+    afterState: {
+      visitId: d.visitId,
+      howWereThey: d.howWereThey,
+      actualDurationMinutes: d.actualDurationMinutes,
+      hasThingsToFlag: Boolean(d.thingsToFlag),
+    },
+    metadata: {
+      event: 'post_visit_report_submitted',
+      via: 'companion_portal',
+      ...(d.thingsToFlag ? { safeguardingHook: true } : {}),
+    },
+  });
+
+  await audit({
+    actorType: 'system',
+    actorId: null,
+    actionType: 'state_change',
+    targetType: 'Visit',
+    targetId: d.visitId,
+    beforeState: { state: 'completed' },
+    afterState: { state: 'reported' },
+    metadata: { event: 'visit_state_change', via: 'report_submission' },
+  });
+
+  await sendFamilySummaryEmail(report.id);
+
+  if (d.thingsToFlag) {
+    try {
+      const { openCaseFromReport } = await import('@/lib/safeguarding');
+      await openCaseFromReport(report.id);
+    } catch (err) {
+      console.error('[report] safeguarding hook failed', { reportId: report.id, err });
+    }
+  }
+
+  revalidatePath('/companion');
+  revalidatePath('/companion/visits');
+  revalidatePath(`/companion/visits/${d.visitId}`);
+  revalidatePath('/ops');
+  revalidatePath('/ops/visits');
+  revalidatePath(`/ops/visits/${d.visitId}`);
+  revalidatePath(`/ops/subscriptions/${before.subscriptionId}`);
+  revalidatePath(`/ops/families/${before.familyId}`);
+  redirect(`/companion/visits/${d.visitId}`);
 }

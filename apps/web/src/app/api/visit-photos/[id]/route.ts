@@ -3,8 +3,10 @@ import { prisma } from '@/lib/prisma';
 import { getSessionUser, isOperator } from '@/lib/auth-helpers';
 import { readPhotoBytes } from '@/lib/visit-photo-storage';
 
-// Auth-gated photo streaming. Two paths in:
+// Auth-gated photo streaming. Three paths in:
 //   - Operators always allowed (safeguarding triage trumps consent).
+//   - The assigned companion always allowed for their own photos
+//     (they uploaded them; they see them back).
 //   - Family members of the visit's family allowed, but only when the
 //     recipient consented to report sharing - matches the rule we use
 //     for the post-visit-report family email.
@@ -28,6 +30,7 @@ export async function GET(
           visit: {
             select: {
               familyId: true,
+              companion: { select: { userId: true } },
               recipient: { select: { consentToReportSharing: true } },
             },
           },
@@ -38,6 +41,10 @@ export async function GET(
   if (!photo) return new NextResponse('Not found', { status: 404 });
 
   let allowed = isOperator(user.role);
+  // Companion-of-the-visit: always allowed for their own photos.
+  if (!allowed && photo.report.visit.companion.userId === user.id) {
+    allowed = true;
+  }
   if (!allowed) {
     if (!photo.report.visit.recipient.consentToReportSharing) {
       // Family member without consent - same as 'not found' from their
