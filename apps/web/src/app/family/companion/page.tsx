@@ -1,6 +1,7 @@
 import { Heart, MapPin } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { requireFamilyMember } from '@/lib/auth-helpers';
+import { companionPhotoSrc } from '@/lib/companion-photo-src';
 
 export const metadata = { title: 'Your companion' };
 
@@ -22,7 +23,7 @@ export default async function FamilyCompanionPage() {
       },
       include: {
         companion: {
-          select: { id: true, firstName: true, bio: true, photoUrl: true, borough: true },
+          select: { id: true, firstName: true, bio: true, photoUrl: true, photoFilename: true, borough: true },
         },
         recipient: { select: { firstName: true, preferredName: true } },
       },
@@ -36,7 +37,7 @@ export default async function FamilyCompanionPage() {
       },
       include: {
         companion: {
-          select: { id: true, firstName: true, bio: true, photoUrl: true, borough: true },
+          select: { id: true, firstName: true, bio: true, photoUrl: true, photoFilename: true, borough: true },
         },
         recipient: { select: { firstName: true, preferredName: true } },
       },
@@ -51,6 +52,7 @@ export default async function FamilyCompanionPage() {
       firstName: string;
       bio: string | null;
       photoUrl: string | null;
+      photoFilename: string | null;
       borough: string;
     };
     recipientLabel: string;
@@ -96,10 +98,10 @@ export default async function FamilyCompanionPage() {
               className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6 flex flex-col sm:flex-row gap-5"
             >
               <div className="flex-shrink-0">
-                {p.companion.photoUrl ? (
+                {companionPhotoSrc(p.companion) ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={p.companion.photoUrl}
+                    src={companionPhotoSrc(p.companion)!}
                     alt={`Photo of ${p.companion.firstName}`}
                     width="120"
                     height="120"

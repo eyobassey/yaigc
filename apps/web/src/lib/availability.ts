@@ -86,3 +86,39 @@ export function parseAvailabilityFormData(
 export function hasAnyAvailability(slots: AvailabilitySlots): boolean {
   return DAYS.some(({ key }) => (slots[key]?.length ?? 0) > 0);
 }
+
+/**
+ * Type guard for an unknown value (e.g. Prisma Json column read) that
+ * we want to treat as AvailabilitySlots.
+ */
+function isAvailabilitySlots(v: unknown): v is AvailabilitySlots {
+  return Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+}
+
+/**
+ * Render structured availability as a list of human-readable lines,
+ * one per day. Used by display surfaces (companion profile view) where
+ * a vertical list reads more naturally than the one-line summary.
+ *
+ * Returns an empty array when nothing is selected so callers can show
+ * a tailored empty state.
+ */
+export function renderAvailabilityLines(slots: unknown): string[] {
+  if (!isAvailabilitySlots(slots)) return [];
+  const lines: string[] = [];
+  for (const d of DAYS) {
+    const sel = slots[d.key];
+    if (!sel || sel.length === 0) continue;
+    if (sel.length === 3) {
+      lines.push(`${d.label} - all day`);
+      continue;
+    }
+    const labels = sel
+      .map((p) => PERIODS.find((pp) => pp.key === p)?.label ?? '')
+      .filter((l) => l.length > 0)
+      .join(', ');
+    lines.push(`${d.label} - ${labels}`);
+  }
+  if (slots.caveats) lines.push(slots.caveats);
+  return lines;
+}

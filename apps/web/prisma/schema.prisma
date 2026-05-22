@@ -760,12 +760,13 @@ model Companion {
   applicationId String              @unique
   status        CompanionStatus     @default(onboarding)
 
-  firstName String  // public-facing
-  lastName  String  // operator-only
-  photoUrl  String?
-  bio       String? @db.Text
-  borough   CompanionBorough
-  interests String? @db.Text
+  firstName     String  // public-facing
+  lastName      String  // operator-only
+  photoUrl      String?
+  photoFilename String? // server-generated; objects live at s3://.../companion-profiles/<id>/<filename>
+  bio           String? @db.Text
+  borough       CompanionBorough
+  interests     String? @db.Text
 
   availability         Json?
   maxConcurrentMatches Int  @default(4)

@@ -168,8 +168,10 @@ export type CompanionContext = {
     lastName: string;
     borough: string;
     photoUrl: string | null;
+    photoFilename: string | null;
     bio: string | null;
     interests: string | null;
+    availability: unknown;
   };
 };
 
@@ -199,8 +201,10 @@ export async function requireCompanion(callbackPath: string): Promise<CompanionC
       lastName: true,
       borough: true,
       photoUrl: true,
+      photoFilename: true,
       bio: true,
       interests: true,
+      availability: true,
     },
   });
   if (!companion) redirect('/no-access');

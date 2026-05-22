@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { ChevronLeft, Heart, MapPin } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { requireFamilyMember } from '@/lib/auth-helpers';
+import { companionPhotoSrc } from '@/lib/companion-photo-src';
 import {
   buildResponseLabel,
   inferDecliner,
@@ -23,7 +24,14 @@ export default async function FamilyMatchDetailPage({
     where: { id: params.id },
     include: {
       companion: {
-        select: { firstName: true, bio: true, photoUrl: true, borough: true },
+        select: {
+          id: true,
+          firstName: true,
+          bio: true,
+          photoUrl: true,
+          photoFilename: true,
+          borough: true,
+        },
       },
       recipient: { select: { firstName: true, preferredName: true } },
     },
@@ -91,10 +99,10 @@ export default async function FamilyMatchDetailPage({
         <div className="flex flex-col gap-6">
           <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6 flex flex-col sm:flex-row gap-5">
             <div className="flex-shrink-0">
-              {match.companion.photoUrl ? (
+              {companionPhotoSrc(match.companion) ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={match.companion.photoUrl}
+                  src={companionPhotoSrc(match.companion)!}
                   alt={`Photo of ${match.companion.firstName}`}
                   width="140"
                   height="140"

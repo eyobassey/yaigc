@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { ChevronLeft, Calendar, Heart, FileText } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { requireFamilyMember } from '@/lib/auth-helpers';
+import { companionPhotoSrc } from '@/lib/companion-photo-src';
 import { formatUkDateTime, formatUkTime } from '@/lib/visit-schedule';
 import { FamilyVisitStatePill } from '../page';
 
@@ -27,7 +28,9 @@ export default async function FamilyVisitDetailPage({
   const visit = await prisma.visit.findUnique({
     where: { id: params.id },
     include: {
-      companion: { select: { firstName: true, photoUrl: true } },
+      companion: {
+        select: { id: true, firstName: true, photoUrl: true, photoFilename: true },
+      },
       recipient: {
         select: {
           firstName: true,
@@ -103,10 +106,10 @@ export default async function FamilyVisitDetailPage({
         </section>
 
         <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6 flex items-center gap-4">
-          {visit.companion.photoUrl ? (
+          {companionPhotoSrc(visit.companion) ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={visit.companion.photoUrl}
+              src={companionPhotoSrc(visit.companion)!}
               alt={`Photo of ${visit.companion.firstName}`}
               width="72"
               height="72"
