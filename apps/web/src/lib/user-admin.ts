@@ -14,6 +14,16 @@ import {
   userRoleChangedText,
   userRoleChangedSubject,
 } from '@/lib/email/user-role-changed';
+import {
+  userForceSignedOutHtml,
+  userForceSignedOutText,
+  userForceSignedOutSubject,
+} from '@/lib/email/user-force-signed-out';
+import {
+  userPasswordForceResetHtml,
+  userPasswordForceResetText,
+  userPasswordForceResetSubject,
+} from '@/lib/email/user-password-force-reset';
 
 // O.14.2: operator_admin can update another user's role, first name,
 // and last name. Email is locked in this stage (changing email needs a
@@ -224,4 +234,251 @@ export async function editUserByAdmin(
 export async function canEditUsers(): Promise<boolean> {
   const u = await getSessionUser();
   return Boolean(u && isOperator(u.role) && u.role === 'operator_admin');
+}
+
+// ====================================================================
+// O.14.3 - Security actions
+//
+// Three destructive actions that an operator can take against a user.
+// Each one:
+//   - Auth-gated (admin only; force-reset is also safeguarding-allowed).
+//   - Self-protected: you can't run these against your own account
+//     via /ops/users. Use the per-user account page for those instead.
+//   - Reason is required free-text - captured in the audit log so we
+//     can review later. Not surfaced in the email.
+//   - Emails the user so the action isn't silent.
+//   - Audit-logged with before-state where useful.
+// ====================================================================
+
+const ReasonSchema = z.object({
+  userId: z.string().min(1),
+  reason: z.string().trim().min(1, 'Reason required.').max(500),
+});
+
+export type SecurityActionState = {
+  ok: boolean;
+  error?: string;
+};
+
+function canForceReset(role: string): boolean {
+  return role === 'operator_admin' || role === 'operator_safeguarding';
+}
+
+// --------------------------------------------------------------------
+// Force sign-out of every active session for a user.
+// --------------------------------------------------------------------
+
+export async function forceSignOutAllSessions(
+  _prev: SecurityActionState,
+  formData: FormData,
+): Promise<SecurityActionState> {
+  const actor = await getSessionUser();
+  if (!actor) return { ok: false, error: 'Sign in first.' };
+  if (actor.role !== 'operator_admin') {
+    return { ok: false, error: 'Only admins can force sign-out.' };
+  }
+
+  const parsed = ReasonSchema.safeParse({
+    userId: String(formData.get('userId') ?? ''),
+    reason: String(formData.get('reason') ?? '').trim(),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid input.' };
+  }
+  const d = parsed.data;
+
+  if (d.userId === actor.id) {
+    return {
+      ok: false,
+      error:
+        "Use the regular sign-out on your own account page rather than this route.",
+    };
+  }
+
+  const target = await prisma.user.findUnique({
+    where: { id: d.userId },
+    select: { id: true, email: true, firstName: true },
+  });
+  if (!target) return { ok: false, error: 'User not found.' };
+
+  const { count } = await prisma.session.deleteMany({ where: { userId: d.userId } });
+
+  await audit({
+    actorType: 'user',
+    actorId: actor.id,
+    actorRole: actor.role,
+    actionType: 'delete',
+    targetType: 'Session',
+    targetId: d.userId,
+    metadata: {
+      event: 'sessions_force_revoked_by_admin',
+      revokedCount: count,
+      reason: d.reason,
+    },
+  });
+
+  try {
+    const transport = buildTransport();
+    await transport.sendMail({
+      to: target.email,
+      from: `${brand.fullName} <${process.env.EMAIL_SENDER}>`,
+      subject: userForceSignedOutSubject(),
+      text: userForceSignedOutText({ firstName: target.firstName }),
+      html: userForceSignedOutHtml({ firstName: target.firstName }),
+    });
+  } catch (err) {
+    console.error('[user-admin] force-signout email failed', { to: target.email, err });
+  }
+
+  revalidatePath(`/ops/users/${d.userId}`);
+  redirect(`/ops/users/${d.userId}`);
+}
+
+// --------------------------------------------------------------------
+// Force-reset password: clear the hash + revoke all sessions. User
+// must use magic-link to get back in, then set a new password.
+// --------------------------------------------------------------------
+
+export async function forceResetPassword(
+  _prev: SecurityActionState,
+  formData: FormData,
+): Promise<SecurityActionState> {
+  const actor = await getSessionUser();
+  if (!actor) return { ok: false, error: 'Sign in first.' };
+  if (!canForceReset(actor.role)) {
+    return {
+      ok: false,
+      error: 'Only admins or the safeguarding lead can force-reset passwords.',
+    };
+  }
+
+  const parsed = ReasonSchema.safeParse({
+    userId: String(formData.get('userId') ?? ''),
+    reason: String(formData.get('reason') ?? '').trim(),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid input.' };
+  }
+  const d = parsed.data;
+
+  if (d.userId === actor.id) {
+    return {
+      ok: false,
+      error: 'Use the change-password flow on your own account page instead.',
+    };
+  }
+
+  const target = await prisma.user.findUnique({
+    where: { id: d.userId },
+    select: { id: true, email: true, firstName: true, passwordHash: true },
+  });
+  if (!target) return { ok: false, error: 'User not found.' };
+
+  // Same transaction so a partial state is impossible (password
+  // cleared but sessions still alive would be confusing).
+  const { sessionCount } = await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: d.userId },
+      data: { passwordHash: null, passwordSetAt: null },
+    });
+    const r = await tx.session.deleteMany({ where: { userId: d.userId } });
+    return { sessionCount: r.count };
+  });
+
+  await audit({
+    actorType: 'user',
+    actorId: actor.id,
+    actorRole: actor.role,
+    actionType: 'update',
+    targetType: 'User',
+    targetId: d.userId,
+    metadata: {
+      event: 'password_force_reset_by_admin',
+      hadPassword: Boolean(target.passwordHash),
+      sessionsRevoked: sessionCount,
+      reason: d.reason,
+    },
+  });
+
+  try {
+    const transport = buildTransport();
+    await transport.sendMail({
+      to: target.email,
+      from: `${brand.fullName} <${process.env.EMAIL_SENDER}>`,
+      subject: userPasswordForceResetSubject(),
+      text: userPasswordForceResetText({ firstName: target.firstName }),
+      html: userPasswordForceResetHtml({ firstName: target.firstName }),
+    });
+  } catch (err) {
+    console.error('[user-admin] password-force-reset email failed', { to: target.email, err });
+  }
+
+  revalidatePath(`/ops/users/${d.userId}`);
+  redirect(`/ops/users/${d.userId}`);
+}
+
+// --------------------------------------------------------------------
+// Revoke a single passkey on behalf of the user. Admin-only. We do
+// NOT email - removing a single passkey is a common cleanup action
+// (lost device etc) and the user already sees the change on their
+// own account page.
+// --------------------------------------------------------------------
+
+const RevokePasskeySchema = z.object({
+  userId: z.string().min(1),
+  passkeyId: z.string().min(1),
+});
+
+export async function revokePasskeyAsAdmin(
+  _prev: SecurityActionState,
+  formData: FormData,
+): Promise<SecurityActionState> {
+  const actor = await getSessionUser();
+  if (!actor) return { ok: false, error: 'Sign in first.' };
+  if (actor.role !== 'operator_admin') {
+    return { ok: false, error: 'Only admins can revoke passkeys.' };
+  }
+
+  const parsed = RevokePasskeySchema.safeParse({
+    userId: String(formData.get('userId') ?? ''),
+    passkeyId: String(formData.get('passkeyId') ?? ''),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid input.' };
+  }
+  const d = parsed.data;
+
+  if (d.userId === actor.id) {
+    return {
+      ok: false,
+      error: 'Remove your own passkey from your account page instead.',
+    };
+  }
+
+  const row = await prisma.authenticator.findUnique({
+    where: { id: d.passkeyId },
+    select: { id: true, userId: true, nickname: true },
+  });
+  if (!row || row.userId !== d.userId) {
+    return { ok: false, error: 'Passkey not found for this user.' };
+  }
+
+  await prisma.authenticator.delete({ where: { id: row.id } });
+
+  await audit({
+    actorType: 'user',
+    actorId: actor.id,
+    actorRole: actor.role,
+    actionType: 'delete',
+    targetType: 'Authenticator',
+    targetId: d.userId,
+    metadata: {
+      event: 'passkey_revoked_by_admin',
+      passkeyId: row.id,
+      nickname: row.nickname,
+    },
+  });
+
+  revalidatePath(`/ops/users/${d.userId}`);
+  redirect(`/ops/users/${d.userId}`);
 }

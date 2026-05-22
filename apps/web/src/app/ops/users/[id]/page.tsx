@@ -17,6 +17,7 @@ import { requireOperator } from '@/lib/auth-helpers';
 import { deviceLabel } from '@/lib/session';
 import { Paginator } from '@/components/ui/Paginator';
 import { parsePagination, buildView } from '@/lib/pagination';
+import { SecurityActionsPanel } from './SecurityActionsPanel';
 
 export const metadata = { title: 'User' };
 
@@ -392,6 +393,20 @@ export default async function OpsUserDetailPage({
               </ul>
             ) : null}
           </section>
+
+          <SecurityActionsPanel
+            userId={user.id}
+            actorRole={actor.role}
+            isSelf={actor.id === user.id}
+            isDeleted={Boolean(user.deletedAt)}
+            hasPassword={Boolean(user.passwordHash)}
+            activeSessionCount={user.sessions.length}
+            passkeys={user.authenticators.map((a) => ({
+              id: a.id,
+              nickname: a.nickname,
+              lastUsedAt: a.lastUsedAt ? a.lastUsedAt.toISOString() : null,
+            }))}
+          />
 
           <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
             <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-3 flex items-center gap-2">
