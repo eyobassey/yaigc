@@ -7,7 +7,7 @@ const EDITABLE_SUBSCRIPTION_STATES = new Set(['active', 'paused']);
 import { prisma } from '@/lib/prisma';
 import { summariseSubscription, DAY_LABELS, FREQUENCY_LABELS } from '@/lib/subscription-format';
 import { formatUkDateTime } from '@/lib/visit-schedule';
-import { generateNextVisit } from '@/lib/visit';
+import { generateNextVisit, generateBulkVisits } from '@/lib/visit';
 import { VisitStatePill } from '../../visits/page';
 import { TransitionPanel } from './TransitionPanel';
 
@@ -218,16 +218,49 @@ export default async function OpsSubscriptionDetailPage({
                 Visits ({sub.visits.length})
               </h2>
               {sub.status === 'active' ? (
-                <form action={generateNextVisit}>
-                  <input type="hidden" name="subscriptionId" value={sub.id} />
-                  <button
-                    type="submit"
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-moss/20 text-moss text-[0.75rem] font-medium hover:bg-moss hover:text-cream transition-colors whitespace-nowrap"
+                <div className="flex items-center gap-2 flex-wrap">
+                  <form action={generateNextVisit}>
+                    <input type="hidden" name="subscriptionId" value={sub.id} />
+                    <button
+                      type="submit"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-moss/20 text-moss text-[0.75rem] font-medium hover:bg-moss hover:text-cream transition-colors whitespace-nowrap"
+                    >
+                      <Plus size={12} strokeWidth={2} aria-hidden="true" />
+                      Generate next visit
+                    </button>
+                  </form>
+                  <form
+                    action={generateBulkVisits}
+                    className="inline-flex items-center gap-1"
                   >
-                    <Plus size={12} strokeWidth={2} aria-hidden="true" />
-                    Generate next visit
-                  </button>
-                </form>
+                    <input type="hidden" name="subscriptionId" value={sub.id} />
+                    <label
+                      htmlFor={`bulk-${sub.id}`}
+                      className="sr-only"
+                    >
+                      Number of visits to generate
+                    </label>
+                    <select
+                      id={`bulk-${sub.id}`}
+                      name="count"
+                      defaultValue="4"
+                      className="text-[0.75rem] px-1.5 py-1 rounded-md border border-moss/20 bg-cream text-charcoal focus:outline-none focus:ring-2 focus:ring-moss/25"
+                    >
+                      <option value="2">next 2</option>
+                      <option value="4">next 4</option>
+                      <option value="8">next 8</option>
+                      <option value="12">next 12</option>
+                    </select>
+                    <button
+                      type="submit"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-moss/20 text-moss text-[0.75rem] font-medium hover:bg-moss hover:text-cream transition-colors whitespace-nowrap"
+                      title="Generate several visits at once; emails are suppressed for the batch."
+                    >
+                      <Plus size={12} strokeWidth={2} aria-hidden="true" />
+                      Bulk generate
+                    </button>
+                  </form>
+                </div>
               ) : null}
             </div>
             {sub.visits.length === 0 ? (

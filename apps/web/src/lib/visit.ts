@@ -144,6 +144,66 @@ export async function generateNextVisit(formData: FormData): Promise<void> {
 }
 
 // -------------------------------------------------------------------------
+// BULK generate the next N visits for a Subscription. Loops the single-shot
+// generator; each call anchors on the latest existing visit so the schedule
+// walks forward correctly. Per-visit booked emails are suppressed (a batch
+// of 12 emails would spam the family); the audit log captures a single
+// summary entry. Cap is 12 to avoid runaway loops if someone passes the URL
+// directly.
+// -------------------------------------------------------------------------
+
+const MAX_BULK_VISITS = 12;
+
+export async function generateBulkVisits(formData: FormData): Promise<void> {
+  'use server';
+  const operator = await getSessionUser();
+  if (!operator) return;
+  const subscriptionId = String(formData.get('subscriptionId') ?? '');
+  const requested = Number(formData.get('count') ?? '0');
+  if (!subscriptionId) return;
+  const count = Math.min(
+    Math.max(Math.trunc(Number.isFinite(requested) ? requested : 0), 1),
+    MAX_BULK_VISITS,
+  );
+
+  const createdIds: string[] = [];
+  let stopReason: string | null = null;
+  for (let i = 0; i < count; i++) {
+    const r = await generateNextVisitForSubscription(subscriptionId, {
+      actor: 'user',
+      actorId: operator.id,
+      sendEmails: false,
+    });
+    if (r.ok) {
+      createdIds.push(r.visitId);
+    } else {
+      stopReason = r.reason;
+      break;
+    }
+  }
+
+  await audit({
+    actorType: 'user',
+    actorId: operator.id,
+    actorRole: operator.role,
+    actionType: 'create',
+    targetType: 'Subscription',
+    targetId: subscriptionId,
+    metadata: {
+      event: 'visits_bulk_generated',
+      requested: count,
+      created: createdIds.length,
+      stoppedAt: stopReason,
+      visitIds: createdIds,
+    },
+  });
+
+  revalidatePath('/ops');
+  revalidatePath('/ops/visits');
+  revalidatePath(`/ops/subscriptions/${subscriptionId}`);
+}
+
+// -------------------------------------------------------------------------
 // EDIT a Visit (date / time / duration / agreed activity / safety flags).
 // Restricted to scheduled or confirmed state. If the scheduled time
 // changes, a "rescheduled" email goes to both sides.
