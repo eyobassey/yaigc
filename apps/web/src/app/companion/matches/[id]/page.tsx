@@ -3,6 +3,10 @@ import { notFound } from 'next/navigation';
 import { ChevronLeft, MapPin } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { requireCompanion } from '@/lib/auth-helpers';
+import {
+  buildResponseLabel,
+  inferDecliner,
+} from '@/lib/match-response-label';
 import { CompanionMatchStatusPill } from '../page';
 import { RespondPanel } from './RespondPanel';
 
@@ -38,6 +42,29 @@ export default async function CompanionMatchDetailPage({
 
   const responded = Boolean(match.companionResponseAt);
   const canRespond = match.status === 'proposed' && !responded;
+  const decliner = inferDecliner(
+    match.status,
+    match.familyResponseAt,
+    match.companionResponseAt,
+  );
+  const familyLabel = buildResponseLabel(
+    'family',
+    match.status,
+    match.familyResponseAt,
+    decliner,
+  );
+  const companionLabel = buildResponseLabel(
+    'companion',
+    match.status,
+    match.companionResponseAt,
+    decliner,
+  );
+  const toneClass = (t: typeof familyLabel.tone) =>
+    t === 'accepted'
+      ? 'text-moss'
+      : t === 'declined'
+      ? 'text-terracotta'
+      : 'text-charcoal';
   const recipientLabel = match.recipient
     ? match.recipient.preferredName || match.recipient.firstName
     : null;
@@ -171,16 +198,10 @@ export default async function CompanionMatchDetailPage({
             </h2>
             <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-2 text-[0.875rem]">
               <dt className="text-stone">Family</dt>
-              <dd className="text-charcoal">
-                {match.familyResponseAt
-                  ? `Accepted ${match.familyResponseAt.toISOString().slice(0, 10)}`
-                  : 'Awaiting response'}
-              </dd>
+              <dd className={toneClass(familyLabel.tone)}>{familyLabel.text}</dd>
               <dt className="text-stone">You</dt>
-              <dd className="text-charcoal">
-                {match.companionResponseAt
-                  ? `Responded ${match.companionResponseAt.toISOString().slice(0, 10)}`
-                  : 'Not yet'}
+              <dd className={toneClass(companionLabel.tone)}>
+                {companionLabel.text}
               </dd>
             </dl>
           </section>

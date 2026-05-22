@@ -3,6 +3,10 @@ import { notFound } from 'next/navigation';
 import { ChevronLeft, Heart, MapPin } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { requireFamilyMember } from '@/lib/auth-helpers';
+import {
+  buildResponseLabel,
+  inferDecliner,
+} from '@/lib/match-response-label';
 import { FamilyMatchStatusPill } from '../page';
 import { RespondPanel } from './RespondPanel';
 
@@ -29,6 +33,29 @@ export default async function FamilyMatchDetailPage({
   if (!match || match.familyId !== family.id) notFound();
 
   const responded = Boolean(match.familyResponseAt);
+  const decliner = inferDecliner(
+    match.status,
+    match.familyResponseAt,
+    match.companionResponseAt,
+  );
+  const familyLabel = buildResponseLabel(
+    'family',
+    match.status,
+    match.familyResponseAt,
+    decliner,
+  );
+  const companionLabel = buildResponseLabel(
+    'companion',
+    match.status,
+    match.companionResponseAt,
+    decliner,
+  );
+  const toneClass = (t: typeof familyLabel.tone) =>
+    t === 'accepted'
+      ? 'text-moss'
+      : t === 'declined'
+      ? 'text-terracotta'
+      : 'text-charcoal';
   const isPayer = member.role === 'payer';
   const canRespond = match.status === 'proposed' && !responded && isPayer;
   const recipientLabel = match.recipient
@@ -147,16 +174,10 @@ export default async function FamilyMatchDetailPage({
             </h2>
             <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-2 text-[0.875rem]">
               <dt className="text-stone">You</dt>
-              <dd className="text-charcoal">
-                {match.familyResponseAt
-                  ? `Responded ${match.familyResponseAt.toISOString().slice(0, 10)}`
-                  : 'Not yet'}
-              </dd>
+              <dd className={toneClass(familyLabel.tone)}>{familyLabel.text}</dd>
               <dt className="text-stone">{match.companion.firstName}</dt>
-              <dd className="text-charcoal">
-                {match.companionResponseAt
-                  ? `Responded ${match.companionResponseAt.toISOString().slice(0, 10)}`
-                  : 'Awaiting reply'}
+              <dd className={toneClass(companionLabel.tone)}>
+                {companionLabel.text}
               </dd>
             </dl>
           </section>
