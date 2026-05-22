@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { Inbox, ChevronRight } from 'lucide-react';
 import type { EnquiryStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { Paginator } from '@/components/ui/Paginator';
+import { parsePagination, buildView } from '@/lib/pagination';
 
 export const metadata = {
   title: 'Enquiries',
@@ -18,26 +20,30 @@ const STATUSES: { value: EnquiryStatus | 'all'; label: string }[] = [
 export default async function OpsEnquiriesPage({
   searchParams,
 }: {
-  searchParams: { status?: string };
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
-  const rawStatus = (searchParams.status ?? 'new') as EnquiryStatus | 'all';
+  const rawStatus = ((searchParams.status as string) ?? 'new') as EnquiryStatus | 'all';
   const status = STATUSES.some((s) => s.value === rawStatus)
     ? rawStatus
     : 'new';
 
   const where = status === 'all' ? {} : { status: status as EnquiryStatus };
 
-  const [counts, enquiries] = await Promise.all([
+  const state = parsePagination(searchParams, { pageSize: 25 });
+  const [counts, total, enquiries] = await Promise.all([
     prisma.enquiry.groupBy({
       by: ['status'],
       _count: { _all: true },
     }),
+    prisma.enquiry.count({ where }),
     prisma.enquiry.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      take: 100,
+      skip: state.skip,
+      take: state.pageSize,
     }),
   ]);
+  const view = buildView(state, total);
 
   const countByStatus = Object.fromEntries(
     counts.map((c) => [c.status, c._count._all]),
@@ -133,6 +139,13 @@ export default async function OpsEnquiriesPage({
           </ul>
         )}
       </div>
+
+      <Paginator
+        basePath="/ops/enquiries"
+        searchParams={searchParams}
+        view={view}
+        label="enquiry"
+      />
     </div>
   );
 }

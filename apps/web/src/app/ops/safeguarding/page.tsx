@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { ShieldAlert, ChevronRight, Plus } from 'lucide-react';
 import type { SafeguardingSeverity, SafeguardingStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { Paginator } from '@/components/ui/Paginator';
+import { parsePagination, buildView } from '@/lib/pagination';
 
 export const metadata = { title: 'Safeguarding' };
 
@@ -18,9 +20,9 @@ const NON_CLOSED: SafeguardingStatus[] = ['open', 'under_review', 'actioned'];
 export default async function OpsSafeguardingPage({
   searchParams,
 }: {
-  searchParams: { status?: string };
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
-  const raw = searchParams.status ?? 'open';
+  const raw = (searchParams.status as string) ?? 'open';
   const status = FILTERS.some((f) => f.value === raw) ? raw : 'open';
 
   const where =
@@ -29,19 +31,23 @@ export default async function OpsSafeguardingPage({
       : status === 'open' || status === 'under_review' || status === 'actioned' || status === 'closed'
       ? { status: status as SafeguardingStatus }
       : {};
+  const state = parsePagination(searchParams, { pageSize: 25 });
 
-  const [counts, cases] = await Promise.all([
+  const [counts, total, cases] = await Promise.all([
     prisma.safeguardingCase.groupBy({ by: ['status'], _count: { _all: true } }),
+    prisma.safeguardingCase.count({ where }),
     prisma.safeguardingCase.findMany({
       where,
       orderBy: [{ severity: 'desc' }, { openedAt: 'desc' }],
-      take: 100,
+      skip: state.skip,
+      take: state.pageSize,
       include: {
         subjectRecipient: { select: { firstName: true, lastName: true, preferredName: true } },
         assignedTo: { select: { firstName: true, lastName: true, email: true } },
       },
     }),
   ]);
+  const view = buildView(state, total);
 
   const countByStatus = Object.fromEntries(counts.map((c) => [c.status, c._count._all])) as Record<
     SafeguardingStatus,
@@ -154,6 +160,13 @@ export default async function OpsSafeguardingPage({
           </ul>
         )}
       </div>
+
+      <Paginator
+        basePath="/ops/safeguarding"
+        searchParams={searchParams}
+        view={view}
+        label="case"
+      />
     </div>
   );
 }

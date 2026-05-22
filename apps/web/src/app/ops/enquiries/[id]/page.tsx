@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { getSessionUser } from '@/lib/auth-helpers';
 import { StatusPill, SourcePill } from '../page';
 import { StatusActions } from './StatusActions';
+import { Paginator } from '@/components/ui/Paginator';
+import { parsePagination, buildView } from '@/lib/pagination';
 
 export const metadata = {
   title: 'Enquiry',
@@ -12,8 +14,10 @@ export const metadata = {
 
 export default async function OpsEnquiryDetailPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
   const enquiry = await prisma.enquiry.findUnique({
     where: { id: params.id },
@@ -23,11 +27,21 @@ export default async function OpsEnquiryDetailPage({
   const user = await getSessionUser();
 
   // Show this enquiry's audit history (creation + every status change).
-  const history = await prisma.auditLogEntry.findMany({
-    where: { targetType: 'Enquiry', targetId: enquiry.id },
-    orderBy: { id: 'desc' },
-    take: 20,
+  const historyWhere = { targetType: 'Enquiry', targetId: enquiry.id };
+  const historyState = parsePagination(searchParams, {
+    pageSize: 20,
+    pageParam: 'hp',
   });
+  const [historyTotal, history] = await Promise.all([
+    prisma.auditLogEntry.count({ where: historyWhere }),
+    prisma.auditLogEntry.findMany({
+      where: historyWhere,
+      orderBy: { id: 'desc' },
+      skip: historyState.skip,
+      take: historyState.pageSize,
+    }),
+  ]);
+  const historyView = buildView(historyState, historyTotal);
 
   return (
     <div>
@@ -194,6 +208,16 @@ export default async function OpsEnquiryDetailPage({
               ))}
             </ul>
           )}
+          <div className="px-5 pb-4">
+            <Paginator
+              basePath={`/ops/enquiries/${enquiry.id}`}
+              searchParams={searchParams}
+              view={historyView}
+              pageParam="hp"
+              label="entry"
+              labelPlural="entries"
+            />
+          </div>
         </div>
       </section>
     </div>

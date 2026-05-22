@@ -3,6 +3,8 @@ import { Sparkles, ChevronRight } from 'lucide-react';
 import { type MatchStatus, type Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireCompanion } from '@/lib/auth-helpers';
+import { Paginator } from '@/components/ui/Paginator';
+import { parsePagination, buildView } from '@/lib/pagination';
 
 export const metadata = { title: 'Matches' };
 
@@ -16,11 +18,11 @@ const FILTERS: { value: 'open' | 'accepted' | 'declined' | 'all'; label: string 
 export default async function CompanionMatchesPage({
   searchParams,
 }: {
-  searchParams: { status?: string };
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
   const { companion } = await requireCompanion('/companion/matches');
 
-  const raw = searchParams.status ?? 'open';
+  const raw = (searchParams.status as string) ?? 'open';
   const status = (FILTERS.find((f) => f.value === raw)?.value ?? 'open') as
     | 'open'
     | 'accepted'
@@ -50,7 +52,8 @@ export default async function CompanionMatchesPage({
     where = { candidateCompanionId: companion.id };
   }
 
-  const [openCount, acceptedCount, declinedCount, allCount, matches] = await Promise.all([
+  const pagination = parsePagination(searchParams, { pageSize: 20 });
+  const [openCount, acceptedCount, declinedCount, allCount, total, matches] = await Promise.all([
     prisma.match.count({
       where: {
         candidateCompanionId: companion.id,
@@ -68,16 +71,19 @@ export default async function CompanionMatchesPage({
       },
     }),
     prisma.match.count({ where: { candidateCompanionId: companion.id } }),
+    prisma.match.count({ where }),
     prisma.match.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      take: 100,
+      skip: pagination.skip,
+      take: pagination.pageSize,
       include: {
         family: { select: { billingName: true } },
         recipient: { select: { firstName: true, preferredName: true } },
       },
     }),
   ]);
+  const view = buildView(pagination, total);
 
   const counts: Record<string, number> = {
     open: openCount,
@@ -170,6 +176,14 @@ export default async function CompanionMatchesPage({
           </ul>
         )}
       </div>
+
+      <Paginator
+        basePath="/companion/matches"
+        searchParams={searchParams}
+        view={view}
+        label="match"
+        labelPlural="matches"
+      />
     </div>
   );
 }

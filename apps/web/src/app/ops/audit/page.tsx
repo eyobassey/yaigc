@@ -1,37 +1,35 @@
-import Link from 'next/link';
-import { FileSearch, ChevronLeft, ChevronRight } from 'lucide-react';
+import { FileSearch } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
+import { Paginator } from '@/components/ui/Paginator';
+import { parsePagination, buildView } from '@/lib/pagination';
 
 export const metadata = {
   title: 'Audit log',
 };
 
-// Server-rendered audit viewer. List the most recent entries with cursor
-// pagination by id (BIGSERIAL is monotonically increasing). Filters can be
-// layered on later (by actor, action type, target type) but the simplest
-// useful view is "show me the last N events" which this delivers.
+// Server-rendered audit viewer. Offset pagination keyed by ?page=N so
+// the operator can move back and forth and jump to a specific page.
+// Filters by actor / action / target can layer on later.
 
 const PAGE_SIZE = 50;
 
 export default async function OpsAuditPage({
   searchParams,
 }: {
-  searchParams: { before?: string };
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
-  const before = searchParams.before
-    ? BigInt(searchParams.before)
-    : undefined;
+  const state = parsePagination(searchParams, { pageSize: PAGE_SIZE });
 
-  const entries = await prisma.auditLogEntry.findMany({
-    where: before ? { id: { lt: before } } : undefined,
-    orderBy: { id: 'desc' },
-    take: PAGE_SIZE + 1,
-  });
-
-  const hasMore = entries.length > PAGE_SIZE;
-  const visible = hasMore ? entries.slice(0, PAGE_SIZE) : entries;
-  const lastVisible = visible[visible.length - 1];
-  const nextCursor = hasMore && lastVisible ? lastVisible.id.toString() : null;
+  const [total, entries] = await Promise.all([
+    prisma.auditLogEntry.count(),
+    prisma.auditLogEntry.findMany({
+      orderBy: { id: 'desc' },
+      skip: state.skip,
+      take: state.pageSize,
+    }),
+  ]);
+  const view = buildView(state, total);
+  const visible = entries;
 
   return (
     <div>
@@ -113,31 +111,13 @@ export default async function OpsAuditPage({
         )}
       </div>
 
-      <nav className="mt-6 flex items-center justify-between text-sm" aria-label="Pagination">
-        <div className="text-stone">
-          {visible.length} {visible.length === 1 ? 'entry' : 'entries'} on this page
-        </div>
-        <div className="flex items-center gap-2">
-          {before ? (
-            <Link
-              href="/ops/audit"
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded border border-moss/15 text-moss hover:bg-moss/5 transition-colors"
-            >
-              <ChevronLeft size={14} strokeWidth={1.75} aria-hidden="true" />
-              Newest
-            </Link>
-          ) : null}
-          {nextCursor ? (
-            <Link
-              href={`/ops/audit?before=${nextCursor}`}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded border border-moss/15 text-moss hover:bg-moss/5 transition-colors"
-            >
-              Older
-              <ChevronRight size={14} strokeWidth={1.75} aria-hidden="true" />
-            </Link>
-          ) : null}
-        </div>
-      </nav>
+      <Paginator
+        basePath="/ops/audit"
+        searchParams={searchParams}
+        view={view}
+        label="entry"
+        className="mt-6"
+      />
     </div>
   );
 }

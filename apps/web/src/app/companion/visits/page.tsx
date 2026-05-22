@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { requireCompanion } from '@/lib/auth-helpers';
 import { formatUkDateTime, ukLocalDayBounds } from '@/lib/visit-schedule';
 import { CompanionVisitStatePill } from './_pill';
+import { Paginator } from '@/components/ui/Paginator';
+import { parsePagination, buildView } from '@/lib/pagination';
 
 export const metadata = { title: 'Visits' };
 
@@ -29,11 +31,11 @@ const PAST_STATES: VisitState[] = [
 export default async function CompanionVisitsPage({
   searchParams,
 }: {
-  searchParams: { filter?: string };
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
   const { companion } = await requireCompanion('/companion/visits');
 
-  const rawFilter = searchParams.filter ?? 'upcoming';
+  const rawFilter = (searchParams.filter as string) ?? 'upcoming';
   const filter = FILTERS.some((f) => f.value === rawFilter) ? rawFilter : 'upcoming';
 
   const now = new Date();
@@ -59,7 +61,8 @@ export default async function CompanionVisitsPage({
     order = 'desc';
   }
 
-  const [todayCount, upcomingCount, pastCount, allCount, visits] = await Promise.all([
+  const pagination = parsePagination(searchParams, { pageSize: 20 });
+  const [todayCount, upcomingCount, pastCount, allCount, total, visits] = await Promise.all([
     prisma.visit.count({
       where: {
         companionId: companion.id,
@@ -77,16 +80,19 @@ export default async function CompanionVisitsPage({
       where: { companionId: companion.id, state: { in: PAST_STATES } },
     }),
     prisma.visit.count({ where: { companionId: companion.id } }),
+    prisma.visit.count({ where }),
     prisma.visit.findMany({
       where,
       orderBy: { scheduledStartAt: order },
-      take: 100,
+      skip: pagination.skip,
+      take: pagination.pageSize,
       include: {
         recipient: { select: { firstName: true, preferredName: true, addressCity: true } },
         family: { select: { billingName: true } },
       },
     }),
   ]);
+  const view = buildView(pagination, total);
 
   const counts: Record<string, number> = {
     today: todayCount,
@@ -183,6 +189,13 @@ export default async function CompanionVisitsPage({
           </ul>
         )}
       </div>
+
+      <Paginator
+        basePath="/companion/visits"
+        searchParams={searchParams}
+        view={view}
+        label="visit"
+      />
     </div>
   );
 }

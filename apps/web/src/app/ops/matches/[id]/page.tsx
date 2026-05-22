@@ -4,13 +4,17 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { MatchStatusPill } from '../page';
 import { TransitionPanel } from './TransitionPanel';
+import { Paginator } from '@/components/ui/Paginator';
+import { parsePagination, buildView } from '@/lib/pagination';
 
 export const metadata = { title: 'Match' };
 
 export default async function OpsMatchDetailPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
   const match = await prisma.match.findUnique({
     where: { id: params.id },
@@ -42,11 +46,21 @@ export default async function OpsMatchDetailPage({
   });
   if (!match) notFound();
 
-  const history = await prisma.auditLogEntry.findMany({
-    where: { targetType: 'Match', targetId: match.id },
-    orderBy: { id: 'desc' },
-    take: 20,
+  const historyWhere = { targetType: 'Match', targetId: match.id };
+  const historyState = parsePagination(searchParams, {
+    pageSize: 20,
+    pageParam: 'hp',
   });
+  const [historyTotal, history] = await Promise.all([
+    prisma.auditLogEntry.count({ where: historyWhere }),
+    prisma.auditLogEntry.findMany({
+      where: historyWhere,
+      orderBy: { id: 'desc' },
+      skip: historyState.skip,
+      take: historyState.pageSize,
+    }),
+  ]);
+  const historyView = buildView(historyState, historyTotal);
 
   const proposerName =
     `${match.proposedBy.firstName ?? ''} ${match.proposedBy.lastName ?? ''}`.trim() ||
@@ -283,6 +297,14 @@ export default async function OpsMatchDetailPage({
                 ))}
               </ul>
             )}
+            <Paginator
+              basePath={`/ops/matches/${match.id}`}
+              searchParams={searchParams}
+              view={historyView}
+              pageParam="hp"
+              label="entry"
+              labelPlural="entries"
+            />
           </section>
         </aside>
       </div>

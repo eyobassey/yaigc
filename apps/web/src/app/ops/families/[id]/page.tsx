@@ -6,6 +6,8 @@ import { FamilyStatusPill } from '../page';
 import { MatchStatusPill } from '../../matches/page';
 import { SubscriptionStatusPill } from '../../subscriptions/[id]/page';
 import { summariseSubscription } from '@/lib/subscription-format';
+import { Paginator } from '@/components/ui/Paginator';
+import { parsePagination, buildView } from '@/lib/pagination';
 
 export const metadata = {
   title: 'Family',
@@ -13,8 +15,10 @@ export const metadata = {
 
 export default async function OpsFamilyDetailPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
   const family = await prisma.family.findUnique({
     where: { id: params.id },
@@ -52,23 +56,33 @@ export default async function OpsFamilyDetailPage({
   });
   if (!family) notFound();
 
-  const history = await prisma.auditLogEntry.findMany({
-    where: {
-      OR: [
-        { targetType: 'Family', targetId: family.id },
-        ...family.recipients.map((r) => ({
-          targetType: 'Recipient' as const,
-          targetId: r.id,
-        })),
-        ...family.members.map((m) => ({
-          targetType: 'FamilyMember' as const,
-          targetId: m.id,
-        })),
-      ],
-    },
-    orderBy: { id: 'desc' },
-    take: 40,
+  const historyWhere = {
+    OR: [
+      { targetType: 'Family', targetId: family.id },
+      ...family.recipients.map((r) => ({
+        targetType: 'Recipient' as const,
+        targetId: r.id,
+      })),
+      ...family.members.map((m) => ({
+        targetType: 'FamilyMember' as const,
+        targetId: m.id,
+      })),
+    ],
+  };
+  const historyState = parsePagination(searchParams, {
+    pageSize: 20,
+    pageParam: 'hp',
   });
+  const [historyTotal, history] = await Promise.all([
+    prisma.auditLogEntry.count({ where: historyWhere }),
+    prisma.auditLogEntry.findMany({
+      where: historyWhere,
+      orderBy: { id: 'desc' },
+      skip: historyState.skip,
+      take: historyState.pageSize,
+    }),
+  ]);
+  const historyView = buildView(historyState, historyTotal);
 
   const originatingEnquiry = await prisma.enquiry.findFirst({
     where: { convertedToFamilyId: family.id },
@@ -450,6 +464,14 @@ export default async function OpsFamilyDetailPage({
                 ))}
               </ul>
             )}
+            <Paginator
+              basePath={`/ops/families/${family.id}`}
+              searchParams={searchParams}
+              view={historyView}
+              pageParam="hp"
+              label="entry"
+              labelPlural="entries"
+            />
           </section>
         </aside>
       </div>

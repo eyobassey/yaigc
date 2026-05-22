@@ -4,6 +4,8 @@ import { type Prisma, type VisitState } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireFamilyMember } from '@/lib/auth-helpers';
 import { formatUkDateTime, VISIT_STATE_LABEL } from '@/lib/visit-schedule';
+import { Paginator } from '@/components/ui/Paginator';
+import { parsePagination, buildView } from '@/lib/pagination';
 
 export const metadata = { title: 'Visits' };
 
@@ -27,11 +29,11 @@ const PAST_STATES: VisitState[] = [
 export default async function FamilyVisitsPage({
   searchParams,
 }: {
-  searchParams: { filter?: string };
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
   const { family } = await requireFamilyMember('/family/visits');
 
-  const raw = searchParams.filter ?? 'upcoming';
+  const raw = (searchParams.filter as string) ?? 'upcoming';
   const filter = FILTERS.some((f) => f.value === raw) ? raw : 'upcoming';
 
   const now = new Date();
@@ -55,7 +57,8 @@ export default async function FamilyVisitsPage({
     order = 'desc';
   }
 
-  const [upcomingCount, pastCount, allCount, visits] = await Promise.all([
+  const pagination = parsePagination(searchParams, { pageSize: 20 });
+  const [upcomingCount, pastCount, allCount, total, visits] = await Promise.all([
     prisma.visit.count({
       where: {
         familyId: family.id,
@@ -67,16 +70,19 @@ export default async function FamilyVisitsPage({
       where: { familyId: family.id, state: { in: PAST_STATES } },
     }),
     prisma.visit.count({ where: { familyId: family.id } }),
+    prisma.visit.count({ where }),
     prisma.visit.findMany({
       where,
       orderBy: { scheduledStartAt: order },
-      take: 100,
+      skip: pagination.skip,
+      take: pagination.pageSize,
       include: {
         companion: { select: { firstName: true } },
         recipient: { select: { firstName: true, preferredName: true } },
       },
     }),
   ]);
+  const view = buildView(pagination, total);
 
   const counts: Record<string, number> = {
     upcoming: upcomingCount,
@@ -158,6 +164,13 @@ export default async function FamilyVisitsPage({
           </ul>
         )}
       </div>
+
+      <Paginator
+        basePath="/family/visits"
+        searchParams={searchParams}
+        view={view}
+        label="visit"
+      />
     </div>
   );
 }

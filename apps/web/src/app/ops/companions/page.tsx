@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { Heart, ChevronRight } from 'lucide-react';
 import type { CompanionApplicationStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { Paginator } from '@/components/ui/Paginator';
+import { parsePagination, buildView } from '@/lib/pagination';
 
 export const metadata = { title: 'Companions' };
 
@@ -20,25 +22,28 @@ const STATUSES: { value: CompanionApplicationStatus | 'all'; label: string }[] =
 export default async function OpsCompanionsPage({
   searchParams,
 }: {
-  searchParams: { status?: string };
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
-  const rawStatus = (searchParams.status ?? 'received') as
+  const rawStatus = ((searchParams.status as string) ?? 'received') as
     | CompanionApplicationStatus
     | 'all';
   const status = STATUSES.some((s) => s.value === rawStatus) ? rawStatus : 'received';
 
   const where =
     status === 'all' ? {} : { status: status as CompanionApplicationStatus };
+  const state = parsePagination(searchParams, { pageSize: 25 });
 
-  const [counts, applications, activeCompanions] = await Promise.all([
+  const [counts, total, applications, activeCompanions] = await Promise.all([
     prisma.companionApplication.groupBy({
       by: ['status'],
       _count: { _all: true },
     }),
+    prisma.companionApplication.count({ where }),
     prisma.companionApplication.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      take: 100,
+      skip: state.skip,
+      take: state.pageSize,
       include: {
         companion: {
           select: { id: true, status: true, borough: true },
@@ -47,6 +52,7 @@ export default async function OpsCompanionsPage({
     }),
     prisma.companion.count(),
   ]);
+  const view = buildView(state, total);
 
   const countByStatus = Object.fromEntries(
     counts.map((c) => [c.status, c._count._all]),
@@ -149,6 +155,13 @@ export default async function OpsCompanionsPage({
           </ul>
         )}
       </div>
+
+      <Paginator
+        basePath="/ops/companions"
+        searchParams={searchParams}
+        view={view}
+        label="application"
+      />
     </div>
   );
 }

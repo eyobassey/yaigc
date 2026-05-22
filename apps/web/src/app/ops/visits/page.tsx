@@ -3,6 +3,8 @@ import { Calendar, ChevronRight } from 'lucide-react';
 import { type Prisma, type VisitState } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { formatUkDateTime, VISIT_STATE_LABEL, ukLocalDayBounds } from '@/lib/visit-schedule';
+import { Paginator } from '@/components/ui/Paginator';
+import { parsePagination, buildView } from '@/lib/pagination';
 
 export const metadata = { title: 'Visits' };
 
@@ -36,9 +38,9 @@ const CANCELLED_STATES: VisitState[] = [
 export default async function OpsVisitsPage({
   searchParams,
 }: {
-  searchParams: { filter?: string };
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
-  const rawFilter = searchParams.filter ?? 'upcoming';
+  const rawFilter = (searchParams.filter as string) ?? 'upcoming';
   const filter = FILTERS.some((f) => f.value === rawFilter) ? rawFilter : 'upcoming';
 
   const now = new Date();
@@ -64,7 +66,8 @@ export default async function OpsVisitsPage({
     orderDirection = 'desc';
   }
 
-  const [counts, visits] = await Promise.all([
+  const state = parsePagination(searchParams, { pageSize: 25 });
+  const [counts, total, visits] = await Promise.all([
     Promise.all([
       prisma.visit.count({ where: { scheduledStartAt: { gte: now }, state: { notIn: CANCELLED_STATES } } }),
       prisma.visit.count({ where: { scheduledStartAt: { gte: startOfToday, lt: endOfToday } } }),
@@ -73,10 +76,12 @@ export default async function OpsVisitsPage({
       prisma.visit.count({ where: { state: { in: CANCELLED_STATES } } }),
       prisma.visit.count(),
     ]),
+    prisma.visit.count({ where }),
     prisma.visit.findMany({
       where,
       orderBy: { scheduledStartAt: orderDirection },
-      take: 100,
+      skip: state.skip,
+      take: state.pageSize,
       include: {
         family: { select: { id: true, billingName: true } },
         companion: { select: { firstName: true, lastName: true } },
@@ -84,6 +89,7 @@ export default async function OpsVisitsPage({
       },
     }),
   ]);
+  const view = buildView(state, total);
 
   const [upcomingCount, todayCount, needsReportCount, pastCount, cancelledCount, allCount] = counts;
   const countByFilter: Record<string, number> = {
@@ -184,6 +190,13 @@ export default async function OpsVisitsPage({
           </ul>
         )}
       </div>
+
+      <Paginator
+        basePath="/ops/visits"
+        searchParams={searchParams}
+        view={view}
+        label="visit"
+      />
     </div>
   );
 }

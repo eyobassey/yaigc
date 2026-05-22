@@ -14,6 +14,8 @@ import { TransitionPanel } from './TransitionPanel';
 import { TriageNotesForm } from './TriageNotesForm';
 import { RightToWorkPanel } from './RightToWorkPanel';
 import { DocumentList } from './DocumentList';
+import { Paginator } from '@/components/ui/Paginator';
+import { parsePagination, buildView } from '@/lib/pagination';
 
 export const metadata = { title: 'Application' };
 
@@ -22,7 +24,7 @@ export default async function CompanionApplicationDetailPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { welcomed?: string };
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
   const application = await prisma.companionApplication.findUnique({
     where: { id: params.id },
@@ -39,18 +41,28 @@ export default async function CompanionApplicationDetailPage({
   });
   if (!application) notFound();
 
-  const history = await prisma.auditLogEntry.findMany({
-    where: {
-      OR: [
-        { targetType: 'CompanionApplication', targetId: application.id },
-        ...(application.companion
-          ? [{ targetType: 'Companion' as const, targetId: application.companion.id }]
-          : []),
-      ],
-    },
-    orderBy: { id: 'desc' },
-    take: 30,
+  const historyWhere = {
+    OR: [
+      { targetType: 'CompanionApplication', targetId: application.id },
+      ...(application.companion
+        ? [{ targetType: 'Companion' as const, targetId: application.companion.id }]
+        : []),
+    ],
+  };
+  const historyState = parsePagination(searchParams, {
+    pageSize: 20,
+    pageParam: 'hp',
   });
+  const [historyTotal, history] = await Promise.all([
+    prisma.auditLogEntry.count({ where: historyWhere }),
+    prisma.auditLogEntry.findMany({
+      where: historyWhere,
+      orderBy: { id: 'desc' },
+      skip: historyState.skip,
+      take: historyState.pageSize,
+    }),
+  ]);
+  const historyView = buildView(historyState, historyTotal);
 
   return (
     <div>
@@ -274,6 +286,14 @@ export default async function CompanionApplicationDetailPage({
                 ))}
               </ul>
             )}
+            <Paginator
+              basePath={`/ops/companions/${application.id}`}
+              searchParams={searchParams}
+              view={historyView}
+              pageParam="hp"
+              label="entry"
+              labelPlural="entries"
+            />
           </section>
         </aside>
       </div>

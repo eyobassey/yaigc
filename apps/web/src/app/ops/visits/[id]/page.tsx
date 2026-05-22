@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { formatUkDateTime, formatUkTime } from '@/lib/visit-schedule';
 import { VisitStatePill } from '../page';
 import { TransitionPanel } from './TransitionPanel';
+import { Paginator } from '@/components/ui/Paginator';
+import { parsePagination, buildView } from '@/lib/pagination';
 
 const EDITABLE_STATES = new Set(['scheduled', 'confirmed']);
 
@@ -21,8 +23,10 @@ export const metadata = { title: 'Visit' };
 
 export default async function OpsVisitDetailPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
   const visit = await prisma.visit.findUnique({
     where: { id: params.id },
@@ -61,11 +65,21 @@ export default async function OpsVisitDetailPage({
   });
   if (!visit) notFound();
 
-  const history = await prisma.auditLogEntry.findMany({
-    where: { targetType: 'Visit', targetId: visit.id },
-    orderBy: { id: 'desc' },
-    take: 20,
+  const historyWhere = { targetType: 'Visit', targetId: visit.id };
+  const historyState = parsePagination(searchParams, {
+    pageSize: 20,
+    pageParam: 'hp',
   });
+  const [historyTotal, history] = await Promise.all([
+    prisma.auditLogEntry.count({ where: historyWhere }),
+    prisma.auditLogEntry.findMany({
+      where: historyWhere,
+      orderBy: { id: 'desc' },
+      skip: historyState.skip,
+      take: historyState.pageSize,
+    }),
+  ]);
+  const historyView = buildView(historyState, historyTotal);
 
   const scheduledEnd = new Date(
     visit.scheduledStartAt.getTime() + visit.scheduledDurationMinutes * 60 * 1000,
@@ -375,6 +389,14 @@ export default async function OpsVisitDetailPage({
                 ))}
               </ul>
             )}
+            <Paginator
+              basePath={`/ops/visits/${visit.id}`}
+              searchParams={searchParams}
+              view={historyView}
+              pageParam="hp"
+              label="entry"
+              labelPlural="entries"
+            />
           </section>
         </aside>
       </div>

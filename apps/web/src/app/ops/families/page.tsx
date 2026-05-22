@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { Users, ChevronRight } from 'lucide-react';
 import type { FamilyStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { Paginator } from '@/components/ui/Paginator';
+import { parsePagination, buildView } from '@/lib/pagination';
 
 export const metadata = {
   title: 'Families',
@@ -19,9 +21,9 @@ const STATUSES: { value: FamilyStatus | 'all'; label: string }[] = [
 export default async function OpsFamiliesPage({
   searchParams,
 }: {
-  searchParams: { status?: string };
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
-  const rawStatus = (searchParams.status ?? 'prospect') as
+  const rawStatus = ((searchParams.status as string) ?? 'prospect') as
     | FamilyStatus
     | 'all';
   const status = STATUSES.some((s) => s.value === rawStatus)
@@ -29,16 +31,19 @@ export default async function OpsFamiliesPage({
     : 'prospect';
 
   const where = status === 'all' ? {} : { status: status as FamilyStatus };
+  const state = parsePagination(searchParams, { pageSize: 25 });
 
-  const [counts, families] = await Promise.all([
+  const [counts, total, families] = await Promise.all([
     prisma.family.groupBy({
       by: ['status'],
       _count: { _all: true },
     }),
+    prisma.family.count({ where }),
     prisma.family.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      take: 100,
+      skip: state.skip,
+      take: state.pageSize,
       include: {
         recipients: { select: { firstName: true, lastName: true } },
         members: {
@@ -51,6 +56,7 @@ export default async function OpsFamiliesPage({
       },
     }),
   ]);
+  const view = buildView(state, total);
 
   const countByStatus = Object.fromEntries(
     counts.map((c) => [c.status, c._count._all]),
@@ -152,6 +158,14 @@ export default async function OpsFamiliesPage({
           </ul>
         )}
       </div>
+
+      <Paginator
+        basePath="/ops/families"
+        searchParams={searchParams}
+        view={view}
+        label="family"
+        labelPlural="families"
+      />
     </div>
   );
 }

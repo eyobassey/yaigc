@@ -3,6 +3,8 @@ import { Sparkles, ChevronRight } from 'lucide-react';
 import { type MatchStatus, type Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireFamilyMember } from '@/lib/auth-helpers';
+import { Paginator } from '@/components/ui/Paginator';
+import { parsePagination, buildView } from '@/lib/pagination';
 
 export const metadata = { title: 'Matches' };
 
@@ -16,11 +18,11 @@ const FILTERS: { value: 'open' | 'accepted' | 'declined' | 'all'; label: string 
 export default async function FamilyMatchesPage({
   searchParams,
 }: {
-  searchParams: { status?: string };
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
   const { family } = await requireFamilyMember('/family/matches');
 
-  const raw = searchParams.status ?? 'open';
+  const raw = (searchParams.status as string) ?? 'open';
   const status = (FILTERS.find((f) => f.value === raw)?.value ?? 'open') as
     | 'open'
     | 'accepted'
@@ -41,7 +43,8 @@ export default async function FamilyMatchesPage({
     where = { familyId: family.id };
   }
 
-  const [openCount, acceptedCount, pastCount, allCount, matches] = await Promise.all([
+  const pagination = parsePagination(searchParams, { pageSize: 20 });
+  const [openCount, acceptedCount, pastCount, allCount, total, matches] = await Promise.all([
     prisma.match.count({
       where: { familyId: family.id, status: 'proposed', familyResponseAt: null },
     }),
@@ -53,16 +56,19 @@ export default async function FamilyMatchesPage({
       },
     }),
     prisma.match.count({ where: { familyId: family.id } }),
+    prisma.match.count({ where }),
     prisma.match.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      take: 100,
+      skip: pagination.skip,
+      take: pagination.pageSize,
       include: {
         companion: { select: { firstName: true, borough: true } },
         recipient: { select: { firstName: true, preferredName: true } },
       },
     }),
   ]);
+  const view = buildView(pagination, total);
 
   const counts: Record<string, number> = {
     open: openCount,
@@ -161,6 +167,14 @@ export default async function FamilyMatchesPage({
           </ul>
         )}
       </div>
+
+      <Paginator
+        basePath="/family/matches"
+        searchParams={searchParams}
+        view={view}
+        label="match"
+        labelPlural="matches"
+      />
     </div>
   );
 }

@@ -10,13 +10,17 @@ import { formatUkDateTime } from '@/lib/visit-schedule';
 import { generateNextVisit, generateBulkVisits } from '@/lib/visit';
 import { VisitStatePill } from '../../visits/page';
 import { TransitionPanel } from './TransitionPanel';
+import { Paginator } from '@/components/ui/Paginator';
+import { parsePagination, buildView } from '@/lib/pagination';
 
 export const metadata = { title: 'Subscription' };
 
 export default async function OpsSubscriptionDetailPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
   const sub = await prisma.subscription.findUnique({
     where: { id: params.id },
@@ -43,11 +47,21 @@ export default async function OpsSubscriptionDetailPage({
   });
   if (!sub) notFound();
 
-  const history = await prisma.auditLogEntry.findMany({
-    where: { targetType: 'Subscription', targetId: sub.id },
-    orderBy: { id: 'desc' },
-    take: 20,
+  const historyWhere = { targetType: 'Subscription', targetId: sub.id };
+  const historyState = parsePagination(searchParams, {
+    pageSize: 20,
+    pageParam: 'hp',
   });
+  const [historyTotal, history] = await Promise.all([
+    prisma.auditLogEntry.count({ where: historyWhere }),
+    prisma.auditLogEntry.findMany({
+      where: historyWhere,
+      orderBy: { id: 'desc' },
+      skip: historyState.skip,
+      take: historyState.pageSize,
+    }),
+  ]);
+  const historyView = buildView(historyState, historyTotal);
 
   return (
     <div>
@@ -348,6 +362,14 @@ export default async function OpsSubscriptionDetailPage({
                 ))}
               </ul>
             )}
+            <Paginator
+              basePath={`/ops/subscriptions/${sub.id}`}
+              searchParams={searchParams}
+              view={historyView}
+              pageParam="hp"
+              label="entry"
+              labelPlural="entries"
+            />
           </section>
         </aside>
       </div>

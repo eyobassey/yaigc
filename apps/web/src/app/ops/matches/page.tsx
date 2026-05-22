@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { Sparkles, ChevronRight } from 'lucide-react';
 import type { MatchStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { Paginator } from '@/components/ui/Paginator';
+import { parsePagination, buildView } from '@/lib/pagination';
 
 export const metadata = { title: 'Matches' };
 
@@ -17,18 +19,21 @@ const STATUSES: { value: MatchStatus | 'all'; label: string }[] = [
 export default async function OpsMatchesPage({
   searchParams,
 }: {
-  searchParams: { status?: string };
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
-  const rawStatus = (searchParams.status ?? 'proposed') as MatchStatus | 'all';
+  const rawStatus = ((searchParams.status as string) ?? 'proposed') as MatchStatus | 'all';
   const status = STATUSES.some((s) => s.value === rawStatus) ? rawStatus : 'proposed';
   const where = status === 'all' ? {} : { status: status as MatchStatus };
+  const state = parsePagination(searchParams, { pageSize: 25 });
 
-  const [counts, matches] = await Promise.all([
+  const [counts, total, matches] = await Promise.all([
     prisma.match.groupBy({ by: ['status'], _count: { _all: true } }),
+    prisma.match.count({ where }),
     prisma.match.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      take: 100,
+      skip: state.skip,
+      take: state.pageSize,
       include: {
         family: { select: { id: true, billingName: true } },
         companion: { select: { firstName: true, lastName: true, borough: true } },
@@ -36,6 +41,7 @@ export default async function OpsMatchesPage({
       },
     }),
   ]);
+  const view = buildView(state, total);
 
   const countByStatus = Object.fromEntries(
     counts.map((c) => [c.status, c._count._all]),
@@ -124,6 +130,14 @@ export default async function OpsMatchesPage({
           </ul>
         )}
       </div>
+
+      <Paginator
+        basePath="/ops/matches"
+        searchParams={searchParams}
+        view={view}
+        label="match"
+        labelPlural="matches"
+      />
     </div>
   );
 }
