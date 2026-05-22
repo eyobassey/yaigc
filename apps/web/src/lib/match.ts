@@ -176,12 +176,23 @@ export async function transitionMatch(formData: FormData): Promise<void> {
   const now = new Date();
   const isDecline = d.to === 'declined';
 
+  // For 'accepted': only stamp the timestamps that are still null. If
+  // the companion has already accepted via /companion/matches/[id],
+  // their response timestamp is preserved.
+  const existing = await prisma.match.findUnique({
+    where: { id: d.matchId },
+    select: { familyResponseAt: true, companionResponseAt: true },
+  });
+
   const result = await prisma.match.updateMany({
     where: { id: d.matchId, status: 'proposed' },
     data: {
       status: d.to,
       ...(d.to === 'accepted'
-        ? { familyResponseAt: now, companionResponseAt: now }
+        ? {
+            familyResponseAt: existing?.familyResponseAt ?? now,
+            companionResponseAt: existing?.companionResponseAt ?? now,
+          }
         : {}),
       ...(isDecline ? { declineReason: d.note ?? '(no reason given)' } : {}),
     },
@@ -601,4 +612,150 @@ async function sendMatchConfirmationEmails(matchId: string): Promise<void> {
       });
     }
   }
+}
+
+// -------------------------------------------------------------------------
+// COMPANION-DRIVEN match response. The companion accepts or declines a
+// proposed match from /companion/matches/[id]. Family side response is
+// still operator-mediated (operator captures it on a phone call) until
+// we add a family match-response UI later.
+// -------------------------------------------------------------------------
+
+const CompanionRespondSchema = z
+  .object({
+    matchId: z.string().min(1),
+    action: z.enum(['accept', 'decline']),
+    note: z.string().trim().max(2000).optional(),
+  })
+  .refine((d) => d.action !== 'decline' || (d.note && d.note.length >= 10), {
+    message: 'A short reason is required for decline.',
+    path: ['note'],
+  });
+
+export type CompanionRespondState = {
+  ok: boolean;
+  errors?: Record<string, string>;
+};
+
+export async function respondToMatchByCompanion(
+  _prev: CompanionRespondState,
+  formData: FormData,
+): Promise<CompanionRespondState> {
+  const { requireCompanion } = await import('@/lib/auth-helpers');
+  const { user, companion } = await requireCompanion('/companion/matches');
+
+  const parsed = CompanionRespondSchema.safeParse({
+    matchId: String(formData.get('matchId') ?? ''),
+    action: String(formData.get('action') ?? ''),
+    note: String(formData.get('note') ?? '').trim() || undefined,
+  });
+  if (!parsed.success) {
+    return {
+      ok: false,
+      errors: Object.fromEntries(
+        parsed.error.issues.flatMap((i) => {
+          const k = i.path[0];
+          return typeof k === 'string' ? [[k, i.message]] : [];
+        }),
+      ),
+    };
+  }
+  const d = parsed.data;
+
+  // Scope: match must belong to this companion + still be in 'proposed'.
+  const before = await prisma.match.findUnique({
+    where: { id: d.matchId },
+    select: {
+      status: true,
+      candidateCompanionId: true,
+      familyId: true,
+      familyResponseAt: true,
+      companionResponseAt: true,
+    },
+  });
+  if (!before) return { ok: false, errors: { _form: 'Match not found.' } };
+  if (before.candidateCompanionId !== companion.id) {
+    return { ok: false, errors: { _form: 'Not authorised.' } };
+  }
+  if (before.status !== 'proposed') {
+    return { ok: false, errors: { _form: 'Match is no longer open.' } };
+  }
+
+  const now = new Date();
+
+  if (d.action === 'decline') {
+    await prisma.match.update({
+      where: { id: d.matchId },
+      data: {
+        status: 'declined',
+        companionResponseAt: before.companionResponseAt ?? now,
+        declineReason: d.note,
+      },
+    });
+    await audit({
+      actorType: 'user',
+      actorId: user.id,
+      actorRole: user.role,
+      actionType: 'state_change',
+      targetType: 'Match',
+      targetId: d.matchId,
+      beforeState: { status: 'proposed' },
+      afterState: { status: 'declined' },
+      metadata: {
+        event: 'match_status_change',
+        via: 'companion_portal',
+        note: d.note,
+      },
+    });
+    revalidatePath('/companion/matches');
+    revalidatePath(`/companion/matches/${d.matchId}`);
+    revalidatePath('/ops/matches');
+    revalidatePath(`/ops/matches/${d.matchId}`);
+    revalidatePath(`/ops/families/${before.familyId}`);
+    return { ok: true };
+  }
+
+  // Accept: stamp companion's response. Flip to accepted only if family
+  // side has already responded; otherwise stay in 'proposed' awaiting
+  // the operator to capture the family's response.
+  const bothNowAccepted = before.familyResponseAt != null;
+  await prisma.match.update({
+    where: { id: d.matchId },
+    data: {
+      companionResponseAt: now,
+      ...(bothNowAccepted ? { status: 'accepted' } : {}),
+    },
+  });
+
+  await audit({
+    actorType: 'user',
+    actorId: user.id,
+    actorRole: user.role,
+    actionType: bothNowAccepted ? 'state_change' : 'update',
+    targetType: 'Match',
+    targetId: d.matchId,
+    ...(bothNowAccepted
+      ? {
+          beforeState: { status: 'proposed' },
+          afterState: { status: 'accepted' },
+        }
+      : {}),
+    metadata: {
+      event: bothNowAccepted
+        ? 'match_status_change'
+        : 'match_companion_accepted',
+      via: 'companion_portal',
+    },
+  });
+
+  if (bothNowAccepted) {
+    await sendMatchConfirmationEmails(d.matchId);
+  }
+
+  revalidatePath('/companion/matches');
+  revalidatePath(`/companion/matches/${d.matchId}`);
+  revalidatePath('/ops/matches');
+  revalidatePath(`/ops/matches/${d.matchId}`);
+  revalidatePath(`/ops/families/${before.familyId}`);
+  return { ok: true };
 }
