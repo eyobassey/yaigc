@@ -7,6 +7,13 @@ import type { FamilyMemberRelationship } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
 import { getSessionUser } from '@/lib/auth-helpers';
+import {
+  CANONICAL_INTERESTS,
+  CANONICAL_MOBILITY,
+  CANONICAL_DIETARY,
+  serialiseTagged,
+  tagToFormKey,
+} from '@/lib/recipient-tags';
 
 // -------------------------------------------------------------------------
 // Diff helper. Returns only the fields whose value actually changed.
@@ -155,11 +162,11 @@ const RecipientEditSchema = z.object({
   dateOfBirth: z.string().optional(),
   phone: z.string().max(40).optional(),
   pronouns: z.string().max(40).optional(),
-  interests: z.string().max(4000).optional(),
+  interestsOther: z.string().max(4000).optional(),
   thingsToKnow: z.string().max(4000).optional(),
-  mobility: z.string().max(4000).optional(),
+  mobilityOther: z.string().max(4000).optional(),
   healthNotes: z.string().max(4000).optional(),
-  dietary: z.string().max(4000).optional(),
+  dietaryOther: z.string().max(4000).optional(),
   religiousObservance: z.string().max(2000).optional(),
   addressLine1: z.string().max(120).optional(),
   addressLine2: z.string().max(120).optional(),
@@ -197,11 +204,11 @@ export async function updateRecipient(
     dateOfBirth: opt('dateOfBirth'),
     phone: opt('phone'),
     pronouns: opt('pronouns'),
-    interests: opt('interests'),
+    interestsOther: opt('interestsOther'),
     thingsToKnow: opt('thingsToKnow'),
-    mobility: opt('mobility'),
+    mobilityOther: opt('mobilityOther'),
     healthNotes: opt('healthNotes'),
-    dietary: opt('dietary'),
+    dietaryOther: opt('dietaryOther'),
     religiousObservance: opt('religiousObservance'),
     addressLine1: opt('addressLine1'),
     addressLine2: opt('addressLine2'),
@@ -229,6 +236,22 @@ export async function updateRecipient(
   }
   const d = parsed.data;
 
+  // Collect tag-picker ticks for the three categorised fields. Names
+  // are <prefix>_<tagKey> as wired by the shared TagPicker component.
+  const collectTicks = (prefix: string, list: readonly string[]) => {
+    const ticks = new Set<string>();
+    for (const tag of list) {
+      if (formData.get(`${prefix}_${tagToFormKey(tag)}`) === 'on') ticks.add(tag);
+    }
+    return ticks;
+  };
+  const interestTicks = collectTicks('interest', CANONICAL_INTERESTS);
+  const mobilityTicks = collectTicks('mobility', CANONICAL_MOBILITY);
+  const dietaryTicks = collectTicks('dietary', CANONICAL_DIETARY);
+  const interestsCombined = serialiseTagged(CANONICAL_INTERESTS, interestTicks, d.interestsOther);
+  const mobilityCombined = serialiseTagged(CANONICAL_MOBILITY, mobilityTicks, d.mobilityOther);
+  const dietaryCombined = serialiseTagged(CANONICAL_DIETARY, dietaryTicks, d.dietaryOther);
+
   const before = await prisma.recipient.findUnique({
     where: { id: d.recipientId },
   });
@@ -242,11 +265,11 @@ export async function updateRecipient(
     dateOfBirth: d.dateOfBirth ? new Date(d.dateOfBirth) : null,
     phone: d.phone ?? null,
     pronouns: d.pronouns ?? null,
-    interests: d.interests ?? null,
+    interests: interestsCombined || null,
     thingsToKnow: d.thingsToKnow ?? null,
-    mobility: d.mobility ?? null,
+    mobility: mobilityCombined || null,
     healthNotes: d.healthNotes ?? null,
-    dietary: d.dietary ?? null,
+    dietary: dietaryCombined || null,
     religiousObservance: d.religiousObservance ?? null,
     addressLine1: d.addressLine1 ?? null,
     addressLine2: d.addressLine2 ?? null,

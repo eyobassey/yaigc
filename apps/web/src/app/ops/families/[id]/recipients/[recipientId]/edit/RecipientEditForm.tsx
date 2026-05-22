@@ -2,6 +2,13 @@
 
 import { useFormState, useFormStatus } from 'react-dom';
 import { updateRecipient, type RecipientEditState } from '@/lib/family-edit';
+import {
+  CANONICAL_INTERESTS,
+  CANONICAL_MOBILITY,
+  CANONICAL_DIETARY,
+  parseTagged,
+} from '@/lib/recipient-tags';
+import { TagPicker } from '@/components/forms/TagPicker';
 import { Field, TextArea, Section, Checkbox } from '@/app/ops/_components/EditField';
 
 const initial: RecipientEditState = { ok: false };
@@ -41,6 +48,10 @@ export function RecipientEditForm({
   };
 }) {
   const [state, action] = useFormState(updateRecipient, initial);
+
+  const interestsParsed = parseTagged(CANONICAL_INTERESTS, recipient.interests);
+  const mobilityParsed = parseTagged(CANONICAL_MOBILITY, recipient.mobility);
+  const dietaryParsed = parseTagged(CANONICAL_DIETARY, recipient.dietary);
 
   return (
     <form action={action} noValidate className="flex flex-col gap-6">
@@ -142,16 +153,21 @@ export function RecipientEditForm({
       </Section>
 
       <Section
-        title="Profile"
-        description="What the companion needs to know to make visits work."
+        title="Interests"
+        description="Pick from common ones, add anything else below. Helps the companion arrive with something to talk about."
       >
+        <TagPicker
+          fieldPrefix="interest"
+          canonical={CANONICAL_INTERESTS}
+          selected={interestsParsed.selectedTags}
+        />
         <TextArea
-          name="interests"
-          label="Interests"
-          defaultValue={recipient.interests ?? ''}
-          rows={3}
-          hint="Hobbies, things they enjoy, conversation starters."
-          error={state.errors?.interests}
+          name="interestsOther"
+          label="Anything else"
+          rows={2}
+          defaultValue={interestsParsed.other}
+          error={state.errors?.interestsOther}
+          hint="Specific groups, programmes, places, anything personal."
         />
         <TextArea
           name="thingsToKnow"
@@ -164,17 +180,45 @@ export function RecipientEditForm({
       </Section>
 
       <Section
-        title="Sensitive"
-        description="Restricted-visibility fields. Health and mobility details that help us keep visits safe and appropriate. No clinical detail."
+        title="Mobility (sensitive)"
+        description="Restricted-visibility. Helps the companion know what to expect on arrival."
       >
-        <TextArea
-          name="mobility"
-          label="Mobility"
-          defaultValue={recipient.mobility ?? ''}
-          rows={2}
-          hint="Walking aids, stairs, anything that affects how a visit moves."
-          error={state.errors?.mobility}
+        <TagPicker
+          fieldPrefix="mobility"
+          canonical={CANONICAL_MOBILITY}
+          selected={mobilityParsed.selectedTags}
         />
+        <TextArea
+          name="mobilityOther"
+          label="Anything else"
+          rows={2}
+          defaultValue={mobilityParsed.other}
+          error={state.errors?.mobilityOther}
+        />
+      </Section>
+
+      <Section
+        title="Dietary (sensitive)"
+        description="If you offer tea or share a meal during the visit."
+      >
+        <TagPicker
+          fieldPrefix="dietary"
+          canonical={CANONICAL_DIETARY}
+          selected={dietaryParsed.selectedTags}
+        />
+        <TextArea
+          name="dietaryOther"
+          label="Anything else"
+          rows={2}
+          defaultValue={dietaryParsed.other}
+          error={state.errors?.dietaryOther}
+        />
+      </Section>
+
+      <Section
+        title="Other (sensitive)"
+        description="Restricted-visibility free-text fields. No clinical detail."
+      >
         <TextArea
           name="healthNotes"
           label="Health notes (general)"
@@ -182,14 +226,6 @@ export function RecipientEditForm({
           rows={3}
           hint="General context. Not a medical record."
           error={state.errors?.healthNotes}
-        />
-        <TextArea
-          name="dietary"
-          label="Dietary"
-          defaultValue={recipient.dietary ?? ''}
-          rows={2}
-          hint="Allergies, preferences."
-          error={state.errors?.dietary}
         />
         <TextArea
           name="religiousObservance"
