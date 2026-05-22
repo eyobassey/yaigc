@@ -13,6 +13,7 @@ import {
   newMessageText,
   newMessageSubject,
 } from '@/lib/email/new-message';
+import { publishMessageToUsers } from '@/lib/realtime';
 
 // M.1: operator-mediated messaging. Threads always have one operator
 // and one customer-side party (family_payer or companion). The
@@ -109,8 +110,31 @@ export async function createThread(
       operatorLastReadAt: new Date(),
       operatorLastNotifiedAt: new Date(),
     },
-    select: { id: true },
+    select: {
+      id: true,
+      messages: {
+        select: { id: true, body: true, senderId: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+        take: 1,
+      },
+    },
   });
+
+  // Fan-out to both participants' WebSocket subscribers. Sender echoes
+  // their own message so the optimistic UI can confirm.
+  const first = thread.messages[0];
+  if (first) {
+    await publishMessageToUsers([actor.id, party.id], {
+      kind: 'message',
+      threadId: thread.id,
+      message: {
+        id: first.id,
+        body: first.body,
+        senderId: first.senderId,
+        createdAt: first.createdAt.toISOString(),
+      },
+    });
+  }
 
   await audit({
     actorType: 'user',
@@ -194,20 +218,32 @@ export async function sendMessage(
     return { ok: false, error: 'You are not a participant in this thread.' };
   }
 
-  await prisma.$transaction(async (tx) => {
-    await tx.message.create({
+  const newMessage = await prisma.$transaction(async (tx) => {
+    const created = await tx.message.create({
       data: { threadId: thread.id, senderId: actor.id, body: d.body },
+      select: { id: true, body: true, senderId: true, createdAt: true },
     });
     await tx.thread.update({
       where: { id: thread.id },
       data: {
         lastMessageAt: new Date(),
-        // Sender side reads up to now.
         ...(isActorOperator
           ? { operatorLastReadAt: new Date() }
           : { partyLastReadAt: new Date() }),
       },
     });
+    return created;
+  });
+
+  await publishMessageToUsers([thread.operatorId, thread.partyId], {
+    kind: 'message',
+    threadId: thread.id,
+    message: {
+      id: newMessage.id,
+      body: newMessage.body,
+      senderId: newMessage.senderId,
+      createdAt: newMessage.createdAt.toISOString(),
+    },
   });
 
   await audit({

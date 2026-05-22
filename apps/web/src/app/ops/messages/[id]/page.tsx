@@ -68,6 +68,7 @@ export default async function OpsThreadDetailPage({
       <ThreadView
         threadId={thread.id}
         otherPartyLabel={partyFullName}
+        currentUserId={actor.id}
         messages={thread.messages.map((m) => {
           const senderName =
             [m.sender.firstName, m.sender.lastName].filter(Boolean).join(' ') ||

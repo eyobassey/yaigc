@@ -50,5 +50,30 @@ module.exports = {
       // Use the Next.js HTTP server's readiness signal once available.
       wait_ready: false,
     },
+    {
+      // M.1.1 - WebSocket realtime server. Standalone Node process,
+      // bound to 127.0.0.1:3004. nginx proxies wss://.../realtime/
+      // here with the Upgrade dance.
+      name: 'igc-prod-realtime',
+      script: './node_modules/.bin/tsx',
+      args: 'scripts/realtime-server.ts',
+      cwd: webDir,
+      node_args: `--env-file=${secretsFile}`,
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '200M',
+      env: {
+        NODE_ENV: 'production',
+        REALTIME_PORT: '3004',
+      },
+      error_file: '/home/username/.pm2/logs/igc-prod-realtime-error.log',
+      out_file: '/home/username/.pm2/logs/igc-prod-realtime-out.log',
+      merge_logs: true,
+      time: true,
+      kill_timeout: 5000,
+      listen_timeout: 10000,
+    },
   ],
 };

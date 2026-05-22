@@ -56,6 +56,7 @@ export default async function FamilyThreadDetailPage({
       <ThreadView
         threadId={thread.id}
         otherPartyLabel={operatorLabel}
+        currentUserId={user.id}
         messages={thread.messages.map((m) => ({
           id: m.id,
           body: m.body,
