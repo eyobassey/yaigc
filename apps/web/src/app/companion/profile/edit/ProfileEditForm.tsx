@@ -1,7 +1,7 @@
 'use client';
 
 import { useFormState, useFormStatus } from 'react-dom';
-import { useId } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Heart } from 'lucide-react';
 import {
   editCompanionProfile,
@@ -25,6 +25,51 @@ export function ProfileEditForm({
   currentPhotoSrc,
 }: Props) {
   const [state, action] = useFormState(editCompanionProfile, initial);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Revoke the blob URL whenever it changes or the form unmounts.
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setPreviewError(null);
+    const file = e.target.files?.[0];
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    if (!file) {
+      setPreviewUrl(null);
+      return;
+    }
+    if (!/^image\/(jpeg|png)$/.test(file.type)) {
+      setPreviewError('Use a JPEG or PNG image.');
+      setPreviewUrl(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setPreviewError(
+        `Photo too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max 5MB.`,
+      );
+      setPreviewUrl(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+    setPreviewUrl(URL.createObjectURL(file));
+  }
+
+  function clearPreview() {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    setPreviewError(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  const displayedPhoto = previewUrl ?? currentPhotoSrc;
+  const photoError = previewError ?? state.errors?.photo;
 
   const bio = state.values?.bio ?? initialBio;
   const interests = state.values?.interests ?? initialInterests;
@@ -42,21 +87,28 @@ export function ProfileEditForm({
     >
       <Section title="Your photo">
         <div className="flex items-center gap-5 flex-wrap">
-          <div className="flex-shrink-0">
-            {currentPhotoSrc ? (
+          <div className="flex-shrink-0 relative">
+            {displayedPhoto ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={currentPhotoSrc}
-                alt="Current profile photo"
+                src={displayedPhoto}
+                alt={previewUrl ? 'New photo preview' : 'Current profile photo'}
                 width="96"
                 height="96"
-                className="w-[96px] h-[96px] rounded-full object-cover border border-moss/15"
+                className={`w-[96px] h-[96px] rounded-full object-cover border ${
+                  previewUrl ? 'border-moss ring-2 ring-moss/20' : 'border-moss/15'
+                }`}
               />
             ) : (
               <div className="w-[96px] h-[96px] rounded-full bg-moss/10 flex items-center justify-center">
                 <Heart size={28} strokeWidth={1.5} className="text-moss/40" aria-hidden="true" />
               </div>
             )}
+            {previewUrl ? (
+              <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 inline-flex items-center font-body text-[0.6rem] font-medium uppercase tracking-[0.08em] px-2 py-0.5 rounded bg-moss text-paper whitespace-nowrap">
+                Preview
+              </span>
+            ) : null}
           </div>
           <div className="flex-1 min-w-[220px]">
             <label
@@ -68,14 +120,16 @@ export function ProfileEditForm({
             </label>
             <input
               id="photo"
+              ref={fileInputRef}
               name="photo"
               type="file"
               accept="image/jpeg,image/png"
+              onChange={handlePhotoChange}
               className="block w-full text-charcoal text-[0.875rem] file:mr-3 file:px-3 file:py-2 file:rounded file:border-0 file:bg-moss file:text-paper file:cursor-pointer hover:file:bg-moss-deep"
             />
-            {state.errors?.photo ? (
+            {photoError ? (
               <p className="text-terracotta text-[0.8125rem] mt-1">
-                {state.errors.photo}
+                {photoError}
               </p>
             ) : (
               <p className="text-stone text-[0.8125rem] mt-1">
@@ -83,6 +137,19 @@ export function ProfileEditForm({
                 photo works best.
               </p>
             )}
+            {previewUrl ? (
+              <p className="text-stone text-[0.8125rem] mt-2">
+                This is how your new photo will appear.{' '}
+                <button
+                  type="button"
+                  onClick={clearPreview}
+                  className="text-moss underline hover:text-moss-deep"
+                >
+                  Keep the current one instead
+                </button>
+                .
+              </p>
+            ) : null}
           </div>
         </div>
       </Section>
