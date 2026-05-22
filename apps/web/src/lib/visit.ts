@@ -8,7 +8,7 @@ import { createTransport } from 'nodemailer';
 import { brand } from '@igc/content';
 import { prisma } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
-import { getSessionUser } from '@/lib/auth-helpers';
+import { getSessionUser, requireCompanion } from '@/lib/auth-helpers';
 import { nextVisitStart, TERMINAL_VISIT_STATES, ukWallClockToUtc } from '@/lib/visit-schedule';
 import {
   visitBookedToFamilyHtml,
@@ -497,6 +497,127 @@ export async function transitionVisit(formData: FormData): Promise<void> {
     await sendVisitStartedEmail(d.visitId);
   }
 
+  revalidatePath('/ops');
+  revalidatePath('/ops/visits');
+  revalidatePath(`/ops/visits/${d.visitId}`);
+  revalidatePath(`/ops/subscriptions/${before.subscriptionId}`);
+  revalidatePath(`/ops/families/${before.familyId}`);
+}
+
+// -------------------------------------------------------------------------
+// COMPANION-DRIVEN transitions. Subset of the operator state machine
+// scoped to moves the companion can sensibly make themselves: confirm,
+// en route, in progress, completed, cancelled_by_companion. The
+// operator can still drive any transition via the existing route -
+// these two paths are additive.
+// -------------------------------------------------------------------------
+
+const COMPANION_ALLOWED_TRANSITIONS: Record<string, VisitState[]> = {
+  scheduled: ['confirmed', 'en_route', 'cancelled_by_companion'],
+  confirmed: ['en_route', 'in_progress', 'cancelled_by_companion'],
+  en_route: ['in_progress', 'cancelled_by_companion'],
+  in_progress: ['completed'],
+  completed: [],
+  reported: [],
+  cancelled_by_family: [],
+  cancelled_by_companion: [],
+  cancelled_by_operator: [],
+  no_show_companion: [],
+  no_show_recipient: [],
+};
+
+const CompanionTransitionSchema = z.object({
+  visitId: z.string().min(1),
+  to: z.enum([
+    'confirmed',
+    'en_route',
+    'in_progress',
+    'completed',
+    'cancelled_by_companion',
+  ]),
+  note: z.string().max(2000).optional(),
+});
+
+export async function transitionVisitByCompanion(formData: FormData): Promise<void> {
+  'use server';
+  const { user, companion } = await requireCompanion('/companion');
+
+  const parsed = CompanionTransitionSchema.safeParse({
+    visitId: String(formData.get('visitId') ?? ''),
+    to: String(formData.get('to') ?? ''),
+    note: String(formData.get('note') ?? '').trim() || undefined,
+  });
+  if (!parsed.success) return;
+  const d = parsed.data;
+
+  const before = await prisma.visit.findUnique({
+    where: { id: d.visitId },
+    select: {
+      state: true,
+      companionId: true,
+      subscriptionId: true,
+      familyId: true,
+      scheduledStartAt: true,
+    },
+  });
+  // Scope: the visit must belong to this companion.
+  if (!before || before.companionId !== companion.id) return;
+  const allowed = COMPANION_ALLOWED_TRANSITIONS[before.state] ?? [];
+  if (!allowed.includes(d.to)) return;
+
+  // Cancellation requires a reason. Quietly drop the request if missing -
+  // the form-side validation should have caught it.
+  const isCancel = d.to === 'cancelled_by_companion';
+  if (isCancel && !d.note) return;
+
+  const now = new Date();
+  const data: Prisma.VisitUncheckedUpdateInput = {
+    state: d.to,
+    stateChangedAt: now,
+  };
+  if (d.to === 'in_progress') data.actualStartAt = now;
+  if (d.to === 'completed') data.actualEndAt = now;
+  if (isCancel) {
+    data.cancellationActor = 'companion';
+    data.cancellationReason = d.note ?? null;
+  }
+
+  await prisma.visit.update({ where: { id: d.visitId }, data });
+
+  // Backfill actualStartAt for completed if it was somehow skipped.
+  if (d.to === 'completed') {
+    await prisma.visit.updateMany({
+      where: { id: d.visitId, actualStartAt: null },
+      data: { actualStartAt: before.scheduledStartAt },
+    });
+  }
+
+  await audit({
+    actorType: 'user',
+    actorId: user.id,
+    actorRole: user.role,
+    actionType: 'state_change',
+    targetType: 'Visit',
+    targetId: d.visitId,
+    beforeState: { state: before.state },
+    afterState: { state: d.to },
+    metadata: {
+      event: 'visit_state_change',
+      via: 'companion_portal',
+      ...(d.note ? { note: d.note } : {}),
+    },
+  });
+
+  if (isCancel) {
+    await sendVisitCancelledEmails(d.visitId);
+  }
+  if (d.to === 'in_progress') {
+    await sendVisitStartedEmail(d.visitId);
+  }
+
+  revalidatePath('/companion');
+  revalidatePath('/companion/visits');
+  revalidatePath(`/companion/visits/${d.visitId}`);
   revalidatePath('/ops');
   revalidatePath('/ops/visits');
   revalidatePath(`/ops/visits/${d.visitId}`);
