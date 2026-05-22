@@ -17,8 +17,10 @@ production at [youareingoodcompany.co.uk](https://youareingoodcompany.co.uk)
 (marketing + family + companion) and
 [ops.youareingoodcompany.co.uk](https://ops.youareingoodcompany.co.uk)
 (operator). Sign-in covers magic-link, password, and passkeys (WebAuthn).
-Operator-mediated messaging is live with real-time WebSocket delivery and
-attachments. Stripe payments are the next major block. See
+Messaging is live with real-time WebSocket delivery and attachments:
+operator-mediated threads (M.1) plus direct family ↔ companion threads
+gated per-companion by `operator_admin` and shadowed read-only on an ops
+oversight tab (M.2). Stripe payments are the next major block. See
 [Where things are](#where-things-are) below for the honest list of what is
 built versus what is queued.
 
@@ -508,6 +510,8 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 - [x] Analytics dashboard at `/ops/analytics` (O.15) — five inline-SVG charts (enquiries, matches, visits, reports, safeguarding), no new dependency
 - [x] Operator account page at `/ops/account` (P.3.1) — security overview + sign-out
 - [x] Messaging at `/ops/messages` (M.1) — operator-mediated threads with each family and each companion; unread counts in nav; every transition audit-logged
+- [x] Direct F↔C oversight tab at `/ops/messages?tab=direct` (M.2.4) — read-only view of every FAMILY_COMPANION thread; every open audits a `read_sensitive` event on the thread; live updates via WebSocket fan-out to `operator_admin` users
+- [x] Per-companion direct-messaging gate on `/ops/companions/[id]/edit` (M.2.2) — `operator_admin` only, audit-logged on every flip with before/after state
 - [x] Pagination across every list page (offset, page=N) and every detail-page history feed (`hp=N`)
 
 **Family portal (`/family`)**
@@ -519,7 +523,7 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 - [x] Subscription pause / cancel request flow
 - [x] Match visibility: family sees proposed match, can accept or decline, with disambiguated "Accepted / Declined / Awaiting reply" labels
 - [x] Account: name, relationship-to-recipient edit, self-serve "invite a family member"
-- [x] Messaging at `/family/messages` (M.1) — single thread with the office, real-time delivery, attachments
+- [x] Messaging at `/family/messages` (M.1 + M.2.3) — thread with the office plus, when the office has cleared it, a direct thread per matched companion. A "Start a direct thread" panel surfaces eligible matches that don't have a thread yet; threads flip read-only when the match ends or the gate is revoked, history preserved
 
 **Companion portal (`/companion`)**
 
@@ -531,7 +535,7 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 - [x] Pre-accept travel-time estimate (postcodes.io + haversine) shown as "~25 min by car / ~40 by public transport / ~30 on foot" — no postcode leaked pre-accept
 - [x] Profile edit: bio, photo (with live preview), interests, availability grid, driver's licence number + expiry, full home address, optional `maxTravelMiles`
 - [x] Account view: read-only admin fields + sign-out card
-- [x] Messaging at `/companion/messages` (M.1) — single thread with the office, real-time delivery, attachments
+- [x] Messaging at `/companion/messages` (M.1 + M.2.3) — thread with the office plus, when the office has cleared it, a direct thread per matched family. "Start a direct thread" panel for eligible matches without a thread; threads flip read-only on match-end or gate-revoke
 
 **Cron / scheduled jobs**
 
@@ -543,6 +547,7 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 - [x] Operator-mediated threads (M.1): Ops ↔ Family and Ops ↔ Companion, one thread per party, with `Thread` / `Message` / `ThreadReadState` models and unread badges across the nav
 - [x] Real-time delivery (M.1.1): standalone WebSocket server on `:3004`, nginx `/realtime/` upgrade location, Redis pub/sub (`messaging:user:<id>`) fanning out from server actions; client hydrates `ThreadView` without refresh
 - [x] Attachments + emoji picker (M.1.2): images (JPEG/PNG/WebP/HEIC, max 10 MB, EXIF preserved, HEIC→JPEG transcode), documents (PDF / Office / TXT / CSV, max 25 MB), videos (MP4/MOV/WebM, max 100 MB). Magic-byte validation, per-thread S3 prefix, auth-gated streaming, lazy-loaded emoji picker
+- [x] Direct family ↔ companion threads (M.2.1 → M.2.5): new `ThreadKind` enum (`OPS_FAMILY` / `OPS_COMPANION` / `FAMILY_COMPANION`) with backfilled existing rows; `Companion.directMessagingEnabled` gates eligibility per-companion (operator_admin only). Find-or-create via `openDirectThread(matchId)`. Lifecycle derived at runtime from `Match.status` + `Companion.directMessagingEnabled` — match-ended OR gate-revoked flips the thread read-only without losing history. Email notify reuses the M.1 template with an optional `senderLabel`. Static "office can read" banner on both participant sides, `Lock`-iconed "read-only" banner once lifecycle closes
 
 **Performance + caching**
 
@@ -574,7 +579,7 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 
 - [ ] Public companion ratings (gated, moderated)
 - [ ] Direct Payment invoicing (Care Act 2014)
-- [ ] Direct family ↔ companion messaging (today all threads go through the office)
+- [ ] Block / mute on a direct F↔C thread (today only the operator_admin gate can stop one)
 - [ ] Gift vouchers
 - [ ] Multi-language support
 - [ ] Native mobile apps
