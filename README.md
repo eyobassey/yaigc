@@ -12,11 +12,13 @@ site, family portal, companion portal, and operator console. One application,
 one database, organised internally as a modular monolith with eight bounded
 contexts.
 
-**Status**: marketing site + auth backbone live in production at
-[youareingoodcompany.co.uk](https://youareingoodcompany.co.uk). Sprint 1 pages
-shipped, magic-link sign-in working end-to-end, Postgres + Prisma schema v0
-applied. See [Where things are](#where-things-are) below for the honest list
-of what is built versus what is queued.
+**Status**: all three portals plus the operator console are live in
+production at [youareingoodcompany.co.uk](https://youareingoodcompany.co.uk)
+(marketing + family + companion) and
+[ops.youareingoodcompany.co.uk](https://ops.youareingoodcompany.co.uk)
+(operator). Stripe payments are the next major block. See
+[Where things are](#where-things-are) below for the honest list of what is
+built versus what is queued.
 
 ---
 
@@ -165,74 +167,60 @@ igc-platform/
 ├── apps/
 │   └── web/                        # Next.js 14 (App Router) application
 │       ├── public/                 # Static assets, favicons, fonts, brand marks
+│       ├── prisma/
+│       │   ├── schema.prisma       # Single-file Prisma schema
+│       │   └── migrations/         # Version-controlled migrations
 │       ├── src/
-│       │   ├── app/                # App Router routes
-│       │   │   ├── (marketing)/    # Public marketing pages
-│       │   │   ├── (family)/       # Family portal routes
-│       │   │   ├── (companion)/    # Companion portal routes
-│       │   │   ├── (operator)/     # Operator console routes
-│       │   │   ├── api/            # REST route handlers (webhooks, integrations)
+│       │   ├── app/                # App Router routes (one folder per surface)
+│       │   │   ├── (marketing pages live at the apex: /, /how-it-works, /pricing, /safeguarding, /companions/join, /about, /privacy, /terms, /accessibility, /contact)
+│       │   │   ├── companion/      # Companion portal (apex)
+│       │   │   ├── family/         # Family portal (apex)
+│       │   │   ├── ops/            # Operator console (served at ops.* via middleware host check)
+│       │   │   ├── api/            # Auth callbacks, photo / document streaming routes, cron endpoints
 │       │   │   ├── styleguide/     # Renders design tokens for QA
-│       │   │   ├── layout.tsx
-│       │   │   └── page.tsx
-│       │   ├── components/         # React components
-│       │   │   ├── ui/             # shadcn/ui-based primitives, brand-themed
-│       │   │   ├── marketing/      # Marketing-specific compositions
-│       │   │   ├── portal/         # Portal-specific compositions
-│       │   │   └── icons/          # Brand icon set
-│       │   ├── server/             # Server-only code
-│       │   │   ├── auth.ts         # Auth.js configuration
-│       │   │   ├── db.ts           # Prisma client singleton
-│       │   │   ├── trpc.ts         # tRPC root router composition
-│       │   │   └── contexts/       # The eight bounded contexts (see below)
-│       │   ├── lib/                # Isomorphic shared utilities
-│       │   ├── content/            # MDX content (legal pages, FAQ, blog)
-│       │   ├── styles/             # Tailwind config inputs, globals.css
-│       │   ├── types/              # Shared TypeScript types
-│       │   └── middleware.ts       # Auth + role-based middleware
-│       ├── tests/
-│       │   ├── e2e/                # Playwright
-│       │   ├── integration/        # Vitest + supertest
-│       │   └── unit/               # Vitest
+│       │   │   └── layout.tsx
+│       │   ├── components/
+│       │   │   └── ui/             # Shared primitives (Button, Paginator)
+│       │   ├── lib/                # Server-side libraries (one file per concern)
+│       │   │   ├── auth.ts, auth-helpers.ts
+│       │   │   ├── prisma.ts, audit.ts
+│       │   │   ├── companion*.ts, family*.ts, match.ts, subscription.ts, visit.ts
+│       │   │   ├── safeguarding.ts, enquiry.ts, post-visit-report.ts
+│       │   │   ├── badges.ts, pagination.ts, postcode-distance.ts
+│       │   │   ├── visit-schedule.ts (BST-correct day boundaries)
+│       │   │   ├── companion-photo-storage.ts, companion-document-storage.ts, visit-photo-storage.ts (S3)
+│       │   │   └── email/          # Per-template builders, all using lib/email/_chrome.ts
+│       │   └── middleware.ts       # Subdomain + role-based gate
 │       ├── next.config.mjs
 │       ├── tailwind.config.ts
 │       └── package.json
 ├── packages/
 │   ├── design-tokens/              # Brand colours, typography, spacing scale
-│   ├── content/                    # Customer-facing copy strings (en-GB.ts)
-│   └── tsconfig/                   # Shared tsconfig presets
-├── prisma/
-│   ├── schema.prisma               # Database schema (single file)
-│   ├── migrations/                 # Version-controlled migrations
-│   └── seed.ts                     # Seed for local + staging
+│   └── content/                    # Customer-facing copy strings + brand-voice rules
 ├── deploy/
-│   ├── pm2/                        # PM2 ecosystem configs per environment
-│   │   ├── staging.config.cjs
-│   │   └── production.config.cjs
-│   ├── nginx/                      # Reverse proxy configs in front of PM2
-│   └── deploy.sh                   # SSH-based release script (symlink swap)
+│   └── systemd/                    # yaigc-visit-reminders.* and yaigc-action-reminders.* unit files
 ├── docs/
-│   ├── PRD.pdf                     # Product Requirements Document
-│   ├── Engineering_Kickoff_Pack.docx
+│   ├── README.md                   # Pointers to the SDD + design system
+│   ├── Solution_Design_Document_v1.pdf
+│   ├── design-system/              # Tokens, components, AMENDMENTS.md
 │   ├── adr/                        # Architectural Decision Records
-│   ├── runbooks/                   # Operator and engineering runbooks
-│   ├── compliance/                 # GDPR, DPIA, safeguarding crosswalks
-│   └── decisions.md                # Open decisions log
+│   ├── runbooks/                   # Operator and engineering runbooks (currently empty)
+│   └── compliance/                 # GDPR / DPIA / safeguarding (currently empty)
 ├── scripts/
-│   ├── dev.sh                      # Spin up local dev (Docker + app)
-│   ├── seed.sh                     # Reset and seed the dev database
 │   └── lint-content.ts             # Brand voice guard (forbidden words)
-├── .github/
-│   ├── workflows/                  # CI/CD (lint, test, deploy via SSH)
-│   ├── pull_request_template.md
-│   └── CODEOWNERS
-├── docker-compose.yml              # Postgres, Redis, MailHog, S3 mock
-├── .env.example                    # Placeholder env vars (real values via 1Password)
-├── .nvmrc                          # Node version pin
+├── CHANGELOG.md                    # Per-stage commit log (added in May 2026)
 ├── package.json                    # Root pnpm workspace orchestration
 ├── pnpm-workspace.yaml
 └── README.md                       # You are here
 ```
+
+The original SDD anticipated a "modular monolith with eight bounded
+contexts under `src/server/contexts/`" with `dependency-cruiser` keeping
+them isolated. In practice the application has grown as a flat,
+file-per-concern layout under `src/app/` and `src/lib/` and that is
+working well at the current scale. See
+[ADR 0002 — Flat layout, not bounded contexts](docs/adr/0002-flat-layout-not-bounded-contexts.md)
+for the why and when to revisit.
 
 ---
 
@@ -395,44 +383,40 @@ written for that future state.
 
 ---
 
-## Bounded contexts
+## How the code is organised
 
-The application is organised as eight bounded contexts. Each owns a slice of
-the domain. Cross-context interaction goes through explicit public APIs,
-never through shared internal models or direct database joins.
+The application is a single Next.js 14 app. Code is grouped by concern in
+two main folders:
 
-Each context lives in `apps/web/src/server/contexts/<name>/`.
+- `apps/web/src/app/` — App Router routes, one folder per surface
+  (`companion/`, `family/`, `ops/`, plus the marketing pages at the apex
+  and `api/` for streaming + cron endpoints). Each route is a Server
+  Component by default; client components are explicitly marked
+  `'use client'`.
+- `apps/web/src/lib/` — server-side libraries, one file per domain
+  concern. The pattern is **a `lib/<thing>.ts` file owns the server
+  actions, zod schemas, and audit calls for that thing**. Examples:
+  `lib/match.ts` owns Match transitions, `lib/visit.ts` owns the visit
+  state machine, `lib/companion.ts` owns the companion application
+  pipeline and admin edit.
 
-| Context | Owns |
-|---------|------|
-| `family` | Family households, family payers, recipients, household members, family-side preferences and consents |
-| `companion` | Companion profiles, onboarding state, availability, compliance documents (DBS, training, insurance), companion-side preferences |
-| `visit` | Bookings, visit state machine, scheduling, post-visit reports, recurrence, the Match relationship between a Family and a Companion |
-| `payment` | Stripe integration, subscriptions, one-off charges, refunds, companion payouts via Stripe Connect, invoices |
-| `safeguarding` | Safeguarding cases, severity triage, escalation workflow, incident logging, regulator-facing exports |
-| `audit` | Append-only audit log writer. Every other context calls `audit` to record sensitive actions. Never modified, never deleted |
-| `notification` | Email (Brevo), SMS (Twilio), and in-app notification dispatch. Templates and content strings live here |
-| `operator` | Operator console surfaces: dashboards, search across contexts, bulk actions, content management. Consumes other contexts; does not own customer data itself |
+Cross-cutting bits:
 
-Each context folder has the same shape:
+| File / module | What it owns |
+|---|---|
+| `lib/auth.ts` + `lib/auth-helpers.ts` | Auth.js setup and the `requireOperator` / `requireFamilyMember` / `requireFamilyPayer` / `requireCompanion` guards |
+| `lib/audit.ts` | Single `audit(...)` writer. Postgres triggers block UPDATE/DELETE on the table |
+| `lib/email/` | Brevo email templates, all using a shared `_chrome.ts` renderer (HTML + plain text) |
+| `lib/companion-photo-storage.ts`, `lib/companion-document-storage.ts`, `lib/visit-photo-storage.ts` | S3 helpers, paired with auth-gated `/api/<thing>/[id]` streaming routes |
+| `lib/visit-schedule.ts` | BST-correct UK day boundaries and "next visit start" maths |
+| `lib/pagination.ts` + `components/ui/Paginator.tsx` | Shared offset pagination |
+| `lib/badges.ts` | Closed catalogue of operator-assigned companion badges + tier-from-visits helper |
 
-```
-contexts/<name>/
-├── models.ts        # Domain models (internal)
-├── service.ts       # Business logic (internal)
-├── router.ts        # tRPC router (mounted in src/server/trpc.ts)
-├── jobs.ts          # Background jobs owned by this context (BullMQ workers)
-├── api.ts           # Public API. The ONLY file other contexts may import.
-└── __tests__/
-```
-
-**Rule (enforced in CI by `dependency-cruiser`):** a file inside one context
-can only import another context through that context's `api.ts`. Direct
-imports of another context's `models.ts` or `service.ts` will fail the lint
-step.
-
-If you want to bypass this, write an ADR explaining why. A passing CI check
-is the architecture in this codebase. The rule is not a suggestion.
+The original SDD specification of "eight bounded contexts in
+`src/server/contexts/` with `dependency-cruiser` enforcement" was not
+implemented in favour of this flatter layout. See
+[ADR 0002](docs/adr/0002-flat-layout-not-bounded-contexts.md) for the
+reasoning and the trigger to revisit.
 
 ---
 
@@ -444,7 +428,7 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 ### Built and working
 
 > Tick each box only when the thing actually works in production, not when
-> the PR is open. Last updated 2026-05-21.
+> the PR is open. Last updated 2026-05-22.
 
 **Infrastructure**
 
@@ -452,7 +436,10 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 - [x] IONOS London VPS with Postgres 16 (PGDG), Redis 7, nginx, PM2
 - [x] HTTPS end-to-end: Cloudflare Full (Strict) + 15-year Origin Cert
 - [x] nginx hardening: HSTS, X-Frame-Options DENY, X-Content-Type-Options, Referrer-Policy, Permissions-Policy
-- [ ] CI/CD pipeline (currently manual `pnpm build` + `pm2 restart` on the box)
+- [x] `ops.youareingoodcompany.co.uk` subdomain served from same nginx, same origin cert (ADR 0001)
+- [x] AWS S3 (`igc-app-files-prod`, eu-west-2) for visit photos, companion documents, and profile photos. Files are auth-gated via Next.js API routes — bucket itself stays private
+- [x] systemd timers for cron: hourly visit reminders + hourly action reminders (matches / confirmations / overdue reports), with `Persistent=true` for missed-run catch-up
+- [ ] CI/CD pipeline (currently `pnpm build` + `pm2 restart igc-prod-web` on the box)
 - [ ] Local development environment (Docker stack)
 
 **Web platform foundations**
@@ -462,73 +449,100 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 - [x] Tailwind CSS 3.4 sourced from design tokens
 - [x] Self-hosted Fraunces + Inter via `next/font/google`
 - [x] Design tokens (`packages/design-tokens`) with full brand palette
-- [x] Content strings (`packages/content`) with brand voice guard (1736 string literals scanned, 0 violations)
+- [x] Content strings (`packages/content`) with brand voice guard
 - [x] `/styleguide` route rendering tokens
-- [x] Shared `PageShell` (Nav + footer + skip-link) and `LongForm` primitives
+- [x] Shared `PageShell` (Nav + footer + skip-link), `LongForm`, and `Paginator` primitives
 
 **Marketing surface (Sprint 1)**
 
-- [x] Home (`/`) with hero photo, trust strip, pillars, how-it-works teaser, founder note, visit gallery, pricing teaser, FAQ, final CTA
-- [x] `/how-it-works`, `/pricing`, `/safeguarding`, `/companions/join` (full content from `@igc/content`)
-- [x] `/about` (founder copy from internal review bundle)
-- [x] `/privacy`, `/terms`, `/accessibility` (long-form drafts, robots:noindex, "Draft for review" banners, italic placeholders for Companies House / ICO numbers)
-- [x] `/not-found`, `/icon.svg` favicon
-- [x] Mobile drawer, sticky nav, full-name horizontal wordmark
+- [x] Home, `/how-it-works`, `/pricing`, `/safeguarding`, `/companions/join`
+- [x] `/about`, `/privacy`, `/terms`, `/accessibility`
+- [x] Public application form at `/companions/join/apply` (structured availability picker)
+- [x] Public enquiry form at `/contact` → `Enquiry` triage queue in ops
 
 **SEO + social**
 
 - [x] `robots.txt`, `sitemap.xml`, `theme-color`, `apple-mobile-web-app-status-bar-style`
-- [x] Open Graph + Twitter card defaults in root layout
-- [x] Per-page OG images (`/`, `/pricing`, `/safeguarding`, `/how-it-works`, `/about`, `/companions/join`) rendered via `next/og` with real Fraunces italic
+- [x] Open Graph + Twitter card defaults + per-page OG images via `next/og`
 - [x] JSON-LD: LocalBusiness in root layout, FAQPage on home
 - [x] Title template `%s · You Are In Good Company`
 
-**Database**
-
-- [x] Postgres 16 on the IONOS box, loopback only, role `yaigc` with CREATEDB for migrations
-- [x] Prisma 6.19 schema v0: `User`, `Account`, `Session`, `VerificationToken` (Auth.js standard) + `UserRole` enum (`USER` / `COMPANION` / `OPERATOR` / `ADMIN`)
-- [x] First migration applied (`20260521..._init`)
-- [ ] Business models: `Family`, `FamilyMember`, `Recipient`, `Companion`, `Visit`, `AuditLogEntry`
-- [ ] Seed script with realistic dev data
-- [ ] Bounded-context directory scaffolding with `dependency-cruiser` enforcement
-
 **Auth + accounts**
 
-- [x] Auth.js v5 (beta) with `@auth/prisma-adapter`, database session strategy
-- [x] Magic link via Brevo SMTP, branded HTML email with horizontal wordmark
-- [x] `/sign-in`, `/sign-in/check-email`, `/me` (Server Component, redirects to `/sign-in?callbackUrl=/me` if not signed in; shows email + user id + sign-out)
-- [x] `/api/auth/[...nextauth]` route handlers
-- [ ] Password provider (Auth.js Credentials, hashed via argon2)
-- [ ] Role-based middleware enforcing route-group access
-- [ ] Audit log writer wired into auth flows
+- [x] Auth.js v5 with `@auth/prisma-adapter`, database session strategy
+- [x] Magic link via Brevo SMTP, branded HTML email
+- [x] Cross-subdomain cookie (`.youareingoodcompany.co.uk`) so the same session covers apex + ops + future `app.*`
+- [x] `UserRole` enum at SDD spec: `family_payer`, `family_viewer`, `companion`, `operator`, `operator_admin`, `safeguarding_lead`, `finance`, `support`
+- [x] Role-aware helpers in `lib/auth-helpers.ts`: `requireOperator`, `requireFamilyMember`, `requireFamilyPayer`, `requireCompanion`
+- [x] Role-based middleware enforcing route-group access (apex portals + ops subdomain)
+- [x] Append-only audit log (Postgres triggers block UPDATE/DELETE) wired into every state change; viewer at `/ops/audit`
+
+**Operator console (`ops.youareingoodcompany.co.uk`)**
+
+- [x] Today dashboard: enquiries, prospect families, new applications, open matches, visits today, missing reports, open safeguarding cases, pending family requests, compliance flags
+- [x] Cross-console search field in the header (`/ops/search`) — Family / Recipient / Companion / Enquiry with deep links
+- [x] Families list + detail + edit (address, consent, members, recipients, age display, sub change requests)
+- [x] Companions list with tier pill + visit count + badge chips per row; detail with photo, RTW panel, documents, history, edit
+- [x] Companion edit covers admin (name, borough, hourly rate, engagement, status, max concurrent matches) + profile (bio, interests, availability, photo with live preview) + driver's licence (number + expiry) + full home address + max travel miles + internal badges
+- [x] Match flow: propose, accept, decline, un-match with cascade-cancel, accept/un-match emails
+- [x] Subscription create-from-match, edit schedule, status transitions, change requests honoured
+- [x] Visit state machine (`scheduled` → `confirmed` → `en_route` → `in_progress` → `completed` → `reported`, plus cancellations and no-shows). Manual and bulk visit generation
+- [x] Visit calendar view at `/ops/visits/calendar` — week-at-a-glance (Mon–Sun, BST-correct)
+- [x] Post-visit report submission with up to N photos (S3), redacted family summary email
+- [x] Safeguarding cases: severity triage, escalation workflow, case notes, auto-open hooks
+- [x] Compliance dashboard at `/ops/compliance` — DBS, insurance, driver's licence expired / ≤30 days / ≤90 days / missing, per-companion flag badges
+- [x] Audit log viewer with offset pagination
+- [x] Pagination across every list page (offset, page=N) and every detail-page history feed (`hp=N`)
+
+**Family portal (`/family`)**
+
+- [x] Dashboard
+- [x] Recipient view + edit (interests, mobility, dietary as tag pickers + free-text "Other")
+- [x] Matched-companion view (gated, post-accept), photo via auth-gated route
+- [x] Visits list + detail with reports + photos (auth-gated)
+- [x] Subscription pause / cancel request flow
+- [x] Match visibility: family sees proposed match, can accept or decline, with disambiguated "Accepted / Declined / Awaiting reply" labels
+- [x] Account: name, relationship-to-recipient edit, self-serve "invite a family member"
+
+**Companion portal (`/companion`)**
+
+- [x] Dashboard
+- [x] Application + RTW data + document uploads (passport, BRP, share code, visa letter, ILR, DBS, driver's licence, photo ID, proof of address, insurance, other)
+- [x] Visits list + detail with state machine transitions (confirm, en-route, in-progress, completed, cancellations)
+- [x] Self-submitted post-visit report (with photos) — `submittedByOperatorId` left NULL when self-submitted
+- [x] Match accept / decline via portal, with the same emails as the operator path
+- [x] Pre-accept travel-time estimate (postcodes.io + haversine) shown as "~25 min by car / ~40 by public transport / ~30 on foot" — no postcode leaked pre-accept
+- [x] Profile edit: bio, photo (with live preview), interests, availability grid, driver's licence number + expiry, full home address, optional `maxTravelMiles`
+- [x] Account view: read-only admin fields + sign-out card
+
+**Cron / scheduled jobs**
+
+- [x] Hourly visit reminders (24h before scheduled start, single-fire via `reminderSentAt`)
+- [x] Hourly action reminders (24h after match proposal with no response from each side; 4h before unconfirmed visits; 4h after a completed visit with no report) — all single-fire via column flags
 
 **Performance + caching**
 
 - [x] `sharp` installed for next/image production optimisation
 - [x] Long-cache headers (`max-age=31536000, immutable`) for `/logo`, `/photos`, `/fonts`
 - [x] Explicit width/height on all `<img>` tags (CLS-protective)
+- [x] Auth-gated photo routes use `Cache-Control: private, max-age=3600`
 
 **Observability + legal (queued)**
 
 - [ ] Sentry, PostHog (EU region, gated on cookie consent), Better Stack logging
 - [ ] Cookie consent banner (PECR + UK GDPR)
 - [ ] Real Companies House registration number + ICO registration number swapped in for the italic placeholders in /privacy and /terms
-- [ ] First 11 ADRs documenting the major decisions (the `docs/adr/` directory is currently empty)
 
-### In flight (Sprint 1+)
+### In flight / next
 
-- [ ] Family portal: sign-up, dashboard, visits, recipient profile, plan and payments, household, messages
-- [ ] Companion portal: application, onboarding tracker, profile, availability calendar, visits, post-visit report, earnings
-- [ ] Operator console: family list, companion roster, booking management, safeguarding cases, payment ledger, audit viewer
-- [ ] Booking engine: state machine, recurring schedules, cooling-off rules
-- [ ] Post-visit report flow
 - [ ] Stripe Subscriptions integration (family billing)
 - [ ] Stripe Connect integration (companion payouts)
-- [ ] SMS reminders (Twilio)
-- [ ] DBS expiry tracking and alerts (uCheck)
+- [ ] Family billing surface (`/family/subscription` payments tab)
+- [ ] Companion payouts surface (`/companion/payouts`)
+- [ ] SMS reminders (Twilio) alongside the existing email cron
+- [ ] DBS uCheck API integration (today the dashboard tracks expiry dates manually)
 - [ ] Identity verification (Stripe Identity)
-- [ ] Migrate AWS from `769018976493` (current Rom Flex account) → YAIGC's own AWS account
-- [ ] Migrate Brevo from Rom Flex's account → YAIGC's own Brevo account
+- [ ] Credential rotations: burned Brevo SMTP, AWS access key, AUTH_SECRET
 
 ### Not yet started (Phase 2+)
 
@@ -807,20 +821,16 @@ into it.
 - [Product Requirements Document](docs/PRD.pdf) - what we are building, who for, why, when. Read first.
 - [Engineering Kickoff Pack](docs/Engineering_Kickoff_Pack.docx) - Sprint 0 ticket backlog, repo scaffold rationale, environment setup checklist.
 
-### Architecture (Sprint 0 deliverable; not yet authored)
+### Architecture
 
-- [`docs/adr/`](docs/adr/) - Architectural Decision Records. The "why" behind each technology choice.
-  - [0001 - Stack choice](docs/adr/0001-stack-choice.md)
-  - [0002 - Monorepo structure](docs/adr/0002-monorepo-structure.md)
-  - [0003 - Modular monolith over microservices](docs/adr/0003-modular-monolith.md)
-  - [0004 - Auth.js v5](docs/adr/0004-auth-library.md)
-  - [0005 - Postgres over MySQL](docs/adr/0005-postgres-over-mysql.md)
-  - [0006 - Prisma over TypeORM](docs/adr/0006-prisma-over-typeorm.md)
-  - [0007 - Brevo for email](docs/adr/0007-email-brevo.md)
-  - [0008 - BullMQ on Redis for background jobs](docs/adr/0008-jobs-bullmq.md)
-  - [0009 - Audit log pattern](docs/adr/0009-audit-log-pattern.md)
-  - [0010 - IONOS single-box hosting for Phase 1, with re-platform trigger](docs/adr/0010-hosting-ionos.md)
-  - [0011 - Secrets management (PM2 ecosystem files now, AWS Secrets Manager before first paid visit)](docs/adr/0011-secrets-management.md)
+- [`docs/adr/`](docs/adr/) - Architectural Decision Records. The "why" behind each major decision.
+  - [0001 - Operator console served from ops.* subdomain](docs/adr/0001-operator-subdomain.md)
+  - [0002 - Flat layout, not bounded contexts](docs/adr/0002-flat-layout-not-bounded-contexts.md)
+  - [0003 - S3 + auth-gated routes for user-uploaded files](docs/adr/0003-s3-auth-gated-file-storage.md)
+  - [0004 - Offset pagination over cursor pagination](docs/adr/0004-offset-pagination.md)
+  - [0005 - postcodes.io for pre-accept travel-time estimates](docs/adr/0005-postcodes-io-travel-estimate.md)
+  - [0006 - Internal companion badging: tier + manual tags](docs/adr/0006-companion-badging.md)
+- [`CHANGELOG.md`](CHANGELOG.md) - One entry per shipped stage, dated, with commit SHA.
 
 ### Brand and design
 

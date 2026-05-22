@@ -30,19 +30,25 @@ something, or designing a new pattern.
 
 ## 3. Architectural Decision Records (`adr/`)
 
-One ADR per major technology decision. Format: numbered (`0001-...`),
-markdown, dated, with context / decision / consequences.
+One ADR per major technology or design decision. Format: numbered
+(`0001-...`), markdown, dated, with context / decision / alternatives
+/ consequences / triggers to revisit.
 
-`adr/` is currently empty. First entries to write (per the SDD ToC):
+Current ADRs (most recent first):
 
-- 0001 — Next.js 14 App Router, TS strict, Tailwind, shadcn/ui, tRPC, Zod
-- 0003 — Modular monolith with 8 bounded contexts (dependency-cruiser)
-- 0004 — Auth.js v5 with database sessions
-- 0005 — PostgreSQL 16+ on the IONOS box (Phase 1)
-- 0006 — Prisma as the ORM
-- 0007 — Brevo for email (EU residency)
-- 0008 — Inngest for background jobs
-- 0010 — IONOS single-box hosting for Phase 1, with re-platform trigger
+- [`0006-companion-badging.md`](adr/0006-companion-badging.md) — Internal companion badging: live-computed tier + manual descriptive tags
+- [`0005-postcodes-io-travel-estimate.md`](adr/0005-postcodes-io-travel-estimate.md) — postcodes.io + haversine for pre-accept travel-time
+- [`0004-offset-pagination.md`](adr/0004-offset-pagination.md) — Offset pagination platform-wide
+- [`0003-s3-auth-gated-file-storage.md`](adr/0003-s3-auth-gated-file-storage.md) — S3 private + auth-gated Next.js API routes for all user-uploaded files
+- [`0002-flat-layout-not-bounded-contexts.md`](adr/0002-flat-layout-not-bounded-contexts.md) — Why the flat `app/` + `lib/` layout, with a clear trigger to revisit
+- [`0001-operator-subdomain.md`](adr/0001-operator-subdomain.md) — Operator console served from `ops.*` subdomain rather than a separate domain
+
+Decisions still to record (in priority order):
+
+- Stack choice (Next.js 14 App Router, TS strict, Tailwind, Auth.js v5, Prisma, Postgres, Brevo)
+- Audit log pattern (Postgres triggers blocking UPDATE/DELETE)
+- IONOS single-box hosting for Phase 1, with re-platform trigger
+- Server actions over tRPC (the SDD anticipated tRPC; we went with App Router server actions)
 
 ## Other folders
 
