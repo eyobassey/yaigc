@@ -3,14 +3,23 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { createTransport } from 'nodemailer';
+import { brand } from '@igc/content';
 import { prisma } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
-import { requireFamilyPayer } from '@/lib/auth-helpers';
+import { isOperator, requireFamilyPayer } from '@/lib/auth-helpers';
+import {
+  familyMemberInvitedHtml,
+  familyMemberInvitedText,
+  familyMemberInvitedSubject,
+} from '@/lib/email/family-member-invited';
 import {
   CANONICAL_INTERESTS,
-  serialiseInterests,
+  CANONICAL_MOBILITY,
+  CANONICAL_DIETARY,
+  serialiseTagged,
   tagToFormKey,
-} from '@/lib/recipient-interests';
+} from '@/lib/recipient-tags';
 
 // -------------------------------------------------------------------------
 // EDIT RECIPIENT (family-side)
@@ -36,9 +45,9 @@ const EditRecipientSchema = z.object({
     .or(z.literal('').transform(() => undefined)),
   interestsOther: z.string().trim().max(2000).optional(),
   thingsToKnow: z.string().trim().max(2000).optional(),
-  mobility: z.string().trim().max(2000).optional(),
+  mobilityOther: z.string().trim().max(2000).optional(),
   healthNotes: z.string().trim().max(2000).optional(),
-  dietary: z.string().trim().max(2000).optional(),
+  dietaryOther: z.string().trim().max(2000).optional(),
   religiousObservance: z.string().trim().max(2000).optional(),
   // Address fields (validated either way; gate enforced in the handler).
   addressLine1: z.string().trim().max(120).optional(),
@@ -76,9 +85,9 @@ export async function editFamilyRecipient(
     'dateOfBirth',
     'interestsOther',
     'thingsToKnow',
-    'mobility',
+    'mobilityOther',
     'healthNotes',
-    'dietary',
+    'dietaryOther',
     'religiousObservance',
     'addressLine1',
     'addressLine2',
@@ -88,13 +97,18 @@ export async function editFamilyRecipient(
   ]) {
     raw[key] = String(formData.get(key) ?? '').trim() || undefined;
   }
-  // Collect ticked interest tags via interest_<key> checkboxes.
-  const selectedTags = new Set<string>();
-  for (const tag of CANONICAL_INTERESTS) {
-    if (formData.get(`interest_${tagToFormKey(tag)}`) === 'on') {
-      selectedTags.add(tag);
+  // Collect ticked tags across each tag category. Each checkbox name
+  // is <category>_<tagKey>.
+  const collectTicks = (prefix: string, list: readonly string[]) => {
+    const ticks = new Set<string>();
+    for (const tag of list) {
+      if (formData.get(`${prefix}_${tagToFormKey(tag)}`) === 'on') ticks.add(tag);
     }
-  }
+    return ticks;
+  };
+  const interestTicks = collectTicks('interest', CANONICAL_INTERESTS);
+  const mobilityTicks = collectTicks('mobility', CANONICAL_MOBILITY);
+  const dietaryTicks = collectTicks('dietary', CANONICAL_DIETARY);
   // Checkboxes come back as 'on' or absent.
   raw.consentToVisits = formData.get('consentToVisits') === 'on' ? 'on' : undefined;
   raw.consentToPhotos = formData.get('consentToPhotos') === 'on' ? 'on' : undefined;
@@ -140,7 +154,9 @@ export async function editFamilyRecipient(
     consentToPhotos: d.consentToPhotos === 'on',
     consentToReportSharing: d.consentToReportSharing === 'on',
   };
-  const interestsCombined = serialiseInterests(selectedTags, d.interestsOther);
+  const interestsCombined = serialiseTagged(CANONICAL_INTERESTS, interestTicks, d.interestsOther);
+  const mobilityCombined = serialiseTagged(CANONICAL_MOBILITY, mobilityTicks, d.mobilityOther);
+  const dietaryCombined = serialiseTagged(CANONICAL_DIETARY, dietaryTicks, d.dietaryOther);
   const update: Record<string, unknown> = {
     firstName: d.firstName,
     lastName: d.lastName,
@@ -150,9 +166,9 @@ export async function editFamilyRecipient(
     dateOfBirth: d.dateOfBirth ? new Date(`${d.dateOfBirth}T00:00:00.000Z`) : null,
     interests: interestsCombined || null,
     thingsToKnow: d.thingsToKnow ?? null,
-    mobility: d.mobility ?? null,
+    mobility: mobilityCombined || null,
     healthNotes: d.healthNotes ?? null,
-    dietary: d.dietary ?? null,
+    dietary: dietaryCombined || null,
     religiousObservance: d.religiousObservance ?? null,
     ...consents,
   };
@@ -404,4 +420,195 @@ export async function requestSubscriptionChange(formData: FormData): Promise<voi
   revalidatePath('/ops');
   revalidatePath(`/ops/families/${family.id}`);
   revalidatePath(`/ops/subscriptions/${sub.id}`);
+}
+
+// -------------------------------------------------------------------------
+// INVITE another family member (self-serve)
+// -------------------------------------------------------------------------
+
+const InviteSchema = z.object({
+  email: z.string().trim().toLowerCase().email('Use a valid email address.').max(254),
+  firstName: z.string().trim().min(1).max(80),
+  lastName: z.string().trim().min(1).max(80),
+  relationshipToRecipient: z
+    .enum(RELATIONSHIPS)
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
+});
+
+export type InviteState = {
+  ok: boolean;
+  errors?: Record<string, string>;
+  values?: Record<string, string | undefined>;
+};
+
+export async function inviteFamilyMember(
+  _prev: InviteState,
+  formData: FormData,
+): Promise<InviteState> {
+  const { user, family } = await requireFamilyPayer('/family/account/invite');
+
+  const raw = {
+    email: String(formData.get('email') ?? '').trim().toLowerCase(),
+    firstName: String(formData.get('firstName') ?? '').trim(),
+    lastName: String(formData.get('lastName') ?? '').trim(),
+    relationshipToRecipient:
+      String(formData.get('relationshipToRecipient') ?? '').trim() || undefined,
+  };
+
+  const parsed = InviteSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      errors: Object.fromEntries(
+        parsed.error.issues.flatMap((i) => {
+          const k = i.path[0];
+          return typeof k === 'string' ? [[k, i.message]] : [];
+        }),
+      ),
+      values: raw,
+    };
+  }
+  const d = parsed.data;
+
+  // Conflict checks. We deliberately surface most as the same opaque
+  // 'cannot add this email' to avoid leaking who has accounts elsewhere
+  // on the platform - only the inviter's own duplicate and 'already on
+  // this household' are spelled out.
+  const existing = await prisma.user.findUnique({
+    where: { email: d.email },
+    select: { id: true, role: true, deletedAt: true },
+  });
+
+  if (existing) {
+    if (existing.id === user.id) {
+      return { ok: false, errors: { email: 'That is you.' }, values: raw };
+    }
+    if (isOperator(existing.role)) {
+      return {
+        ok: false,
+        errors: { email: 'Cannot add this email. Get in touch and we will help.' },
+        values: raw,
+      };
+    }
+    const alreadyHere = await prisma.familyMember.findFirst({
+      where: { userId: existing.id, familyId: family.id, deletedAt: null },
+      select: { id: true },
+    });
+    if (alreadyHere) {
+      return {
+        ok: false,
+        errors: { email: 'Already on this household.' },
+        values: raw,
+      };
+    }
+    const onOtherFamily = await prisma.familyMember.findFirst({
+      where: {
+        userId: existing.id,
+        familyId: { not: family.id },
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    if (onOtherFamily) {
+      return {
+        ok: false,
+        errors: { email: 'Cannot add this email. Get in touch and we will help.' },
+        values: raw,
+      };
+    }
+  }
+
+  // Recipient first-name for the email subject + body, picked from the
+  // first recipient on the household. Falls back to the billing name.
+  const firstRecipient = await prisma.recipient.findFirst({
+    where: { familyId: family.id, deletedAt: null },
+    select: { firstName: true, preferredName: true },
+    orderBy: { firstName: 'asc' },
+  });
+  const recipientLabel =
+    firstRecipient?.preferredName ??
+    firstRecipient?.firstName ??
+    family.billingName;
+
+  // Atomic: create User if missing, create FamilyMember row.
+  const { inviteeUserId, isNewUser } = await prisma.$transaction(async (tx) => {
+    let inviteeId = existing?.id;
+    let isNew = false;
+    if (!inviteeId) {
+      const created = await tx.user.create({
+        data: {
+          email: d.email,
+          firstName: d.firstName,
+          lastName: d.lastName,
+          role: 'family_viewer',
+        },
+        select: { id: true },
+      });
+      inviteeId = created.id;
+      isNew = true;
+    }
+    await tx.familyMember.create({
+      data: {
+        userId: inviteeId,
+        familyId: family.id,
+        role: 'viewer',
+        relationshipToRecipient: d.relationshipToRecipient ?? null,
+      },
+    });
+    return { inviteeUserId: inviteeId, isNewUser: isNew };
+  });
+
+  await audit({
+    actorType: 'user',
+    actorId: user.id,
+    actorRole: user.role,
+    actionType: 'create',
+    targetType: 'FamilyMember',
+    targetId: inviteeUserId,
+    metadata: {
+      event: 'family_member_invited',
+      familyId: family.id,
+      inviteeEmail: d.email,
+      newUser: isNewUser,
+      via: 'family_portal',
+    },
+  });
+
+  // Heads-up email. Best-effort: failure logs but does not unwind the
+  // membership (they can still sign in at /sign-in).
+  try {
+    const transport = createTransport({
+      host: process.env.SMTP_HOST!,
+      port: Number(process.env.SMTP_PORT ?? 587),
+      auth: { user: process.env.SMTP_USER!, pass: process.env.SMTP_PASSWORD! },
+    });
+    const input = {
+      inviteeFirstName: d.firstName,
+      inviterFirstName: user.firstName ?? 'A family member',
+      familyBillingName: family.billingName,
+      recipientFirstName: recipientLabel,
+    };
+    await transport.sendMail({
+      to: d.email,
+      from: `${brand.fullName} <${process.env.EMAIL_SENDER}>`,
+      subject: familyMemberInvitedSubject(input),
+      text: familyMemberInvitedText(input),
+      html: familyMemberInvitedHtml(input),
+    });
+    await audit({
+      actorType: 'system',
+      actorId: null,
+      actionType: 'state_change',
+      targetType: 'FamilyMember',
+      targetId: inviteeUserId,
+      metadata: { event: 'family_invite_email_sent', to: d.email },
+    });
+  } catch (err) {
+    console.error('[family] invite email failed', { to: d.email, err });
+  }
+
+  revalidatePath('/family/account');
+  revalidatePath(`/ops/families/${family.id}`);
+  redirect('/family/account?invited=1');
 }

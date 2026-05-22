@@ -1,4 +1,5 @@
-import { User, Users } from 'lucide-react';
+import Link from 'next/link';
+import { User, Users, Plus } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { requireFamilyMember } from '@/lib/auth-helpers';
 import { AccountForm } from './AccountForm';
@@ -15,8 +16,13 @@ const RELATIONSHIP_LABEL: Record<string, string> = {
   other: 'Other',
 };
 
-export default async function FamilyAccountPage() {
+export default async function FamilyAccountPage({
+  searchParams,
+}: {
+  searchParams: { invited?: string };
+}) {
   const { user, member, family } = await requireFamilyMember('/family/account');
+  const justInvited = searchParams.invited === '1';
 
   // Payer can edit; viewers (Phase 2) get a read-only view.
   const isPayer = member.role === 'payer';
@@ -80,16 +86,38 @@ export default async function FamilyAccountPage() {
         </dd>
       </dl>
 
+      {justInvited ? (
+        <div className="mb-6 bg-moss/5 border-l-4 border-moss px-5 py-4 rounded-r">
+          <p className="font-body text-[0.7rem] font-medium uppercase tracking-[0.12em] text-moss mb-1">
+            Invite sent
+          </p>
+          <p className="text-charcoal text-[0.9375rem] leading-[1.55]">
+            They will see a one-time sign-in link in their inbox shortly.
+          </p>
+        </div>
+      ) : null}
+
       <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6 mb-6">
-        <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-3 inline-flex items-center gap-2">
-          <Users size={14} strokeWidth={1.75} className="text-moss" aria-hidden="true" />
-          Other people on this household ({otherMembers.length})
-        </h2>
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+          <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone inline-flex items-center gap-2">
+            <Users size={14} strokeWidth={1.75} className="text-moss" aria-hidden="true" />
+            Other people on this household ({otherMembers.length})
+          </h2>
+          {isPayer ? (
+            <Link
+              href="/family/account/invite"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-moss/20 text-moss text-[0.75rem] font-medium hover:bg-moss hover:text-cream transition-colors whitespace-nowrap"
+            >
+              <Plus size={12} strokeWidth={2} aria-hidden="true" />
+              Invite someone
+            </Link>
+          ) : null}
+        </div>
         {otherMembers.length === 0 ? (
           <p className="text-stone text-[0.9375rem] leading-[1.55]">
-            You are the only one on the account right now. If you want a
-            partner, sibling or grown-up child to be looped in too, drop
-            us a line and we will add them.
+            You are the only one on the account right now. Click{' '}
+            <strong>Invite someone</strong> above to loop in a partner,
+            sibling, or grown-up child.
           </p>
         ) : (
           <ul className="flex flex-col gap-3">

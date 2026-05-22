@@ -7,9 +7,12 @@ import {
 } from '@/lib/family-portal';
 import {
   CANONICAL_INTERESTS,
-  parseStoredInterests,
+  CANONICAL_MOBILITY,
+  CANONICAL_DIETARY,
+  parseTagged,
   tagToFormKey,
-} from '@/lib/recipient-interests';
+  type TagList,
+} from '@/lib/recipient-tags';
 import {
   Field,
   TextArea,
@@ -58,7 +61,9 @@ export function EditForm({
     return original ?? undefined;
   };
 
-  const parsed = parseStoredInterests(recipient.interests);
+  const interestsParsed = parseTagged(CANONICAL_INTERESTS, recipient.interests);
+  const mobilityParsed = parseTagged(CANONICAL_MOBILITY, recipient.mobility);
+  const dietaryParsed = parseTagged(CANONICAL_DIETARY, recipient.dietary);
 
   return (
     <form action={action} noValidate className="flex flex-col gap-6">
@@ -159,45 +164,62 @@ export function EditForm({
 
       <Section
         title="Interests"
-        description="Pick whatever sounds right; add anything else at the bottom. This helps the companion arrive with something to talk about."
+        description="Pick whatever sounds right; add anything else below. This helps the companion arrive with something to talk about."
       >
-        <fieldset>
-          <legend className="sr-only">Common interests</legend>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {CANONICAL_INTERESTS.map((tag) => {
-              const key = tagToFormKey(tag);
-              return (
-                <label
-                  key={tag}
-                  htmlFor={`interest-${key}`}
-                  className="flex items-start gap-2 cursor-pointer text-charcoal text-[0.875rem] leading-[1.3] p-2.5 rounded-md border border-moss/10 hover:border-moss/30 hover:bg-cream-deep/40 transition-colors has-[:checked]:border-moss has-[:checked]:bg-moss/5"
-                >
-                  <input
-                    id={`interest-${key}`}
-                    type="checkbox"
-                    name={`interest_${key}`}
-                    defaultChecked={parsed.selectedTags.has(tag)}
-                    className="mt-0.5 w-4 h-4 rounded border-moss/30 text-moss focus:ring-moss/30 flex-shrink-0"
-                  />
-                  <span>{tag}</span>
-                </label>
-              );
-            })}
-          </div>
-        </fieldset>
+        <TagPicker
+          fieldPrefix="interest"
+          canonical={CANONICAL_INTERESTS}
+          selected={interestsParsed.selectedTags}
+        />
         <TextArea
           name="interestsOther"
-          label="Anything else (free text)"
+          label="Anything else"
           rows={2}
-          defaultValue={state.values?.interestsOther ?? parsed.other}
+          defaultValue={state.values?.interestsOther ?? interestsParsed.other}
           error={state.errors?.interestsOther}
-          hint="Specific groups, programmes, songs, places, anything personal that does not fit the boxes above."
+          hint="Groups, programmes, songs, places, anything personal."
         />
       </Section>
 
       <Section
-        title="Helping the companion know them"
-        description="Everything here is shared with the companion before they visit. Skip anything that does not feel relevant."
+        title="Mobility"
+        description="Helps the companion know what to expect on arrival and plan the visit."
+      >
+        <TagPicker
+          fieldPrefix="mobility"
+          canonical={CANONICAL_MOBILITY}
+          selected={mobilityParsed.selectedTags}
+        />
+        <TextArea
+          name="mobilityOther"
+          label="Anything else"
+          rows={2}
+          defaultValue={state.values?.mobilityOther ?? mobilityParsed.other}
+          error={state.errors?.mobilityOther}
+        />
+      </Section>
+
+      <Section
+        title="Dietary"
+        description="If you offer tea, biscuits or share a meal during the visit."
+      >
+        <TagPicker
+          fieldPrefix="dietary"
+          canonical={CANONICAL_DIETARY}
+          selected={dietaryParsed.selectedTags}
+        />
+        <TextArea
+          name="dietaryOther"
+          label="Anything else"
+          rows={2}
+          defaultValue={state.values?.dietaryOther ?? dietaryParsed.other}
+          error={state.errors?.dietaryOther}
+        />
+      </Section>
+
+      <Section
+        title="Other things to share with the companion"
+        description="Free text for context that does not fit anywhere else."
       >
         <TextArea
           name="thingsToKnow"
@@ -205,15 +227,7 @@ export function EditForm({
           rows={3}
           defaultValue={v('thingsToKnow')}
           error={state.errors?.thingsToKnow}
-          hint="Helpful context the companion should arrive knowing."
-        />
-        <TextArea
-          name="mobility"
-          label="Mobility (optional)"
-          rows={2}
-          defaultValue={v('mobility')}
-          error={state.errors?.mobility}
-          hint="Walking, stairs, frames, wheelchairs."
+          hint="Anything helpful the companion should arrive knowing."
         />
         <TextArea
           name="healthNotes"
@@ -222,13 +236,6 @@ export function EditForm({
           defaultValue={v('healthNotes')}
           error={state.errors?.healthNotes}
           hint="Conditions to be aware of. We treat this carefully."
-        />
-        <TextArea
-          name="dietary"
-          label="Dietary (optional)"
-          rows={2}
-          defaultValue={v('dietary')}
-          error={state.errors?.dietary}
         />
         <TextArea
           name="religiousObservance"
@@ -279,6 +286,43 @@ export function EditForm({
         </a>
       </div>
     </form>
+  );
+}
+
+function TagPicker({
+  fieldPrefix,
+  canonical,
+  selected,
+}: {
+  fieldPrefix: string;
+  canonical: TagList;
+  selected: Set<string>;
+}) {
+  return (
+    <fieldset>
+      <legend className="sr-only">Pick any that apply</legend>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {canonical.map((tag) => {
+          const key = tagToFormKey(tag);
+          return (
+            <label
+              key={tag}
+              htmlFor={`${fieldPrefix}-${key}`}
+              className="flex items-start gap-2 cursor-pointer text-charcoal text-[0.875rem] leading-[1.3] p-2.5 rounded-md border border-moss/10 hover:border-moss/30 hover:bg-cream-deep/40 transition-colors has-[:checked]:border-moss has-[:checked]:bg-moss/5"
+            >
+              <input
+                id={`${fieldPrefix}-${key}`}
+                type="checkbox"
+                name={`${fieldPrefix}_${key}`}
+                defaultChecked={selected.has(tag)}
+                className="mt-0.5 w-4 h-4 rounded border-moss/30 text-moss focus:ring-moss/30 flex-shrink-0"
+              />
+              <span>{tag}</span>
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }
 
