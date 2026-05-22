@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { Home, Calendar, Heart, Coins, User, LogOut, Sparkles } from 'lucide-react';
+import { Home, Calendar, Heart, Coins, User, LogOut, Sparkles, MessageSquare } from 'lucide-react';
 import { brand } from '@igc/content';
 import { signOut } from '@/lib/auth';
 import { requireFamilyMember } from '@/lib/auth-helpers';
@@ -26,6 +26,7 @@ const NAV_ITEMS = [
   { href: '/family/recipient', label: 'Household', icon: Heart },
   { href: '/family/companion', label: 'Companion', icon: Heart },
   { href: '/family/subscription', label: 'Subscription', icon: Coins },
+  { href: '/family/messages', label: 'Messages', icon: MessageSquare },
   { href: '/family/account', label: 'Account', icon: User },
 ];
 

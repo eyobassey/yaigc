@@ -64,6 +64,9 @@ model User {
   caseNotes               SafeguardingCaseNote[]
   rightToWorkVerified     CompanionApplication[] @relation("RightToWorkVerifiedBy")
   badgesAwarded           CompanionBadge[]       @relation("BadgeAwardedBy")
+  threadsAsOperator       Thread[]               @relation("ThreadsAsOperator")
+  threadsAsParty          Thread[]               @relation("ThreadsAsParty")
+  messagesSent            Message[]
 
   @@index([email])
   @@index([role])
@@ -882,6 +885,48 @@ model Companion {
   @@index([status])
   @@index([borough, status])
   @@index([dbsRenewalDueAt])
+}
+
+// Operator-mediated messaging thread. Always two parties: an operator
+// (the platform side) and one of the customer-side users (a family
+// payer or a companion). v1 deliberately disallows direct family <->
+// companion threads; the operator is always in the loop. Per-side
+// lastReadAt and lastNotifiedAt drive unread badges and the 5-minute
+// email-debounce.
+model Thread {
+  id            String   @id @default(cuid())
+  subject       String?
+  operatorId    String
+  partyId       String
+  partyRole     String   // 'family_member' | 'companion' snapshot
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  lastMessageAt DateTime @default(now())
+
+  operatorLastReadAt    DateTime?
+  partyLastReadAt       DateTime?
+  operatorLastNotifiedAt DateTime?
+  partyLastNotifiedAt    DateTime?
+
+  operator User      @relation("ThreadsAsOperator", fields: [operatorId], references: [id])
+  party    User      @relation("ThreadsAsParty",   fields: [partyId],    references: [id])
+  messages Message[]
+
+  @@index([operatorId, lastMessageAt(sort: Desc)])
+  @@index([partyId, lastMessageAt(sort: Desc)])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  threadId  String
+  senderId  String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  thread Thread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender User   @relation(fields: [senderId], references: [id])
+
+  @@index([threadId, createdAt(sort: Desc)])
 }
 
 // Internal-only descriptive labels operators attach to a companion -

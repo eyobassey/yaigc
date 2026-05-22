@@ -8,6 +8,7 @@ import {
   Settings,
   LogOut,
   FileText,
+  MessageSquare,
 } from 'lucide-react';
 import { brand } from '@igc/content';
 import { signOut } from '@/lib/auth';
@@ -32,6 +33,7 @@ const NAV_ITEMS = [
   { href: '/companion/matches', label: 'Matches', icon: Sparkles },
   { href: '/companion/profile', label: 'Profile', icon: User },
   { href: '/companion/documents', label: 'Documents', icon: FileText },
+  { href: '/companion/messages', label: 'Messages', icon: MessageSquare },
   { href: '/companion/account', label: 'Account', icon: Settings },
 ];
 
