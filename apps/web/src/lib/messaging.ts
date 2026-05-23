@@ -534,6 +534,109 @@ export async function markThreadRead(threadId: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------
+// DELETE MESSAGE (M.3.2) - sender-only, 15-minute window
+// ---------------------------------------------------------------
+//
+// Soft delete. We set deletedAt + deletedByUserId; the body stays on
+// disk and the audit log records the original. Gate is enforced
+// server-side on every call - the UI hides the button after the
+// window but a stale tab can't slip past. Fan-out target mirrors
+// sendMessage: participants for OPS_*, participants + active
+// operator_admins for FAMILY_COMPANION.
+
+const DELETE_WINDOW_MS = 15 * 60 * 1000;
+
+export async function deleteMessage(formData: FormData): Promise<void> {
+  'use server';
+  const actor = await getSessionUser();
+  if (!actor) return;
+
+  const messageId = String(formData.get('messageId') ?? '');
+  if (!messageId) return;
+
+  const message = await prisma.message.findUnique({
+    where: { id: messageId },
+    select: {
+      id: true,
+      senderId: true,
+      body: true,
+      createdAt: true,
+      deletedAt: true,
+      threadId: true,
+      attachments: { select: { id: true } },
+      thread: {
+        select: {
+          kind: true,
+          operatorId: true,
+          partyId: true,
+          familyUserId: true,
+          companionUserId: true,
+        },
+      },
+    },
+  });
+  if (!message) return;
+  if (message.senderId !== actor.id) return;
+  if (message.deletedAt) return;
+  if (Date.now() - message.createdAt.getTime() > DELETE_WINDOW_MS) return;
+
+  await prisma.message.update({
+    where: { id: message.id },
+    data: { deletedAt: new Date(), deletedByUserId: actor.id },
+  });
+
+  await audit({
+    actorType: 'user',
+    actorId: actor.id,
+    actorRole: actor.role,
+    actionType: 'delete',
+    targetType: 'Message',
+    targetId: message.id,
+    metadata: {
+      event: 'message_deleted',
+      threadId: message.threadId,
+      threadKind: message.thread.kind,
+      originalBody: message.body,
+      attachmentCount: message.attachments.length,
+    },
+  });
+
+  // Mirror sendMessage's fan-out logic so every client that saw the
+  // original message also sees the deletion in real time.
+  let recipientUserIds: string[];
+  if (message.thread.kind === 'FAMILY_COMPANION') {
+    const adminIds = await prisma.user.findMany({
+      where: { role: 'operator_admin', deletedAt: null },
+      select: { id: true },
+    });
+    recipientUserIds = Array.from(
+      new Set<string>(
+        [
+          message.thread.familyUserId,
+          message.thread.companionUserId,
+          ...adminIds.map((u) => u.id),
+        ].filter((id): id is string => Boolean(id)),
+      ),
+    );
+  } else {
+    recipientUserIds = [
+      message.thread.operatorId,
+      message.thread.partyId,
+    ].filter((id): id is string => Boolean(id));
+  }
+
+  await publishMessageToUsers(recipientUserIds, {
+    kind: 'message-deleted',
+    threadId: message.threadId,
+    messageId: message.id,
+  });
+
+  revalidatePath(`/ops/messages/${message.threadId}`);
+  revalidatePath(`/family/messages/${message.threadId}`);
+  revalidatePath(`/companion/messages/${message.threadId}`);
+}
+
+// ---------------------------------------------------------------
 // OPEN DIRECT THREAD (M.2.3)
 // ---------------------------------------------------------------
 //

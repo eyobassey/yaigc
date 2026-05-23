@@ -36,7 +36,8 @@ export interface MessageEnvelopeAttachment {
   originalFilename: string | null;
 }
 
-export interface MessageEnvelope {
+// A new message has landed in a thread the recipient subscribes to.
+export interface NewMessageEnvelope {
   kind: 'message';
   threadId: string;
   message: {
@@ -47,6 +48,17 @@ export interface MessageEnvelope {
     attachments?: MessageEnvelopeAttachment[];
   };
 }
+
+// M.3.2: a previously-sent message has been deleted by its sender.
+// Clients flip the bubble to a tombstone in place; the row + body
+// stay on disk and are recoverable via the audit log.
+export interface MessageDeletedEnvelope {
+  kind: 'message-deleted';
+  threadId: string;
+  messageId: string;
+}
+
+export type MessageEnvelope = NewMessageEnvelope | MessageDeletedEnvelope;
 
 // Fire-and-forget per-user publish. Errors are logged and swallowed
 // because we never want a Redis hiccup to roll back a message write -
