@@ -1,10 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ChevronLeft, MessageSquare, Eye, Lock } from 'lucide-react';
+import { ChevronLeft, MessageSquare, Lock } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { requireCompanion } from '@/lib/auth-helpers';
 import { markThreadRead, isDirectThreadWritable } from '@/lib/messaging';
 import { ThreadView } from '@/components/messaging/ThreadView';
+import { DirectThreadOversightBanner } from '@/components/messaging/DirectThreadOversightBanner';
 
 export const metadata = { title: 'Thread' };
 
@@ -89,7 +90,14 @@ export default async function CompanionThreadDetailPage({
       </header>
 
       {isDirect ? (
-        directReadOnly ? <EndedBanner /> : <OversightBanner />
+        directReadOnly ? (
+          <EndedBanner />
+        ) : (
+          <DirectThreadOversightBanner>
+            The office can read messages in this thread. They are there
+            if anything ever needs flagging.
+          </DirectThreadOversightBanner>
+        )
       ) : null}
 
       <ThreadView
@@ -111,24 +119,6 @@ export default async function CompanionThreadDetailPage({
           deletedAt: m.deletedAt ? m.deletedAt.toISOString() : null,
         }))}
       />
-    </div>
-  );
-}
-
-// M.2.3 - same disclosure as the family side.
-function OversightBanner() {
-  return (
-    <div className="mb-5 rounded-md border border-terracotta/30 bg-terracotta/[0.06] px-4 py-3 flex items-start gap-3">
-      <Eye
-        size={18}
-        strokeWidth={1.75}
-        aria-hidden="true"
-        className="text-terracotta flex-shrink-0 mt-0.5"
-      />
-      <p className="text-charcoal text-[0.875rem] leading-[1.55]">
-        The office can read messages in this thread. They are there if
-        anything ever needs flagging.
-      </p>
     </div>
   );
 }
