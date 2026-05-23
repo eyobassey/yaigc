@@ -69,6 +69,7 @@ model User {
   directThreadsAsFamily    Thread[]              @relation("DirectThreadsAsFamily")
   directThreadsAsCompanion Thread[]              @relation("DirectThreadsAsCompanion")
   messagesSent            Message[]
+  messagesDeleted         Message[]              @relation("MessagesDeleted")
   attachmentsUploaded     MessageAttachment[]    @relation("AttachmentUploadedBy")
 
   @@index([email])
@@ -967,8 +968,20 @@ model Message {
   body      String   @db.Text
   createdAt DateTime @default(now())
 
+  // M.3.1 - sender-side soft delete. When deletedAt is set, the
+  // counterpart renders a "Message deleted" tombstone but the row +
+  // body stay on disk so safeguarding investigations can still
+  // reconstruct the conversation via the audit log. operator_admins
+  // viewing FAMILY_COMPANION threads on the oversight tab also see
+  // the original body with a strike-through marker. deletedByUserId
+  // is always the sender today; the FK is in place so a future
+  // moderation feature would not need a schema change.
+  deletedAt        DateTime?
+  deletedByUserId  String?
+
   thread      Thread              @relation(fields: [threadId], references: [id], onDelete: Cascade)
   sender      User                @relation(fields: [senderId], references: [id])
+  deletedBy   User?               @relation("MessagesDeleted", fields: [deletedByUserId], references: [id])
   attachments MessageAttachment[]
 
   @@index([threadId, createdAt(sort: Desc)])
