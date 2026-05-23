@@ -32,6 +32,16 @@ export const founderNote = {
   attribution: 'Bassey and the team, Manchester',
 } as const;
 
+// "Shape of the relationship" memo (May 2026), closing thought.
+// Renders between FounderNote and VisitGallery as a quiet centred
+// italic. No eyebrow, no attribution; it stands on its own.
+export const philosophyLine = {
+  lines: [
+    'We are not in the business of helping families optimise their parents.',
+    'We are in the business of helping families breathe out a little, on the days when they need to.',
+  ],
+} as const;
+
 export const visitGallery: {
   eyebrow: string;
   title: string;

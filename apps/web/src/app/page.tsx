@@ -6,6 +6,7 @@ import { TrustStrip } from '@/components/marketing/TrustStrip';
 import { Pillars } from '@/components/marketing/Pillars';
 import { HowItWorks } from '@/components/marketing/HowItWorks';
 import { FounderNote } from '@/components/marketing/FounderNote';
+import { PhilosophyLine } from '@/components/marketing/PhilosophyLine';
 import { VisitGallery } from '@/components/marketing/VisitGallery';
 import { PricingTeaser } from '@/components/marketing/PricingTeaser';
 import { FAQ } from '@/components/marketing/FAQ';
@@ -35,6 +36,7 @@ export default function HomePage() {
       <Pillars />
       <HowItWorks />
       <FounderNote />
+      <PhilosophyLine />
       <VisitGallery />
       <PricingTeaser />
       <FAQ />
