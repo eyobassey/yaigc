@@ -71,6 +71,8 @@ model User {
   messagesSent            Message[]
   messagesDeleted         Message[]              @relation("MessagesDeleted")
   attachmentsUploaded     MessageAttachment[]    @relation("AttachmentUploadedBy")
+  familyTextRevisions     FamilyTextRevision[]   @relation("FamilyTextRevisionAuthor")
+  relationshipNotes       RelationshipNote[]     @relation("RelationshipNoteOperator")
 
   @@index([email])
   @@index([role])
@@ -197,15 +199,35 @@ model Family {
   billingPostcode     String?
   billingCountry      String  @default("GB")
 
+  // R.1 - "Shape of the relationship" memo, May 2026.
+  //
+  // whatWeAreHopingFor is the family-payer's emotional landscape -
+  // not a goal, not a measurement, not displayed to the companion.
+  // Read by the operator team during the fifth-visit reflection
+  // call and the periodic check-in.
+  //
+  // checkInCadenceDays controls how often the operator team rings
+  // the family payer for a "how does it feel?" call. Default 90
+  // (quarterly); operator can override per family from
+  // /ops/families/[id]. lastReflectionAt + lastCheckInAt drive the
+  // Today-dashboard "due this week" cards. Memo deliberately
+  // forbids the word "goals" and any measurement framework.
+  whatWeAreHopingFor   String?  @db.Text
+  checkInCadenceDays   Int      @default(90)
+  lastReflectionAt     DateTime?
+  lastCheckInAt        DateTime?
+
   joinedAt           DateTime      @default(now())
   cancelledAt        DateTime?
   cancellationReason String?       @db.Text
 
-  members       FamilyMember[]
-  recipients    Recipient[]
-  matches       Match[]
-  subscriptions Subscription[]
-  visits        Visit[]
+  members           FamilyMember[]
+  recipients        Recipient[]
+  matches           Match[]
+  subscriptions     Subscription[]
+  visits            Visit[]
+  textRevisions     FamilyTextRevision[]
+  relationshipNotes RelationshipNote[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -268,11 +290,24 @@ model Recipient {
   consentToPhotos        Boolean @default(false)
   consentToReportSharing Boolean @default(true)
 
-  family            Family             @relation(fields: [familyId], references: [id])
+  // R.1 - "Shape of the relationship" memo, May 2026.
+  //
+  // aboutTheRecipient is the family-payer-authored prose about who
+  // this person is - what matters to them, what they enjoy, what
+  // the companion should know before the first visit. Held lightly:
+  // no length validation, no scoring, no required prompts. The
+  // companion reads it before every visit (M.2.x companion visit
+  // detail page block). Revision history lives on
+  // FamilyTextRevision so the operator can compare month-1 to
+  // month-12 - the change itself is signal.
+  aboutTheRecipient String? @db.Text
+
+  family            Family               @relation(fields: [familyId], references: [id])
   matches           Match[]
   subscriptions     Subscription[]
   visits            Visit[]
   safeguardingCases SafeguardingCase[]
+  textRevisions     FamilyTextRevision[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -1184,4 +1219,72 @@ enum UserRole {
   operator_finance         // payment runs, invoicing, reconciliation
   operator_admin           // full access (you, Bassey)
   operator_read_only       // observer access (investor, auditor, advisor)
+}
+
+// ----------------------------------------------------------------------------
+// R.1 - Shape of the relationship (design memo, May 2026).
+//
+// Two prose fields - Recipient.aboutTheRecipient (companion-facing) +
+// Family.whatWeAreHopingFor (operator-only) - back a deliberately
+// non-clinical version of "intake". Both are family-payer-authored and
+// edit-history tracked via FamilyTextRevision so the operator can read
+// month-1 vs month-12 and notice drift.
+//
+// RelationshipNote captures the operator's free-text note from the
+// fifth-visit reflection call and from the periodic check-in. There is
+// no scoring, no progress field, no satisfaction rating - the memo is
+// emphatic that measurement would corrupt the post-visit reports it
+// would be measuring. Cadence default 90 days (quarterly) is held on
+// Family.checkInCadenceDays; operator can override per family on
+// /ops/families/[id].
+// ----------------------------------------------------------------------------
+
+model FamilyTextRevision {
+  id           String                  @id @default(cuid())
+  familyId     String
+  // Populated for `aboutTheRecipient` revisions (the field lives on
+  // Recipient, one row per parent the family is visiting). NULL for
+  // `whatWeAreHopingFor` revisions (one row per family). The app
+  // layer enforces this invariant; the DB just exposes a nullable.
+  recipientId  String?
+  field        FamilyTextRevisionField
+  body         String                  @db.Text
+  // Optional because not every save will be by a logged-in author -
+  // future intake-form imports or admin bulk-edits may have no
+  // session. Today every save will carry the family payer's userId.
+  authorUserId String?
+  createdAt    DateTime                @default(now())
+
+  family    Family     @relation(fields: [familyId],    references: [id], onDelete: Cascade)
+  recipient Recipient? @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  author    User?      @relation("FamilyTextRevisionAuthor", fields: [authorUserId], references: [id])
+
+  @@index([familyId, field, createdAt(sort: Desc)])
+  @@index([recipientId, createdAt(sort: Desc)])
+}
+
+enum FamilyTextRevisionField {
+  aboutTheRecipient
+  whatWeAreHopingFor
+}
+
+model RelationshipNote {
+  id              String                @id @default(cuid())
+  familyId        String
+  operatorUserId  String
+  callType        RelationshipNoteKind
+  body            String                @db.Text
+  createdAt       DateTime              @default(now())
+
+  family   Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  operator User   @relation("RelationshipNoteOperator", fields: [operatorUserId], references: [id])
+
+  @@index([familyId, createdAt(sort: Desc)])
+  @@index([callType, createdAt(sort: Desc)])
+}
+
+enum RelationshipNoteKind {
+  fifth_visit
+  check_in
+  other
 }
