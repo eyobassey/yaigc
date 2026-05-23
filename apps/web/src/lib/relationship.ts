@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
-import { requireFamilyPayer } from '@/lib/auth-helpers';
+import { getSessionUser, isOperator, requireFamilyPayer } from '@/lib/auth-helpers';
 
 // R.2 - "Shape of the relationship" memo (May 2026), section 4.1 + 4.2.
 //
@@ -147,4 +147,63 @@ export async function saveWhatWeAreHopingFor(
 
   revalidatePath('/family/recipient');
   return { ok: true };
+}
+
+// ---------------------------------------------------------------
+// Operator cadence control (R.4)
+// ---------------------------------------------------------------
+//
+// Family.checkInCadenceDays drives the "check-ins due this week"
+// card on the operator Today dashboard (R.5). Operators can change
+// the cadence per family from /ops/families/[id]. Allowed values
+// are a small set of presets the dropdown surfaces; raw arbitrary
+// integers are not exposed in the UI but the schema doesn't ban
+// them, so safety lives in this action.
+
+const CADENCE_PRESETS = new Set([0, 30, 90, 180, 365]);
+
+const CadenceSchema = z.object({
+  familyId: z.string().min(1),
+  cadenceDays: z.coerce.number().int().nonnegative(),
+});
+
+export async function setFamilyCheckInCadence(
+  formData: FormData,
+): Promise<void> {
+  const actor = await getSessionUser();
+  if (!actor) return;
+  if (!isOperator(actor.role)) return;
+
+  const parsed = CadenceSchema.safeParse({
+    familyId: String(formData.get('familyId') ?? ''),
+    cadenceDays: String(formData.get('cadenceDays') ?? ''),
+  });
+  if (!parsed.success) return;
+  if (!CADENCE_PRESETS.has(parsed.data.cadenceDays)) return;
+
+  const before = await prisma.family.findUnique({
+    where: { id: parsed.data.familyId },
+    select: { id: true, checkInCadenceDays: true },
+  });
+  if (!before) return;
+  if (before.checkInCadenceDays === parsed.data.cadenceDays) return;
+
+  await prisma.family.update({
+    where: { id: before.id },
+    data: { checkInCadenceDays: parsed.data.cadenceDays },
+  });
+
+  await audit({
+    actorType: 'user',
+    actorId: actor.id,
+    actorRole: actor.role,
+    actionType: 'update',
+    targetType: 'Family',
+    targetId: before.id,
+    beforeState: { checkInCadenceDays: before.checkInCadenceDays },
+    afterState: { checkInCadenceDays: parsed.data.cadenceDays },
+    metadata: { event: 'check_in_cadence_changed' },
+  });
+
+  revalidatePath(`/ops/families/${before.id}`);
 }

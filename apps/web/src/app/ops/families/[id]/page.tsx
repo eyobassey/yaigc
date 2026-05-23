@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ChevronLeft, Pencil, Plus, Sparkles, Calendar } from 'lucide-react';
+import { ChevronLeft, Pencil, Plus, Sparkles, Calendar, Heart, Clock } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
+import { setFamilyCheckInCadence } from '@/lib/relationship';
 import { FamilyStatusPill } from '../page';
 import { MatchStatusPill } from '../../matches/page';
 import { SubscriptionStatusPill } from '../../subscriptions/[id]/page';
@@ -52,9 +53,42 @@ export default async function OpsFamilyDetailPage({
           recipient: { select: { firstName: true, lastName: true } },
         },
       },
+      // R.4: revisions of the two prose fields + the operator notes
+      // timeline. textRevisions is intentionally not capped here -
+      // the page renders them inside a collapsed <details>, and
+      // change-over-time is the whole point of keeping them.
+      textRevisions: {
+        orderBy: { createdAt: 'desc' },
+        include: {
+          author: { select: { firstName: true, lastName: true, email: true } },
+        },
+      },
+      relationshipNotes: {
+        orderBy: { createdAt: 'desc' },
+        include: {
+          operator: { select: { firstName: true, lastName: true } },
+        },
+      },
     },
   });
   if (!family) notFound();
+
+  // Group text revisions by what they describe so each card can
+  // render its own history without re-iterating the whole list.
+  const aboutRevisionsByRecipient = new Map<
+    string,
+    typeof family.textRevisions
+  >();
+  const hopesRevisions: typeof family.textRevisions = [];
+  for (const rev of family.textRevisions) {
+    if (rev.field === 'aboutTheRecipient' && rev.recipientId) {
+      const list = aboutRevisionsByRecipient.get(rev.recipientId) ?? [];
+      list.push(rev);
+      aboutRevisionsByRecipient.set(rev.recipientId, list);
+    } else if (rev.field === 'whatWeAreHopingFor') {
+      hopesRevisions.push(rev);
+    }
+  }
 
   const historyWhere = {
     OR: [
@@ -235,6 +269,15 @@ export default async function OpsFamilyDetailPage({
                           </>
                         ) : null}
                       </dl>
+
+                      {/* R.4: family-payer prose - "What matters about
+                          [name]" - plus a collapsed revision history so
+                          the operator can read month-1 vs month-12. */}
+                      <AboutRecipientBlock
+                        body={r.aboutTheRecipient}
+                        firstName={r.preferredName || r.firstName}
+                        revisions={aboutRevisionsByRecipient.get(r.id) ?? []}
+                      />
                     </li>
                   );
                 })}
@@ -403,6 +446,25 @@ export default async function OpsFamilyDetailPage({
         </div>
 
         <aside className="flex flex-col gap-6">
+          {/* R.4: hopes prose - operator-facing, NEVER shown to the
+              companion directly (memo s5.4). Read during the
+              fifth-visit reflection call and the periodic check-in. */}
+          <HopesBlock
+            body={family.whatWeAreHopingFor}
+            revisions={hopesRevisions}
+          />
+
+          {/* R.4: cadence control + relationship notes timeline. The
+              workflow to log a new note is on the Today dashboard
+              (R.5); this page reads them back. */}
+          <CadenceCard
+            familyId={family.id}
+            cadenceDays={family.checkInCadenceDays}
+            lastCheckInAt={family.lastCheckInAt}
+            lastReflectionAt={family.lastReflectionAt}
+          />
+          <ReflectionNotesBlock notes={family.relationshipNotes} />
+
           {/* Billing address */}
           {(family.billingAddressLine1 ||
             family.billingCity ||
@@ -548,5 +610,250 @@ function ConsentBadge({ label, granted }: { label: string; granted: boolean }) {
       <span aria-hidden="true">{granted ? '✓' : '✗'}</span>
       {label}
     </span>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// R.4: family-shape blocks.
+//
+// All four read-only on this page except for the cadence dropdown.
+// The workflow to log a new RelationshipNote (fifth_visit / check_in)
+// lives on the Today dashboard in R.5.
+// ----------------------------------------------------------------------------
+
+type TextRevision = {
+  id: string;
+  body: string;
+  createdAt: Date;
+  author: { firstName: string | null; lastName: string | null; email: string } | null;
+};
+
+function formatRevisionDate(d: Date): string {
+  return d.toLocaleString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Europe/London',
+  });
+}
+
+function authorLabel(a: TextRevision['author']): string {
+  if (!a) return 'unknown';
+  const name = [a.firstName, a.lastName].filter(Boolean).join(' ');
+  return name || a.email;
+}
+
+function RevisionHistory({ revisions, label }: { revisions: TextRevision[]; label: string }) {
+  if (revisions.length <= 1) return null;
+  return (
+    <details className="mt-3 text-[0.8125rem]">
+      <summary className="cursor-pointer text-stone hover:text-moss inline-flex items-center gap-1 select-none">
+        <Clock size={12} strokeWidth={1.75} aria-hidden="true" />
+        {label} ({revisions.length})
+      </summary>
+      <ol className="mt-3 flex flex-col gap-3 border-l-2 border-moss/10 pl-3">
+        {revisions.map((rev) => (
+          <li key={rev.id}>
+            <div className="text-stone text-[0.7rem] font-mono mb-0.5">
+              {formatRevisionDate(rev.createdAt)} · {authorLabel(rev.author)}
+            </div>
+            {rev.body ? (
+              <p className="text-charcoal whitespace-pre-wrap break-words leading-[1.55]">
+                {rev.body}
+              </p>
+            ) : (
+              <p className="text-stone italic">(cleared)</p>
+            )}
+          </li>
+        ))}
+      </ol>
+    </details>
+  );
+}
+
+function AboutRecipientBlock({
+  body,
+  firstName,
+  revisions,
+}: {
+  body: string | null;
+  firstName: string;
+  revisions: TextRevision[];
+}) {
+  if (!body && revisions.length === 0) return null;
+  return (
+    <div className="mt-4 pt-4 border-t border-moss/10">
+      <h3 className="font-body text-[0.7rem] font-medium uppercase tracking-[0.08em] text-terracotta mb-2">
+        What matters about {firstName}
+      </h3>
+      {body ? (
+        <p className="text-charcoal text-[0.9375rem] leading-[1.6] whitespace-pre-wrap break-words">
+          {body}
+        </p>
+      ) : (
+        <p className="text-stone italic text-[0.8125rem]">(currently cleared)</p>
+      )}
+      <RevisionHistory revisions={revisions} label="Revision history" />
+    </div>
+  );
+}
+
+function HopesBlock({
+  body,
+  revisions,
+}: {
+  body: string | null;
+  revisions: TextRevision[];
+}) {
+  if (!body && revisions.length === 0) return null;
+  return (
+    <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
+      <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-1 inline-flex items-center gap-2">
+        <Heart size={14} strokeWidth={1.75} className="text-terracotta" aria-hidden="true" />
+        What we are hoping for
+      </h2>
+      <p className="text-stone text-[0.75rem] italic mb-3">
+        Family-payer's own words. Operator-only. Not shown to the companion.
+      </p>
+      {body ? (
+        <p className="text-charcoal text-[0.9375rem] leading-[1.6] whitespace-pre-wrap break-words">
+          {body}
+        </p>
+      ) : (
+        <p className="text-stone italic text-[0.8125rem]">(currently cleared)</p>
+      )}
+      <RevisionHistory revisions={revisions} label="Revision history" />
+    </section>
+  );
+}
+
+const CADENCE_OPTIONS: { value: number; label: string }[] = [
+  { value: 30, label: 'Monthly' },
+  { value: 90, label: 'Quarterly (default)' },
+  { value: 180, label: 'Every six months' },
+  { value: 365, label: 'Annually' },
+  { value: 0, label: 'Off — no scheduled check-ins' },
+];
+
+function CadenceCard({
+  familyId,
+  cadenceDays,
+  lastCheckInAt,
+  lastReflectionAt,
+}: {
+  familyId: string;
+  cadenceDays: number;
+  lastCheckInAt: Date | null;
+  lastReflectionAt: Date | null;
+}) {
+  // Show the next-check-in date if a cadence is configured.
+  const nextDue =
+    cadenceDays > 0 && lastCheckInAt
+      ? new Date(lastCheckInAt.getTime() + cadenceDays * 24 * 60 * 60 * 1000)
+      : null;
+  return (
+    <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
+      <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-3">
+        Check-in cadence
+      </h2>
+      <form action={setFamilyCheckInCadence} className="flex flex-col gap-2">
+        <input type="hidden" name="familyId" value={familyId} />
+        <label htmlFor={`cadence-${familyId}`} className="sr-only">
+          Check-in cadence
+        </label>
+        <select
+          id={`cadence-${familyId}`}
+          name="cadenceDays"
+          defaultValue={cadenceDays}
+          className="bg-paper border border-moss/15 rounded-md px-3 py-2 text-charcoal text-[0.9375rem] focus:outline-none focus:ring-2 focus:ring-moss/25 focus:border-moss/40"
+        >
+          {CADENCE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <button
+          type="submit"
+          className="self-start inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-moss text-cream text-[0.8125rem] font-medium hover:bg-moss-deep transition-colors"
+        >
+          Save cadence
+        </button>
+      </form>
+      <dl className="mt-4 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-[0.8125rem]">
+        <dt className="text-stone">Last fifth-visit call</dt>
+        <dd className="text-charcoal">
+          {lastReflectionAt ? formatRevisionDate(lastReflectionAt) : '—'}
+        </dd>
+        <dt className="text-stone">Last check-in</dt>
+        <dd className="text-charcoal">
+          {lastCheckInAt ? formatRevisionDate(lastCheckInAt) : '—'}
+        </dd>
+        {nextDue ? (
+          <>
+            <dt className="text-stone">Next due</dt>
+            <dd className="text-charcoal">{formatRevisionDate(nextDue)}</dd>
+          </>
+        ) : null}
+      </dl>
+    </section>
+  );
+}
+
+type RelationshipNoteRow = {
+  id: string;
+  callType: string;
+  body: string;
+  createdAt: Date;
+  operator: { firstName: string | null; lastName: string | null } | null;
+};
+
+function ReflectionNotesBlock({ notes }: { notes: RelationshipNoteRow[] }) {
+  return (
+    <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
+      <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-3">
+        Reflection notes
+      </h2>
+      {notes.length === 0 ? (
+        <p className="text-stone text-[0.8125rem] italic">
+          No notes yet. Reflection calls show up on the Today dashboard when due.
+        </p>
+      ) : (
+        <ol className="flex flex-col gap-4 divide-y divide-moss/[0.06]">
+          {notes.map((n) => {
+            const name =
+              [n.operator?.firstName, n.operator?.lastName].filter(Boolean).join(' ') ||
+              'operator';
+            const kindLabel =
+              n.callType === 'fifth_visit'
+                ? 'Fifth-visit call'
+                : n.callType === 'check_in'
+                ? 'Check-in'
+                : 'Note';
+            return (
+              <li key={n.id} className="pt-4 first:pt-0">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <span className="inline-flex items-center font-body text-[0.65rem] uppercase tracking-[0.06em] bg-moss/10 text-moss rounded px-1.5 py-0.5">
+                    {kindLabel}
+                  </span>
+                  <time
+                    dateTime={n.createdAt.toISOString()}
+                    className="text-stone text-[0.7rem] font-mono"
+                  >
+                    {formatRevisionDate(n.createdAt)}
+                  </time>
+                  <span className="text-stone text-[0.7rem]">· {name}</span>
+                </div>
+                <p className="text-charcoal text-[0.9375rem] leading-[1.55] whitespace-pre-wrap break-words">
+                  {n.body}
+                </p>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </section>
   );
 }
