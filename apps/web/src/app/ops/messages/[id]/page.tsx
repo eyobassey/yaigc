@@ -134,6 +134,7 @@ export default async function OpsThreadDetailPage({
               fromCurrentUser: false, // ops is never a participant in a direct thread
               senderLabel: senderName,
               attachments: m.attachments,
+              deletedAt: m.deletedAt ? m.deletedAt.toISOString() : null,
             };
           })}
         />
@@ -193,6 +194,7 @@ export default async function OpsThreadDetailPage({
             fromCurrentUser: m.senderId === actor.id,
             senderLabel: senderName,
             attachments: m.attachments,
+            deletedAt: m.deletedAt ? m.deletedAt.toISOString() : null,
           };
         })}
       />

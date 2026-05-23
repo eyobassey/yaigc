@@ -9,9 +9,19 @@ import {
   FileText,
   Download,
   Loader2,
+  Trash2,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
-import { sendMessage, type SendMessageState } from '@/lib/messaging';
+import {
+  sendMessage,
+  deleteMessage,
+  type SendMessageState,
+} from '@/lib/messaging';
+
+// M.3 - sender-side delete window, mirrored from
+// lib/messaging.ts:DELETE_WINDOW_MS. Used to hide the delete button
+// on stale bubbles; the server re-checks on every call anyway.
+const DELETE_WINDOW_MS = 15 * 60 * 1000;
 
 // emoji-picker-react ships a fairly heavy bundle. Load it on demand
 // the first time the user opens the picker so the initial thread render
@@ -70,6 +80,11 @@ interface MessageRow {
   fromCurrentUser: boolean;
   senderLabel: string;
   attachments?: MessageAttachmentRow[];
+  // M.3: when set, this message was soft-deleted by its sender.
+  // Counterparts render a "Message deleted" tombstone; the sender
+  // sees "(deleted by you)". ops_admin on a direct thread gets
+  // special treatment in M.3.4 to see the original body.
+  deletedAt?: string | null;
 }
 
 interface PendingAttachment {
@@ -109,6 +124,10 @@ export function ThreadView({
   const [pending, setPending] = useState<PendingAttachment[]>([]);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
+  // M.3: ids that were soft-deleted at runtime (via WS or the local
+  // delete action). Wins over the server-provided deletedAt so the
+  // tombstone applies without a refresh.
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
   const formRef = useRef<HTMLFormElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -186,6 +205,20 @@ export function ThreadView({
                     },
                   ],
             );
+          } else if (
+            env &&
+            env.kind === 'message-deleted' &&
+            env.threadId === threadId &&
+            typeof env.messageId === 'string'
+          ) {
+            // M.3.2 envelope: mark the bubble as deleted in place.
+            const id: string = env.messageId;
+            setDeletedIds((prev) => {
+              if (prev.has(id)) return prev;
+              const next = new Set(prev);
+              next.add(id);
+              return next;
+            });
           }
         } catch {
           /* ignore malformed payload */
@@ -348,36 +381,61 @@ export function ThreadView({
             No messages yet.
           </li>
         ) : (
-          merged.map((m) => (
+          merged.map((m) => {
+            const isDeleted = Boolean(m.deletedAt) || deletedIds.has(m.id);
+            // The delete button only appears while the actor is the
+            // sender, the message is still within the 15-min window,
+            // and the surface is writable. Server re-checks on every
+            // call so a stale tab can't slip past.
+            const canDelete =
+              !readOnly &&
+              m.fromCurrentUser &&
+              !isDeleted &&
+              Date.now() - new Date(m.createdAt).getTime() < DELETE_WINDOW_MS;
+            return (
             <li
               key={m.id}
               className={`flex flex-col gap-1 max-w-[80%] ${
                 m.fromCurrentUser ? 'self-end items-end' : 'self-start items-start'
               }`}
             >
-              {m.body ? (
+              {isDeleted ? (
                 <div
-                  className={`rounded-lg px-3 py-2 text-[0.9375rem] leading-[1.5] whitespace-pre-wrap break-words ${
+                  className={`rounded-lg px-3 py-2 text-[0.875rem] leading-[1.5] italic ${
                     m.fromCurrentUser
-                      ? 'bg-moss text-cream'
-                      : 'bg-paper text-charcoal border border-moss/10'
+                      ? 'bg-moss/30 text-cream'
+                      : 'bg-stone/10 text-stone border border-moss/10'
                   }`}
                 >
-                  {m.body}
+                  {m.fromCurrentUser ? 'Message deleted (by you).' : 'Message deleted.'}
                 </div>
-              ) : null}
-              {m.attachments && m.attachments.length > 0 ? (
-                <div className="flex flex-col gap-2 mt-0.5 w-full">
-                  {m.attachments.map((a) => (
-                    <AttachmentBubble
-                      key={a.id}
-                      attachment={a}
-                      fromCurrentUser={m.fromCurrentUser}
-                    />
-                  ))}
-                </div>
-              ) : null}
-              <span className="text-stone text-[0.7rem] font-mono">
+              ) : (
+                <>
+                  {m.body ? (
+                    <div
+                      className={`rounded-lg px-3 py-2 text-[0.9375rem] leading-[1.5] whitespace-pre-wrap break-words ${
+                        m.fromCurrentUser
+                          ? 'bg-moss text-cream'
+                          : 'bg-paper text-charcoal border border-moss/10'
+                      }`}
+                    >
+                      {m.body}
+                    </div>
+                  ) : null}
+                  {m.attachments && m.attachments.length > 0 ? (
+                    <div className="flex flex-col gap-2 mt-0.5 w-full">
+                      {m.attachments.map((a) => (
+                        <AttachmentBubble
+                          key={a.id}
+                          attachment={a}
+                          fromCurrentUser={m.fromCurrentUser}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                </>
+              )}
+              <span className="text-stone text-[0.7rem] font-mono inline-flex items-center gap-2">
                 {m.senderLabel} ·{' '}
                 {new Date(m.createdAt).toLocaleString('en-GB', {
                   day: 'numeric',
@@ -386,9 +444,34 @@ export function ThreadView({
                   minute: '2-digit',
                   timeZone: 'Europe/London',
                 })}
+                {canDelete ? (
+                  <form
+                    action={(fd) => {
+                      // Optimistic local flip; the WS event from the
+                      // server will arrive shortly and confirm.
+                      setDeletedIds((prev) => {
+                        if (prev.has(m.id)) return prev;
+                        const next = new Set(prev);
+                        next.add(m.id);
+                        return next;
+                      });
+                      return deleteMessage(fd);
+                    }}
+                  >
+                    <input type="hidden" name="messageId" value={m.id} />
+                    <button
+                      type="submit"
+                      aria-label="Delete this message"
+                      className="text-stone/60 hover:text-terracotta transition-colors inline-flex items-center"
+                    >
+                      <Trash2 size={12} strokeWidth={1.75} aria-hidden="true" />
+                    </button>
+                  </form>
+                ) : null}
               </span>
             </li>
-          ))
+            );
+          })
         )}
       </ul>
 

@@ -108,6 +108,7 @@ export default async function CompanionThreadDetailPage({
               : [m.sender.firstName, m.sender.lastName].filter(Boolean).join(' ') ||
                 otherPartyLabel,
           attachments: m.attachments,
+          deletedAt: m.deletedAt ? m.deletedAt.toISOString() : null,
         }))}
       />
     </div>
