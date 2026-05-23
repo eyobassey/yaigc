@@ -7,7 +7,7 @@ import { brand, nav } from '@igc/content';
 
 const navLinks = [
   { label: 'How it works', href: '/how-it-works' },
-  { label: 'Pricing', href: '/pricing' },
+  { label: 'About', href: '/about' },
   { label: 'Safeguarding', href: '/safeguarding' },
   { label: 'Questions', href: '/#faq' },
 ] as const;
