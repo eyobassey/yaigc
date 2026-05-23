@@ -17,10 +17,11 @@ production at [youareingoodcompany.co.uk](https://youareingoodcompany.co.uk)
 (marketing + family + companion) and
 [ops.youareingoodcompany.co.uk](https://ops.youareingoodcompany.co.uk)
 (operator). Sign-in covers magic-link, password, and passkeys (WebAuthn).
-Messaging is live with real-time WebSocket delivery and attachments:
-operator-mediated threads (M.1) plus direct family ↔ companion threads
-gated per-companion by `operator_admin` and shadowed read-only on an ops
-oversight tab (M.2). Stripe payments are the next major block. See
+Messaging is live with real-time WebSocket delivery, attachments, and a
+15-min sender-side delete window (M.3): operator-mediated threads (M.1)
+plus direct family ↔ companion threads gated per-companion by
+`operator_admin` and shadowed read-only on an ops oversight tab (M.2).
+Stripe payments are the next major block. See
 [Where things are](#where-things-are) below for the honest list of what is
 built versus what is queued.
 
@@ -548,6 +549,7 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 - [x] Real-time delivery (M.1.1): standalone WebSocket server on `:3004`, nginx `/realtime/` upgrade location, Redis pub/sub (`messaging:user:<id>`) fanning out from server actions; client hydrates `ThreadView` without refresh
 - [x] Attachments + emoji picker (M.1.2): images (JPEG/PNG/WebP/HEIC, max 10 MB, EXIF preserved, HEIC→JPEG transcode), documents (PDF / Office / TXT / CSV, max 25 MB), videos (MP4/MOV/WebM, max 100 MB). Magic-byte validation, per-thread S3 prefix, auth-gated streaming, lazy-loaded emoji picker
 - [x] Direct family ↔ companion threads (M.2.1 → M.2.5): new `ThreadKind` enum (`OPS_FAMILY` / `OPS_COMPANION` / `FAMILY_COMPANION`) with backfilled existing rows; `Companion.directMessagingEnabled` gates eligibility per-companion (operator_admin only). Find-or-create via `openDirectThread(matchId)`. Lifecycle derived at runtime from `Match.status` + `Companion.directMessagingEnabled` — match-ended OR gate-revoked flips the thread read-only without losing history. Email notify reuses the M.1 template with an optional `senderLabel`. Static "office can read" banner on both participant sides, `Lock`-iconed "read-only" banner once lifecycle closes
+- [x] Sender-side delete with a 15-minute window (M.3.1 → M.3.4): `Message.deletedAt` + `deletedByUserId` soft-delete columns; `deleteMessage(formData)` server action re-checks sender + window + idempotency on every call; audit log carries the original body in `metadata` so the message is reconstructible from the log alone. Real-time via a new `message-deleted` envelope on the existing Redis fan-out (the standalone realtime server is kind-agnostic, no restart there). `ThreadView` renders tombstones, listens for the WS event, and shows a `Trash2` button on own bubbles within the window. `operator_admin` viewing the FAMILY_COMPANION oversight surface sees the original body with strike-through + `[deleted by sender]` marker so safeguarding has full recovery
 
 **Performance + caching**
 

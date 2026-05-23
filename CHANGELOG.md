@@ -6,6 +6,13 @@ full picture of a stage, read the commit message.
 
 Format: `<sha> · <date> · <stage> — <summary>`
 
+## 2026-05-23
+
+- `a51f1b4` · **M.3.4** — operator_admin on the FAMILY_COMPANION oversight tab sees the original body of every deleted message with `line-through` + 70% opacity + `[deleted by sender]` marker. Non-admin operators still see the tombstone. No new audit kind: the existing `direct_thread_read` event correlates with `message_deleted` entries to answer "which admin saw what was retracted"
+- `b12b9b0` · **M.3.3** — `ThreadView` tombstone + delete button + WS hydration. New `deletedIds` runtime set populated by the `message-deleted` WS envelope OR a local optimistic flip when the sender clicks Trash; tombstone reads "Message deleted (by you)." for the sender, "Message deleted." for the counterpart. Tiny `Trash2` button next to the timestamp on own bubbles within the 15-min window
+- `1cba00c` · **M.3.2** — `deleteMessage(formData)` server action: sender-only, 15-min window, idempotent (`!deletedAt` guard). Audit `actionType=delete`, `targetType=Message`, `metadata={ event:'message_deleted', threadId, threadKind, originalBody, attachmentCount }`. Realtime envelope is now a discriminated union (`NewMessageEnvelope` + `MessageDeletedEnvelope`); the standalone `igc-prod-realtime` server is kind-agnostic, so no restart there. Fan-out mirrors `sendMessage` (participants + operator_admins for direct threads)
+- `49496e2` · **M.3.1** — schema groundwork for sender-side soft delete. New `Message.deletedAt DateTime?` + `Message.deletedByUserId String?` (FK to User) + `User.messagesDeleted Message[]` back-relation. Additive migration, no backfill. Body stays unchanged on delete so safeguarding can reconstruct via the audit log
+
 ## 2026-05-22
 
 - `95e1aa0` · fix — operators streaming attachments on FAMILY_COMPANION threads were 403'd; widened the GET gate to allow `operator_*` roles (audit-logged as `read_sensitive` on `MessageAttachment`). Upload route stays restrictive
