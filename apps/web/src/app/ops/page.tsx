@@ -1,6 +1,18 @@
 import { getSessionUser } from '@/lib/auth-helpers';
 import Link from 'next/link';
-import { Inbox, Calendar, FileText, ShieldAlert, Heart, Users, Sparkles, MessageSquare, ShieldCheck } from 'lucide-react';
+import {
+  Inbox,
+  Calendar,
+  FileText,
+  ShieldAlert,
+  Heart,
+  Users,
+  Sparkles,
+  MessageSquare,
+  ShieldCheck,
+  Phone,
+  ChevronRight,
+} from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 
 export const metadata = {
@@ -138,6 +150,55 @@ export default async function OpsTodayPage() {
     }),
   ]);
 
+  // R.5: "due this week" lists. Fifth-visit reflections are gated by
+  // visit count (>= 4 completed/reported AND no fifth_visit note);
+  // check-ins are gated by Family.checkInCadenceDays + last-call
+  // bookkeeping. Both queries are scoped + filtered in JS because the
+  // numbers stay small at Phase-1 scale.
+  const endOfThisWeek = endOfUkWeek(new Date());
+  const [reflectionCandidates, checkInCandidates] = await Promise.all([
+    prisma.family.findMany({
+      where: {
+        deletedAt: null,
+        relationshipNotes: { none: { callType: 'fifth_visit' } },
+      },
+      select: {
+        id: true,
+        billingName: true,
+        visits: {
+          where: { state: { in: ['completed', 'reported'] } },
+          select: { id: true },
+        },
+      },
+    }),
+    prisma.family.findMany({
+      where: {
+        deletedAt: null,
+        checkInCadenceDays: { gt: 0 },
+      },
+      select: {
+        id: true,
+        billingName: true,
+        checkInCadenceDays: true,
+        lastCheckInAt: true,
+        joinedAt: true,
+      },
+    }),
+  ]);
+  const reflectionsDue = reflectionCandidates
+    .filter((f) => f.visits.length >= 4)
+    .map((f) => ({ id: f.id, billingName: f.billingName, visitCount: f.visits.length }))
+    .sort((a, b) => b.visitCount - a.visitCount);
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+  const checkInsDue = checkInCandidates
+    .map((f) => {
+      const base = f.lastCheckInAt ?? f.joinedAt;
+      const dueAt = new Date(base.getTime() + f.checkInCadenceDays * MS_PER_DAY);
+      return { id: f.id, billingName: f.billingName, dueAt };
+    })
+    .filter((f) => f.dueAt.getTime() <= endOfThisWeek.getTime())
+    .sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime());
+
   return (
     <div>
       <header className="mb-10">
@@ -205,8 +266,119 @@ export default async function OpsTodayPage() {
           );
         })}
       </div>
+
+      {/* R.5: relationship-shape cards. The memo (s4.3, s4.4) makes
+          these explicitly operational rather than product-y; the
+          platform's role is to surface the prompt at the right
+          time. Each row links into the log-call workflow. */}
+      {reflectionsDue.length > 0 || checkInsDue.length > 0 ? (
+        <div className="grid gap-4 sm:grid-cols-2 mb-12">
+          <RelationshipCard
+            title="Reflection calls due"
+            empty="No reflection calls due this week."
+            href="/ops"
+          >
+            {reflectionsDue.map((f) => (
+              <Link
+                key={f.id}
+                href={`/ops/families/${f.id}/log-call?kind=fifth_visit`}
+                className="flex items-center justify-between gap-3 px-3 py-2 rounded-md hover:bg-cream-deep/40 transition-colors group"
+              >
+                <div className="min-w-0">
+                  <div className="font-head text-moss text-[0.9375rem] font-medium truncate">
+                    {f.billingName}
+                  </div>
+                  <div className="text-stone text-[0.75rem] mt-0.5">
+                    {f.visitCount} completed visit{f.visitCount === 1 ? '' : 's'}
+                  </div>
+                </div>
+                <ChevronRight
+                  size={16}
+                  strokeWidth={1.5}
+                  aria-hidden="true"
+                  className="text-stone/50 group-hover:text-moss transition-colors flex-shrink-0"
+                />
+              </Link>
+            ))}
+          </RelationshipCard>
+
+          <RelationshipCard
+            title="Check-ins due"
+            empty="No check-ins due this week."
+            href="/ops"
+          >
+            {checkInsDue.map((f) => (
+              <Link
+                key={f.id}
+                href={`/ops/families/${f.id}/log-call?kind=check_in`}
+                className="flex items-center justify-between gap-3 px-3 py-2 rounded-md hover:bg-cream-deep/40 transition-colors group"
+              >
+                <div className="min-w-0">
+                  <div className="font-head text-moss text-[0.9375rem] font-medium truncate">
+                    {f.billingName}
+                  </div>
+                  <div className="text-stone text-[0.75rem] mt-0.5">
+                    Due {f.dueAt.toLocaleDateString('en-GB', {
+                      day: 'numeric',
+                      month: 'short',
+                      timeZone: 'Europe/London',
+                    })}
+                  </div>
+                </div>
+                <ChevronRight
+                  size={16}
+                  strokeWidth={1.5}
+                  aria-hidden="true"
+                  className="text-stone/50 group-hover:text-moss transition-colors flex-shrink-0"
+                />
+              </Link>
+            ))}
+          </RelationshipCard>
+        </div>
+      ) : null}
     </div>
   );
+}
+
+function RelationshipCard({
+  title,
+  empty,
+  children,
+}: {
+  title: string;
+  empty: string;
+  href: string;
+  children: React.ReactNode;
+}) {
+  const hasChildren = Array.isArray(children) ? children.length > 0 : Boolean(children);
+  return (
+    <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5">
+      <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-3 inline-flex items-center gap-2">
+        <Phone size={14} strokeWidth={1.75} className="text-terracotta" aria-hidden="true" />
+        {title}
+      </h2>
+      {hasChildren ? (
+        <div className="flex flex-col">{children}</div>
+      ) : (
+        <p className="text-stone text-[0.8125rem] italic px-3 py-2">{empty}</p>
+      )}
+    </section>
+  );
+}
+
+// R.5: end of the current UK week (Sunday 23:59:59 in Europe/London).
+// Used by the "check-ins due this week" filter. Approximation - we
+// compute in UTC and add a day-buffer so a check-in scheduled for
+// late Sunday BST never disappears off the list because of a
+// timezone edge. The query is small either way; correctness on the
+// edges is operator-recoverable.
+function endOfUkWeek(now: Date): Date {
+  const day = now.getUTCDay(); // 0 = Sun
+  const daysUntilSunday = (7 - day) % 7;
+  const result = new Date(now);
+  result.setUTCDate(result.getUTCDate() + daysUntilSunday);
+  result.setUTCHours(23, 59, 59, 999);
+  return result;
 }
 
 function greeting() {

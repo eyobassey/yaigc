@@ -1,10 +1,18 @@
 'use server';
 
+import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { createTransport } from 'nodemailer';
+import { brand } from '@igc/content';
 import { prisma } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
 import { getSessionUser, isOperator, requireFamilyPayer } from '@/lib/auth-helpers';
+import {
+  relationshipNoteHtml,
+  relationshipNoteText,
+  relationshipNoteSubject,
+} from '@/lib/email/relationship-note';
 
 // R.2 - "Shape of the relationship" memo (May 2026), section 4.1 + 4.2.
 //
@@ -206,4 +214,162 @@ export async function setFamilyCheckInCadence(
   });
 
   revalidatePath(`/ops/families/${before.id}`);
+}
+
+// ---------------------------------------------------------------
+// Log a relationship note (R.5)
+// ---------------------------------------------------------------
+//
+// One server action covers both kinds of call - fifth-visit
+// reflection and periodic check-in. The callType is supplied by the
+// form on /ops/families/[id]/log-call; allowed values gate the
+// downstream bookkeeping (which timestamp to bump). After the write
+// we email the family payer with the operator's note verbatim,
+// audit-log the call, and bounce the operator back to /ops so the
+// "due this week" card refreshes.
+//
+// Memo s4.3 frames this as "the operator's note from the call".
+// No scoring, no satisfaction rating, no quantitative measurement;
+// section 2.3 explains why those would corrupt the post-visit
+// reports they would be measuring.
+
+const NOTE_MIN = 5;
+const NOTE_MAX = 4000;
+
+const LogNoteSchema = z.object({
+  familyId: z.string().min(1),
+  callType: z.enum(['fifth_visit', 'check_in', 'other']),
+  body: z
+    .string()
+    .trim()
+    .min(NOTE_MIN, 'Write a short note before saving.')
+    .max(NOTE_MAX),
+});
+
+function buildTransport() {
+  return createTransport({
+    host: process.env.SMTP_HOST!,
+    port: Number(process.env.SMTP_PORT ?? 587),
+    auth: { user: process.env.SMTP_USER!, pass: process.env.SMTP_PASSWORD! },
+  });
+}
+
+export type LogNoteState = {
+  ok: boolean;
+  error?: string;
+  values?: { body?: string };
+};
+
+export async function logRelationshipNote(
+  _prev: LogNoteState,
+  formData: FormData,
+): Promise<LogNoteState> {
+  const actor = await getSessionUser();
+  if (!actor) return { ok: false, error: 'Sign in first.' };
+  if (!isOperator(actor.role)) {
+    return { ok: false, error: 'Only operators can log a call.' };
+  }
+
+  const parsed = LogNoteSchema.safeParse({
+    familyId: String(formData.get('familyId') ?? ''),
+    callType: String(formData.get('callType') ?? ''),
+    body: String(formData.get('body') ?? ''),
+  });
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? 'Could not save the note.',
+      values: { body: String(formData.get('body') ?? '') },
+    };
+  }
+  const { familyId, callType, body } = parsed.data;
+
+  // Pull the family + the payer + an active recipient first-name so
+  // the email salutation feels right.
+  const family = await prisma.family.findUnique({
+    where: { id: familyId },
+    include: {
+      members: {
+        where: { role: 'payer', deletedAt: null },
+        take: 1,
+        include: {
+          user: { select: { id: true, email: true, firstName: true } },
+        },
+      },
+    },
+  });
+  if (!family) return { ok: false, error: 'Family not found.' };
+  const payer = family.members[0]?.user;
+  if (!payer) {
+    return { ok: false, error: 'No payer on file - call them directly first.' };
+  }
+
+  const now = new Date();
+  const noteRow = await prisma.$transaction(async (tx) => {
+    const created = await tx.relationshipNote.create({
+      data: {
+        familyId,
+        operatorUserId: actor.id,
+        callType,
+        body,
+      },
+      select: { id: true, createdAt: true },
+    });
+    // Bump the right bookkeeping timestamp so the Today dashboard
+    // queries can compute "due this week" without re-scanning the
+    // notes table.
+    if (callType === 'fifth_visit') {
+      await tx.family.update({
+        where: { id: familyId },
+        data: { lastReflectionAt: now },
+      });
+    } else if (callType === 'check_in') {
+      await tx.family.update({
+        where: { id: familyId },
+        data: { lastCheckInAt: now },
+      });
+    }
+    return created;
+  });
+
+  await audit({
+    actorType: 'user',
+    actorId: actor.id,
+    actorRole: actor.role,
+    actionType: 'create',
+    targetType: 'RelationshipNote',
+    targetId: noteRow.id,
+    metadata: {
+      event: 'relationship_note_logged',
+      familyId,
+      callType,
+      bodyLength: body.length,
+    },
+  });
+
+  // Best-effort email. A transient SMTP hiccup must not roll back the
+  // note - the family will still see it on the next email exchange,
+  // and the operator console always shows the timeline.
+  try {
+    const transport = buildTransport();
+    const payload = {
+      recipientFirstName: payer.firstName,
+      operatorFirstName: actor.firstName ?? null,
+      noteBody: body,
+      noteKind: callType,
+    };
+    await transport.sendMail({
+      to: payer.email,
+      from: `${brand.fullName} <${process.env.EMAIL_SENDER}>`,
+      subject: relationshipNoteSubject(payload),
+      text: relationshipNoteText(payload),
+      html: relationshipNoteHtml(payload),
+    });
+  } catch (err) {
+    console.error('[relationship] note email failed', { familyId, err });
+  }
+
+  revalidatePath('/ops');
+  revalidatePath(`/ops/families/${familyId}`);
+  redirect(`/ops/families/${familyId}`);
 }
