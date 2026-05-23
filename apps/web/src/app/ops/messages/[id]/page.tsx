@@ -123,6 +123,10 @@ export default async function OpsThreadDetailPage({
           otherPartyLabel={`${familyLabel} & ${companionLabel}`}
           currentUserId={actor.id}
           readOnly
+          // M.3.4: operator_admin gets the original body of deleted
+          // messages (strike-through + marker). Non-admin operators
+          // see the standard tombstone like everyone else.
+          revealDeleted={actor.role === 'operator_admin'}
           messages={thread.messages.map((m) => {
             const senderName =
               [m.sender.firstName, m.sender.lastName].filter(Boolean).join(' ') ||

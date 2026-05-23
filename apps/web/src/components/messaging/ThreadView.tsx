@@ -110,6 +110,12 @@ interface Props {
   // ops_admin role uses this to monitor direct threads without
   // posting into them.
   readOnly?: boolean;
+  // M.3.4: when true, deleted messages still show their original
+  // body with a strike-through + "[deleted by sender]" marker
+  // instead of the tombstone. Only used by operator_admins on the
+  // FAMILY_COMPANION oversight surface; gives safeguarding full
+  // recovery of deleted content alongside the audit log.
+  revealDeleted?: boolean;
 }
 
 export function ThreadView({
@@ -118,6 +124,7 @@ export function ThreadView({
   currentUserId,
   messages: initialMessages,
   readOnly = false,
+  revealDeleted = false,
 }: Props) {
   const [state, action] = useFormState(sendMessage, initial);
   const [live, setLive] = useState<MessageRow[]>([]);
@@ -399,7 +406,40 @@ export function ThreadView({
                 m.fromCurrentUser ? 'self-end items-end' : 'self-start items-start'
               }`}
             >
-              {isDeleted ? (
+              {isDeleted && revealDeleted ? (
+                // M.3.4: ops_admin oversight view. Show the original
+                // body with strike-through + a [deleted by sender]
+                // marker so safeguarding can read what was retracted.
+                // Attachments stay visible but dimmed for the same
+                // reason.
+                <>
+                  {m.body ? (
+                    <div
+                      className={`rounded-lg px-3 py-2 text-[0.9375rem] leading-[1.5] whitespace-pre-wrap break-words line-through opacity-70 ${
+                        m.fromCurrentUser
+                          ? 'bg-moss text-cream'
+                          : 'bg-paper text-charcoal border border-moss/10'
+                      }`}
+                    >
+                      {m.body}
+                    </div>
+                  ) : null}
+                  {m.attachments && m.attachments.length > 0 ? (
+                    <div className="flex flex-col gap-2 mt-0.5 w-full opacity-70">
+                      {m.attachments.map((a) => (
+                        <AttachmentBubble
+                          key={a.id}
+                          attachment={a}
+                          fromCurrentUser={m.fromCurrentUser}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                  <span className="text-terracotta text-[0.7rem] font-medium uppercase tracking-[0.08em]">
+                    [deleted by sender]
+                  </span>
+                </>
+              ) : isDeleted ? (
                 <div
                   className={`rounded-lg px-3 py-2 text-[0.875rem] leading-[1.5] italic ${
                     m.fromCurrentUser
