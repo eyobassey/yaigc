@@ -54,6 +54,7 @@ export default async function CompanionVisitDetailPage({
           healthNotes: true,
           dietary: true,
           religiousObservance: true,
+          aboutTheRecipient: true,
         },
       },
       report: true,
@@ -140,6 +141,21 @@ export default async function CompanionVisitDetailPage({
             ) : null}
           </dl>
         </section>
+
+        {visit.recipient.aboutTheRecipient ? (
+          <section className="bg-paper border-l-4 border-terracotta rounded-r-[12px] p-5 sm:p-6 shadow-sm">
+            <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-terracotta mb-3">
+              What matters about{' '}
+              {visit.recipient.preferredName || visit.recipient.firstName}
+            </h2>
+            <p className="text-charcoal text-[0.9375rem] leading-[1.6] whitespace-pre-wrap break-words">
+              {visit.recipient.aboutTheRecipient}
+            </p>
+            <p className="text-stone text-[0.75rem] italic mt-3">
+              Written by the family. Worth a minute before you knock.
+            </p>
+          </section>
+        ) : null}
 
         <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
           <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-3">
