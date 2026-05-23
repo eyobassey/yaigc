@@ -2,15 +2,45 @@ import Link from 'next/link';
 import { Heart, Pencil } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { requireFamilyMember } from '@/lib/auth-helpers';
+import { ProseAutosaveField } from '@/components/relationship/ProseAutosaveField';
+import {
+  saveAboutTheRecipient,
+  saveWhatWeAreHopingFor,
+} from '@/lib/relationship';
 
 export const metadata = { title: 'Recipient' };
 
+// R.2 - helper prompts come straight from the design memo (May 2026).
+// About: section 4.1.1. Hopes lead + helper: section 4.2 / 4.2.1.
+const ABOUT_PROMPTS = [
+  'What matters to them? The small things, the daily things, the things that make a day a good day.',
+  'What do they enjoy? What do they dislike?',
+  'What are you worried about? The thing that wakes you at 3am.',
+  'What are you hoping these visits become?',
+  'What should the companion know before the first visit?',
+];
+
+const HOPES_LEAD =
+  'Not what you want for your mum or dad. What you want for yourself, as the person paying for this. The feeling, the reassurance, the thing that would let you breathe out a little.';
+
+const HOPES_PLACEHOLDER =
+  'What would tell you, three months from now, that this was money well spent?';
+
 export default async function FamilyRecipientPage() {
-  const { family } = await requireFamilyMember('/family/recipient');
+  const { family, member } = await requireFamilyMember('/family/recipient');
 
   const recipients = await prisma.recipient.findMany({
     where: { familyId: family.id, deletedAt: null },
     orderBy: { firstName: 'asc' },
+  });
+
+  // Only the family payer can edit these fields; viewers (Phase 2)
+  // see the same page without the editing affordance.
+  const canEdit = member.role === 'payer';
+
+  const familyRow = await prisma.family.findUnique({
+    where: { id: family.id },
+    select: { whatWeAreHopingFor: true },
   });
 
   if (recipients.length === 0) {
@@ -144,10 +174,45 @@ export default async function FamilyRecipientPage() {
                   </Row>
                 ) : null}
               </dl>
+
+              {canEdit ? (
+                <div className="mt-6 pt-5 border-t border-moss/10">
+                  <ProseAutosaveField
+                    action={saveAboutTheRecipient}
+                    initialValue={r.aboutTheRecipient ?? ''}
+                    hiddenFields={{ recipientId: r.id }}
+                    label={`About ${r.preferredName || r.firstName}`}
+                    helperPrompts={ABOUT_PROMPTS}
+                    rows={6}
+                  />
+                </div>
+              ) : r.aboutTheRecipient ? (
+                <div className="mt-6 pt-5 border-t border-moss/10">
+                  <h3 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.08em] text-stone mb-2">
+                    About {r.preferredName || r.firstName}
+                  </h3>
+                  <p className="whitespace-pre-wrap break-words text-charcoal text-[0.9375rem] leading-[1.55]">
+                    {r.aboutTheRecipient}
+                  </p>
+                </div>
+              ) : null}
             </article>
           );
         })}
       </div>
+
+      {canEdit ? (
+        <section className="mt-8 bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
+          <ProseAutosaveField
+            action={saveWhatWeAreHopingFor}
+            initialValue={familyRow?.whatWeAreHopingFor ?? ''}
+            label="What we are hoping for"
+            helperLead={HOPES_LEAD}
+            placeholder={HOPES_PLACEHOLDER}
+            rows={5}
+          />
+        </section>
+      ) : null}
     </div>
   );
 }
