@@ -97,6 +97,80 @@ const RULES: Rule[] = [
     pattern: /—/,
     reason: 'Em dash is forbidden. Use commas, semicolons, colons, parentheses, or hyphens.',
   },
+  // -------------------------------------------------------------------------
+  // R.6 / Design memo s6.2 - "Shape of the relationship", May 2026.
+  //
+  // These words are not banned because they are bad words. They are banned
+  // because they belong to a different category of service (regulated
+  // social-care / clinical-care), one we have been deliberate about not
+  // being. Service drift is the most common reason an unregulated provider
+  // gets a CQC letter. The lint is the gate.
+  // -------------------------------------------------------------------------
+  {
+    name: 'goals',
+    pattern: /\bgoals?\b/i,
+    reason: 'Goals language is the language of regulated care. We help families breathe, not set objectives.',
+  },
+  {
+    name: 'objectives',
+    pattern: /\bobjectives?\b/i,
+    reason: 'Same trap as "goals". The relationship is not a contract against measurable objectives.',
+  },
+  {
+    name: 'outcomes',
+    pattern: /\boutcomes?\b/i,
+    reason: 'Outcomes is the language of the Adult Social Care Outcomes Framework. We are not commissioned against outcomes.',
+  },
+  {
+    name: 'progress',
+    pattern: /\bprogress\b/i,
+    reason: 'We do not measure progress against an objective. Post-visit reports are observation, not performance.',
+  },
+  {
+    name: 'milestones',
+    pattern: /\bmilestones?\b/i,
+    reason: 'Milestones belong to a planned intervention. The relationship is not on a roadmap.',
+  },
+  {
+    name: 'kpis / metrics',
+    pattern: /\b(kpis?|metrics?)\b/i,
+    reason: 'No quantitative measurement of the recipient or the relationship. Operator analytics belongs in /ops/analytics, not user-facing copy.',
+  },
+  {
+    name: 'wellbeing score',
+    pattern: /\bwellbeing score\b/i,
+    reason: 'No scoring of how the recipient is doing. The post-visit report is prose, not a number.',
+  },
+  {
+    name: 'intervention',
+    pattern: /\bintervention\b/i,
+    reason: 'Intervention is a regulated-care term. We deliver a bit of company, not a planned intervention.',
+  },
+  {
+    name: 'treatment',
+    pattern: /\btreatment\b/i,
+    reason: 'Treatment is clinical-care language. We do not treat anyone.',
+    allowList: [
+      // /privacy: GDPR-style enumeration of what we explicitly do not
+      // collect. Same "name what we are not" pattern as the care rule.
+      /\bmedical diagnoses or treatment\b/i,
+    ],
+  },
+  {
+    name: 'therapy',
+    pattern: /\btherapy\b/i,
+    reason: 'Therapy is clinical-care language. We are not therapists.',
+    allowList: [
+      // /terms section 3 "What we do not do" - listing regulated services
+      // outside our scope. Naming what we are not is allowed everywhere.
+      /\bnursing or therapy\b/i,
+    ],
+  },
+  {
+    name: 'programme',
+    pattern: /\bprogramme\b/i,
+    reason: 'Programme (UK) signals a planned intervention with milestones and outcomes. We do not run a programme.',
+  },
 ];
 
 const SCOPED_PATHS = [

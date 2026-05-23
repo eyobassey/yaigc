@@ -734,7 +734,7 @@ const CADENCE_OPTIONS: { value: number; label: string }[] = [
   { value: 90, label: 'Quarterly (default)' },
   { value: 180, label: 'Every six months' },
   { value: 365, label: 'Annually' },
-  { value: 0, label: 'Off — no scheduled check-ins' },
+  { value: 0, label: 'Off (no scheduled check-ins)' },
 ];
 
 function CadenceCard({
@@ -785,11 +785,11 @@ function CadenceCard({
       <dl className="mt-4 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-[0.8125rem]">
         <dt className="text-stone">Last fifth-visit call</dt>
         <dd className="text-charcoal">
-          {lastReflectionAt ? formatRevisionDate(lastReflectionAt) : '—'}
+          {lastReflectionAt ? formatRevisionDate(lastReflectionAt) : 'never'}
         </dd>
         <dt className="text-stone">Last check-in</dt>
         <dd className="text-charcoal">
-          {lastCheckInAt ? formatRevisionDate(lastCheckInAt) : '—'}
+          {lastCheckInAt ? formatRevisionDate(lastCheckInAt) : 'never'}
         </dd>
         {nextDue ? (
           <>
