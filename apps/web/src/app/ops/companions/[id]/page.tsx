@@ -14,6 +14,7 @@ import { TransitionPanel } from './TransitionPanel';
 import { TriageNotesForm } from './TriageNotesForm';
 import { RightToWorkPanel } from './RightToWorkPanel';
 import { DocumentList } from './DocumentList';
+import { InterviewHistory } from './InterviewHistory';
 import { Paginator } from '@/components/ui/Paginator';
 import { parsePagination, buildView } from '@/lib/pagination';
 import { companionPhotoSrc } from '@/lib/companion-photo-src';
@@ -58,6 +59,12 @@ export default async function CompanionApplicationDetailPage({
       documents: {
         where: { archivedAt: null },
         orderBy: { uploadedAt: 'desc' },
+      },
+      interviews: {
+        orderBy: { happenedAt: 'desc' },
+        include: {
+          interviewer: { select: { firstName: true, lastName: true, email: true } },
+        },
       },
     },
   });
@@ -282,6 +289,11 @@ export default async function CompanionApplicationDetailPage({
               initialValue={application.triageNotes ?? ''}
             />
           </section>
+
+          <InterviewHistory
+            applicationId={application.id}
+            interviews={application.interviews}
+          />
 
           {application.declineReason ? (
             <section className="bg-terracotta/10 border-l-4 border-terracotta px-5 py-4 rounded-r">
