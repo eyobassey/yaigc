@@ -302,6 +302,22 @@ export default async function CompanionApplicationDetailPage({
           />
 
           <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
+            <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-2">
+              Interview rubric
+            </h2>
+            <p className="text-charcoal text-[0.875rem] mb-3 leading-[1.55]">
+              Log a phone screen, in-person interview, or final sign-off.
+              The rubric helps future operators get oriented quickly.
+            </p>
+            <Link
+              href={`/ops/companions/${application.id}/interviews/new`}
+              className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-moss text-cream text-[0.875rem] font-medium hover:bg-moss-dark transition-colors"
+            >
+              Log an interview
+            </Link>
+          </section>
+
+          <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
             <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-3 inline-flex items-center gap-2">
               <ShieldCheck size={14} strokeWidth={1.75} className="text-moss" aria-hidden="true" />
               Right to work
