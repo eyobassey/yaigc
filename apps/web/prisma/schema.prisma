@@ -57,6 +57,7 @@ model User {
   companion               Companion?
   proposedMatches         Match[]                @relation("MatchProposedBy")
   endedMatches            Match[]                @relation("MatchEndedBy")
+  twoVisitReviewsLogged   Match[]                @relation("MatchTwoVisitReviewBy")
   submittedReports        PostVisitReport[]      @relation("ReportSubmittedBy")
   openedCases             SafeguardingCase[]     @relation("CaseOpenedBy")
   closedCases             SafeguardingCase[]     @relation("CaseClosedBy")
@@ -378,11 +379,36 @@ model Match {
   endNote           String?        @db.Text
   endedByOperatorId String?
 
+  // Cover companion (SDD Addendum §2). The named back-up who shadows the
+  // primary on ~1 in 5 visits during the first two months, then steps in
+  // when the primary is unavailable. coverCompanionId is *desired* at
+  // match acceptance but not required - matches accept and visits start
+  // even if cover is unassigned; the absence shows up as an ops nudge on
+  // the today dashboard. coverIntroductionVisitsCompleted is incremented
+  // when a PostVisitReport is filed for a visit whose
+  // Visit.secondaryCompanionId is set; it feeds the "Cover introductions
+  // due this week" dashboard card.
+  coverCompanionId                String?
+  coverIntroductionVisitsCompleted Int      @default(0)
+
+  // Two-visit calibration review (SDD Addendum §4). After visit two is
+  // completed, the operator team has 72 hours to conduct a structured
+  // review with both the family and the companion: outcome continue /
+  // adjust / reset, plus a short note visible to both sides. Distinct
+  // from the fifth-visit reflection call (Stage R, family-only).
+  twoVisitReviewScheduledFor DateTime?
+  twoVisitReviewCompletedAt  DateTime?
+  twoVisitReviewOutcome      TwoVisitReviewOutcome?
+  twoVisitReviewNotes        String?   @db.Text
+  twoVisitReviewByOperatorId String?
+
   family           Family            @relation(fields: [familyId], references: [id])
   recipient        Recipient?        @relation(fields: [recipientId], references: [id])
   companion        Companion         @relation(fields: [candidateCompanionId], references: [id])
+  coverCompanion   Companion?        @relation("MatchCover", fields: [coverCompanionId], references: [id])
   proposedBy       User              @relation("MatchProposedBy", fields: [proposedByOperatorId], references: [id])
   endedBy          User?             @relation("MatchEndedBy", fields: [endedByOperatorId], references: [id])
+  twoVisitReviewBy User?             @relation("MatchTwoVisitReviewBy", fields: [twoVisitReviewByOperatorId], references: [id])
   subscription     Subscription?
   safeguardingCase SafeguardingCase?
 
@@ -392,6 +418,8 @@ model Match {
   @@index([familyId, status])
   @@index([candidateCompanionId, status])
   @@index([status, createdAt(sort: Desc)])
+  @@index([coverCompanionId, status])
+  @@index([twoVisitReviewScheduledFor, twoVisitReviewCompletedAt])
 }
 
 enum MatchStatus {
@@ -410,6 +438,19 @@ enum MatchEndReason {
   companion_circumstances_changed
   safeguarding_concern
   other
+}
+
+// SDD Addendum §4. The three outcomes the operator team can record after
+// the two-visit calibration review.
+//   continue - match is working, no changes
+//   adjust   - match is working but with one or two specific changes,
+//              communicated clearly to both sides in the review note
+//   reset    - match is not working; family is rematched with high
+//              priority (24h SLA per §4.5)
+enum TwoVisitReviewOutcome {
+  continue
+  adjust
+  reset
 }
 
 // ----------------------------------------------------------------------------
@@ -504,17 +545,24 @@ model Visit {
   cancellationReason       String?    @db.Text
   cancellationActor        CancellationActor?
 
+  // SDD Addendum §2.4. Populated on cover-introduction visits where the
+  // named cover is present alongside the primary. The post-visit report
+  // is filed by the primary; the cover's presence is captured here in
+  // the visit record rather than generating a second report.
+  secondaryCompanionId String?
+
   stateChangedAt              DateTime   @default(now())
   reminderSentAt              DateTime?  // 24h-before reminder; null until the cron fires
   confirmationReminderSentAt  DateTime?  // single-fire nudge for unconfirmed visits ~4h out
   reportReminderSentAt        DateTime?  // single-fire nudge for completed visits without a report
 
-  subscription      Subscription       @relation(fields: [subscriptionId], references: [id])
-  family            Family             @relation(fields: [familyId], references: [id])
-  recipient         Recipient          @relation(fields: [recipientId], references: [id])
-  companion         Companion          @relation(fields: [companionId], references: [id])
-  report            PostVisitReport?
-  safeguardingCases SafeguardingCase[]
+  subscription       Subscription       @relation(fields: [subscriptionId], references: [id])
+  family             Family             @relation(fields: [familyId], references: [id])
+  recipient          Recipient          @relation(fields: [recipientId], references: [id])
+  companion          Companion          @relation(fields: [companionId], references: [id])
+  secondaryCompanion Companion?         @relation("VisitSecondaryCompanion", fields: [secondaryCompanionId], references: [id])
+  report             PostVisitReport?
+  safeguardingCases  SafeguardingCase[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -523,6 +571,7 @@ model Visit {
   @@index([subscriptionId, scheduledStartAt(sort: Desc)])
   @@index([companionId, scheduledStartAt])
   @@index([familyId, scheduledStartAt])
+  @@index([secondaryCompanionId, scheduledStartAt])
 }
 
 // ----------------------------------------------------------------------------
@@ -916,12 +965,14 @@ model Companion {
   engagementType           CompanionEngagementType @default(worker)
   hourlyRate               Decimal                 @default(12.00) @db.Decimal(10, 2)
 
-  user          User                 @relation(fields: [userId], references: [id])
-  application   CompanionApplication @relation(fields: [applicationId], references: [id])
-  matches       Match[]
-  subscriptions Subscription[]
-  visits        Visit[]
-  reports       PostVisitReport[]
+  user            User                 @relation(fields: [userId], references: [id])
+  application     CompanionApplication @relation(fields: [applicationId], references: [id])
+  matches         Match[]
+  coverMatches    Match[]              @relation("MatchCover")
+  subscriptions   Subscription[]
+  visits          Visit[]
+  secondaryVisits Visit[]              @relation("VisitSecondaryCompanion")
+  reports         PostVisitReport[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
