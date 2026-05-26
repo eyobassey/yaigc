@@ -11,6 +11,8 @@ import {
   MessageSquare,
   ShieldCheck,
   Phone,
+  Handshake,
+  UserPlus,
   ChevronRight,
 } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
@@ -199,6 +201,62 @@ export default async function OpsTodayPage() {
     .filter((f) => f.dueAt.getTime() <= endOfThisWeek.getTime())
     .sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime());
 
+  // SDD Addendum S.3: two cover-companion nudges. Both queries are
+  // scoped to accepted, non-ended matches and stay small at Phase-1
+  // scale; pace filtering is JS-side. "Accepted at" is the later of
+  // familyResponseAt / companionResponseAt; we treat null as max so a
+  // newly accepted match falls into the window naturally.
+  const TWO_MONTHS_MS = 60 * MS_PER_DAY;
+  const COVER_PACE_DAYS = 14; // ~one cover-present visit every two weeks
+  const coverMatches = await prisma.match.findMany({
+    where: { status: 'accepted', endedAt: null },
+    select: {
+      id: true,
+      coverCompanionId: true,
+      coverIntroductionVisitsCompleted: true,
+      familyResponseAt: true,
+      companionResponseAt: true,
+      family: { select: { billingName: true } },
+      companion: { select: { firstName: true, lastName: true } },
+      coverCompanion: { select: { firstName: true, lastName: true } },
+    },
+  });
+  const now = new Date();
+  const coverPending = coverMatches
+    .filter((m) => m.coverCompanionId === null)
+    .map((m) => ({
+      id: m.id,
+      billingName: m.family.billingName,
+      companionName: `${m.companion.firstName} ${m.companion.lastName}`,
+      acceptedAt: latestResponse(m.familyResponseAt, m.companionResponseAt),
+    }))
+    .sort((a, b) => {
+      const ta = a.acceptedAt?.getTime() ?? 0;
+      const tb = b.acceptedAt?.getTime() ?? 0;
+      return tb - ta;
+    });
+  const coverIntrosDue = coverMatches
+    .filter((m) => m.coverCompanionId !== null)
+    .map((m) => {
+      const acceptedAt = latestResponse(m.familyResponseAt, m.companionResponseAt);
+      if (!acceptedAt) return null;
+      const daysSince = Math.floor((now.getTime() - acceptedAt.getTime()) / MS_PER_DAY);
+      if (daysSince < 0 || now.getTime() - acceptedAt.getTime() > TWO_MONTHS_MS) return null;
+      const expected = Math.floor(daysSince / COVER_PACE_DAYS);
+      if (m.coverIntroductionVisitsCompleted >= expected) return null;
+      return {
+        id: m.id,
+        billingName: m.family.billingName,
+        coverName: m.coverCompanion
+          ? `${m.coverCompanion.firstName} ${m.coverCompanion.lastName}`
+          : '',
+        completed: m.coverIntroductionVisitsCompleted,
+        expected,
+      };
+    })
+    .filter((m): m is NonNullable<typeof m> => m !== null)
+    .sort((a, b) => b.expected - b.completed - (a.expected - a.completed));
+
   return (
     <div>
       <header className="mb-10">
@@ -336,8 +394,113 @@ export default async function OpsTodayPage() {
           </RelationshipCard>
         </div>
       ) : null}
+
+      {/* S.3: cover-companion operational nudges. "Pending" lists
+          accepted matches without a named cover - acceptance does not
+          wait for cover, so this surface is how operators close the
+          gap. "Introductions due" lists matches in their first two
+          months that are behind on cover-present visits. */}
+      {coverPending.length > 0 || coverIntrosDue.length > 0 ? (
+        <div className="grid gap-4 sm:grid-cols-2 mb-12">
+          <CoverCard
+            title="Cover assignments pending"
+            icon={UserPlus}
+            empty="Every accepted match has a named cover."
+          >
+            {coverPending.map((m) => (
+              <Link
+                key={m.id}
+                href={`/ops/matches/${m.id}`}
+                className="flex items-center justify-between gap-3 px-3 py-2 rounded-md hover:bg-cream-deep/40 transition-colors group"
+              >
+                <div className="min-w-0">
+                  <div className="font-head text-moss text-[0.9375rem] font-medium truncate">
+                    {m.billingName}
+                  </div>
+                  <div className="text-stone text-[0.75rem] mt-0.5 truncate">
+                    Primary: {m.companionName}
+                  </div>
+                </div>
+                <ChevronRight
+                  size={16}
+                  strokeWidth={1.5}
+                  aria-hidden="true"
+                  className="text-stone/50 group-hover:text-moss transition-colors flex-shrink-0"
+                />
+              </Link>
+            ))}
+          </CoverCard>
+
+          <CoverCard
+            title="Cover introductions due"
+            icon={Handshake}
+            empty="No matches are behind on cover introductions."
+          >
+            {coverIntrosDue.map((m) => (
+              <Link
+                key={m.id}
+                href={`/ops/matches/${m.id}`}
+                className="flex items-center justify-between gap-3 px-3 py-2 rounded-md hover:bg-cream-deep/40 transition-colors group"
+              >
+                <div className="min-w-0">
+                  <div className="font-head text-moss text-[0.9375rem] font-medium truncate">
+                    {m.billingName}
+                  </div>
+                  <div className="text-stone text-[0.75rem] mt-0.5 truncate">
+                    {m.completed} of {m.expected} cover visits{m.coverName ? ` (${m.coverName})` : ''}
+                  </div>
+                </div>
+                <ChevronRight
+                  size={16}
+                  strokeWidth={1.5}
+                  aria-hidden="true"
+                  className="text-stone/50 group-hover:text-moss transition-colors flex-shrink-0"
+                />
+              </Link>
+            ))}
+          </CoverCard>
+        </div>
+      ) : null}
     </div>
   );
+}
+
+type IconComponent = typeof Phone;
+
+function CoverCard({
+  title,
+  icon: Icon,
+  empty,
+  children,
+}: {
+  title: string;
+  icon: IconComponent;
+  empty: string;
+  children: React.ReactNode;
+}) {
+  const hasChildren = Array.isArray(children) ? children.length > 0 : Boolean(children);
+  return (
+    <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5">
+      <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-3 inline-flex items-center gap-2">
+        <Icon size={14} strokeWidth={1.75} className="text-terracotta" aria-hidden="true" />
+        {title}
+      </h2>
+      {hasChildren ? (
+        <div className="flex flex-col">{children}</div>
+      ) : (
+        <p className="text-stone text-[0.8125rem] italic px-3 py-2">{empty}</p>
+      )}
+    </section>
+  );
+}
+
+// Helper for resolving "accepted at" from a Match. Both responses are
+// non-null on an accepted match; we take the later of the two so the
+// timeline reflects when both sides had confirmed.
+function latestResponse(a: Date | null, b: Date | null): Date | null {
+  if (!a) return b;
+  if (!b) return a;
+  return a.getTime() > b.getTime() ? a : b;
 }
 
 function RelationshipCard({
