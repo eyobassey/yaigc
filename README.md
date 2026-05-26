@@ -24,8 +24,12 @@ plus direct family ↔ companion threads gated per-companion by
 The Shape-of-the-relationship work (Stage R) is in: family-payer
 prose fields with edit history, companion "What matters about [name]"
 block on every visit, operator fifth-visit reflection calls + quarterly
-check-ins, brand-voice lint that catches goals/outcomes drift. Stripe
-payments are the next major block. See
+check-ins, brand-voice lint that catches goals/outcomes drift. Stage S
+(the SDD Addendum, three patterns) is in: a named cover companion per
+match (non-blocking — visits start without one), the two-visit
+calibration review at 72h with a structured workflow page + dual-side
+email, and a cultural-fit refresh of the `/companions/join` copy.
+Stripe payments are the next major block. See
 [Where things are](#where-things-are) below for the honest list of what is
 built versus what is queued.
 
@@ -443,7 +447,7 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 ### Built and working
 
 > Tick each box only when the thing actually works in production, not when
-> the PR is open. Last updated 2026-05-22.
+> the PR is open. Last updated 2026-05-26.
 
 **Infrastructure**
 
@@ -471,7 +475,7 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 
 **Marketing surface (Sprint 1)**
 
-- [x] Home, `/how-it-works`, `/pricing`, `/safeguarding`, `/companions/join`
+- [x] Home, `/how-it-works`, `/pricing`, `/safeguarding`, `/companions/join` (cultural-fit refresh S.7 — settled life as soft preference, broader temperament framing per addendum §3.2)
 - [x] `/about`, `/privacy`, `/terms`, `/accessibility`
 - [x] Public application form at `/companions/join/apply` (structured availability picker)
 - [x] Public enquiry form at `/contact` → `Enquiry` triage queue in ops
@@ -519,6 +523,10 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 - [x] Per-companion direct-messaging gate on `/ops/companions/[id]/edit` (M.2.2) — `operator_admin` only, audit-logged on every flip with before/after state
 - [x] Today-dashboard relationship cards (R.5) — "Reflection calls due" (≥4 completed visits without a `fifth_visit` note) + "Check-ins due" (cadence-driven). Each row links into `/ops/families/[id]/log-call?kind=…`, which surfaces the family's prose + recent post-visit reports next to a textarea. Submit writes a `RelationshipNote`, bumps the right timestamp, and emails the family payer a warm note via the new `relationship-note` template
 - [x] Family-detail surfaces for the relationship shape (R.4) — per-recipient "What matters about [name]" with collapsed revision history, family-level "What we are hoping for" with revisions, cadence dropdown (`Monthly / Quarterly default / Every six months / Annually / Off`, audit-logged), reflection-notes timeline
+- [x] Match flow gains a named cover companion (S.4) — optional at propose-time, always-on assign / swap / clear panel on the match detail (audit-logged with `changeKind=assign|swap|clear`). Cover is a nudge, **not** a gate: match acceptance and visit scheduling proceed without one
+- [x] Today-dashboard cover-companion cards (S.3) — "Cover assignments pending" lists accepted matches without a named cover; "Cover introductions due" lists matches in their first two months that are behind on the ~one-cover-visit-per-fortnight pace
+- [x] Visit edit form gains a "Cover companion present" picker (S.2) when the originating match has a named cover; on post-visit-report submission with `Visit.secondaryCompanionId` set, the report transaction atomically bumps `Match.coverIntroductionVisitsCompleted`
+- [x] Two-visit calibration review (S.5 → S.6) — second post-visit report auto-stamps `Match.twoVisitReviewScheduledFor = now + 72h` inside the same transaction; today-dashboard "Two-visit reviews due" card; structured workflow at `/ops/matches/[id]/two-visit-review` surfaces both reports side by side, takes a `continue / adjust / reset` decision plus a 20–4000 char note, audit-logs, and emails both sides via a new shared `two-visit-review` template. Match detail surfaces the recorded decision; `reset` outcomes on still-accepted matches get a terracotta "rematch needed" treatment (24h SLA per §4.5)
 - [x] Pagination across every list page (offset, page=N) and every detail-page history feed (`hp=N`)
 
 **Family portal (`/family`)**
@@ -532,6 +540,7 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 - [x] Account: name, relationship-to-recipient edit, self-serve "invite a family member"
 - [x] Messaging at `/family/messages` (M.1 + M.2.3) — thread with the office plus, when the office has cleared it, a direct thread per matched companion. A "Start a direct thread" panel surfaces eligible matches that don't have a thread yet; threads flip read-only when the match ends or the gate is revoked, history preserved
 - [x] Family-payer prose editors on `/family/recipient` (R.2) — autosave-on-blur textareas for "About [first name]" (per recipient) and "What we are hoping for" (per family). Helper prompts straight from memo §4.1.1 / §4.2.1. Every save that changes the body appends a `FamilyTextRevision`
+- [x] Cover-companion surfacing on `/family/companion` (S.4) — per-pair "Cover companion" line names the first-name + borough when one is assigned, or "Your cover companion will be named soon. They step in when [primary] cannot." when not. Recipient hears nothing about cover either way — it is buyer-side information
 
 **Companion portal (`/companion`)**
 
@@ -545,6 +554,8 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 - [x] Account view: read-only admin fields + sign-out card
 - [x] Messaging at `/companion/messages` (M.1 + M.2.3) — thread with the office plus, when the office has cleared it, a direct thread per matched family. "Start a direct thread" panel for eligible matches without a thread; threads flip read-only on match-end or gate-revoke
 - [x] "What matters about [name]" block on `/companion/visits/[id]` (R.3) — terracotta-rule card above the structured profile surfacing the family's latest prose. Hidden when the family has not written anything yet. `whatWeAreHopingFor` is deliberately not shown to the companion (memo §5.4)
+- [x] Cover-named matches surface on `/companion/matches` (S.4) — a companion sees the matches they are the named cover for (accepted bucket + all bucket), tagged with a "You are the cover" pill. Match detail allows cover-only viewers; the RespondPanel is hidden and replaced with a "Your role: Cover companion" panel so cover-only viewers do not see accept/decline controls. Cover-present visits surface on the visit detail too
+- [x] Visit detail surfaces "Cover present: [name]" (S.2) on the operator + companion views when the visit's `secondaryCompanionId` is set
 
 **Cron / scheduled jobs**
 
@@ -557,6 +568,7 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 - [x] Real-time delivery (M.1.1): standalone WebSocket server on `:3004`, nginx `/realtime/` upgrade location, Redis pub/sub (`messaging:user:<id>`) fanning out from server actions; client hydrates `ThreadView` without refresh
 - [x] Attachments + emoji picker (M.1.2): images (JPEG/PNG/WebP/HEIC, max 10 MB, EXIF preserved, HEIC→JPEG transcode), documents (PDF / Office / TXT / CSV, max 25 MB), videos (MP4/MOV/WebM, max 100 MB). Magic-byte validation, per-thread S3 prefix, auth-gated streaming, lazy-loaded emoji picker
 - [x] Shape-of-the-relationship surfaces (R.1 → R.6): family-payer prose fields (`Recipient.aboutTheRecipient`, `Family.whatWeAreHopingFor`) with `FamilyTextRevision` edit history, companion `What matters about [name]` block on every visit, operator log-a-call workflow + Today-dashboard "due this week" cards driven by `Family.checkInCadenceDays` + `lastReflectionAt` / `lastCheckInAt`, `RelationshipNote` timeline on the family detail, brand-voice lint extension covering §6.2 of the design memo (goals / outcomes / progress / care plan / wellbeing score / intervention / treatment / therapy / programme + cousins)
+- [x] SDD Addendum — Three patterns (S.1 → S.7): named cover companion per Match (`coverCompanionId` nullable + `coverIntroductionVisitsCompleted` counter), per-visit cover-present marker (`Visit.secondaryCompanionId`), two-visit calibration review fields on Match (`twoVisitReviewScheduledFor` / `CompletedAt` / `Outcome enum` / `Notes` / `ByOperatorId`). Cover is operationally a nudge — match acceptance and visits proceed without one (project rule, see `memory/project_cover_companion_non_blocking.md`); the literal "Required at match acceptance" wording in the addendum is softened in this build. `/companions/join` copy refresh broadens the supply-pool framing per §3.2 (settled life in the UK as soft preference, history of being alongside friends / family / neighbours, stable weekly availability). The addendum is **not** yet folded into the SDD master — waiting on the §6 triggers (matching surface build, or companion interview rubric build, or the 2026-11-26 six-month re-read)
 - [x] Direct family ↔ companion threads (M.2.1 → M.2.5): new `ThreadKind` enum (`OPS_FAMILY` / `OPS_COMPANION` / `FAMILY_COMPANION`) with backfilled existing rows; `Companion.directMessagingEnabled` gates eligibility per-companion (operator_admin only). Find-or-create via `openDirectThread(matchId)`. Lifecycle derived at runtime from `Match.status` + `Companion.directMessagingEnabled` — match-ended OR gate-revoked flips the thread read-only without losing history. Email notify reuses the M.1 template with an optional `senderLabel`. Dismissible "office can read" disclosure banner on both participant sides (per-browser via `localStorage`), `Lock`-iconed "read-only" banner once lifecycle closes
 - [x] Sender-side delete with a 15-minute window (M.3.1 → M.3.4): `Message.deletedAt` + `deletedByUserId` soft-delete columns; `deleteMessage(formData)` server action re-checks sender + window + idempotency on every call; audit log carries the original body in `metadata` so the message is reconstructible from the log alone. Real-time via a new `message-deleted` envelope on the existing Redis fan-out (the standalone realtime server is kind-agnostic, no restart there). `ThreadView` renders tombstones, listens for the WS event, and shows a `Trash2` button on own bubbles within the window. `operator_admin` viewing the FAMILY_COMPANION oversight surface sees the original body with strike-through + `[deleted by sender]` marker so safeguarding has full recovery
 
