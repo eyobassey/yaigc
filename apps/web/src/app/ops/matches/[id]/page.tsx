@@ -49,6 +49,7 @@ export default async function OpsMatchDetailPage({
           borough: true,
         },
       },
+      twoVisitReviewBy: { select: { firstName: true, lastName: true, email: true } },
       proposedBy: { select: { id: true, email: true, firstName: true, lastName: true } },
       subscription: { select: { id: true } },
       endedBy: { select: { id: true, email: true, firstName: true, lastName: true } },
@@ -194,6 +195,65 @@ export default async function OpsMatchDetailPage({
               </h2>
               <p className="text-charcoal leading-[1.55] whitespace-pre-wrap break-words">
                 {match.declineReason}
+              </p>
+            </section>
+          ) : null}
+
+          {match.twoVisitReviewScheduledFor && !match.twoVisitReviewCompletedAt ? (
+            <section className="bg-moss/5 border border-moss/20 rounded-[12px] p-5 sm:p-6">
+              <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-moss mb-2">
+                Two-visit review due
+              </h2>
+              <p className="text-charcoal text-[0.9375rem] mb-3 leading-[1.55]">
+                Window opened{' '}
+                {match.twoVisitReviewScheduledFor.toLocaleDateString('en-GB', {
+                  day: 'numeric',
+                  month: 'short',
+                  timeZone: 'Europe/London',
+                })}
+                . Read both reports, make the calls, write the note.
+              </p>
+              <Link
+                href={`/ops/matches/${match.id}/two-visit-review`}
+                className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-moss text-cream text-[0.875rem] font-medium hover:bg-moss-dark transition-colors"
+              >
+                Open review
+              </Link>
+            </section>
+          ) : null}
+
+          {match.twoVisitReviewCompletedAt && match.twoVisitReviewOutcome ? (
+            <section
+              className={`border-l-4 px-5 py-4 rounded-r ${
+                match.twoVisitReviewOutcome === 'reset'
+                  ? 'bg-terracotta/10 border-terracotta'
+                  : 'bg-moss/5 border-moss/40'
+              }`}
+            >
+              <h2
+                className={`font-body text-[0.7rem] font-medium uppercase tracking-[0.1em] mb-2 ${
+                  match.twoVisitReviewOutcome === 'reset' ? 'text-terracotta' : 'text-moss'
+                }`}
+              >
+                Two-visit review · {match.twoVisitReviewOutcome}
+                {match.twoVisitReviewOutcome === 'reset' && match.status === 'accepted'
+                  ? ' · rematch needed'
+                  : ''}
+              </h2>
+              <p className="text-charcoal text-[0.9375rem] leading-[1.55] whitespace-pre-wrap break-words mb-2">
+                {match.twoVisitReviewNotes}
+              </p>
+              <p className="text-stone text-[0.75rem]">
+                Logged{' '}
+                {match.twoVisitReviewCompletedAt.toISOString().replace('T', ' ').slice(0, 19)}
+                {match.twoVisitReviewBy ? (
+                  <>
+                    {' '}by{' '}
+                    {`${match.twoVisitReviewBy.firstName ?? ''} ${match.twoVisitReviewBy.lastName ?? ''}`.trim() ||
+                      match.twoVisitReviewBy.email}
+                  </>
+                ) : null}
+                .
               </p>
             </section>
           ) : null}
@@ -390,6 +450,14 @@ function summarise(
     }
     if (m.event === 'match_ended_email_sent') {
       return `Ended-email sent to ${m.audience} (${m.to})`;
+    }
+    if (m.event === 'match_cover_companion_change') {
+      const kind = typeof m.changeKind === 'string' ? m.changeKind : 'change';
+      return `Cover companion ${kind}`;
+    }
+    if (m.event === 'two_visit_review_completed') {
+      const decision = typeof m.outcome === 'string' ? m.outcome : 'recorded';
+      return `Two-visit review · ${decision}`;
     }
     if (typeof m.event === 'string') return String(m.event);
   }
