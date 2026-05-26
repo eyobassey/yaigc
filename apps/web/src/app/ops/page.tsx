@@ -13,6 +13,7 @@ import {
   Phone,
   Handshake,
   UserPlus,
+  ClipboardCheck,
   ChevronRight,
 } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
@@ -257,6 +258,29 @@ export default async function OpsTodayPage() {
     .filter((m): m is NonNullable<typeof m> => m !== null)
     .sort((a, b) => b.expected - b.completed - (a.expected - a.completed));
 
+  // SDD Addendum §4.5: matches with the two-visit calibration review
+  // scheduled and not yet completed. The card lets the operator open
+  // the review workflow directly.
+  const twoVisitReviewMatches = await prisma.match.findMany({
+    where: {
+      twoVisitReviewScheduledFor: { lte: endOfThisWeek },
+      twoVisitReviewCompletedAt: null,
+    },
+    select: {
+      id: true,
+      twoVisitReviewScheduledFor: true,
+      family: { select: { billingName: true } },
+      companion: { select: { firstName: true, lastName: true } },
+    },
+    orderBy: { twoVisitReviewScheduledFor: 'asc' },
+  });
+  const twoVisitReviewsDue = twoVisitReviewMatches.map((m) => ({
+    id: m.id,
+    billingName: m.family.billingName,
+    companionName: `${m.companion.firstName} ${m.companion.lastName}`,
+    dueAt: m.twoVisitReviewScheduledFor!,
+  }));
+
   return (
     <div>
       <header className="mb-10">
@@ -448,6 +472,49 @@ export default async function OpsTodayPage() {
                   </div>
                   <div className="text-stone text-[0.75rem] mt-0.5 truncate">
                     {m.completed} of {m.expected} cover visits{m.coverName ? ` (${m.coverName})` : ''}
+                  </div>
+                </div>
+                <ChevronRight
+                  size={16}
+                  strokeWidth={1.5}
+                  aria-hidden="true"
+                  className="text-stone/50 group-hover:text-moss transition-colors flex-shrink-0"
+                />
+              </Link>
+            ))}
+          </CoverCard>
+        </div>
+      ) : null}
+
+      {/* S.5: two-visit calibration reviews. Auto-scheduled 72h after
+          the second post-visit report; this card lists matches whose
+          window opens this week and have not yet been reviewed. */}
+      {twoVisitReviewsDue.length > 0 ? (
+        <div className="grid gap-4 sm:grid-cols-2 mb-12">
+          <CoverCard
+            title="Two-visit reviews due"
+            icon={ClipboardCheck}
+            empty="No two-visit reviews this week."
+          >
+            {twoVisitReviewsDue.map((m) => (
+              <Link
+                key={m.id}
+                href={`/ops/matches/${m.id}/two-visit-review`}
+                className="flex items-center justify-between gap-3 px-3 py-2 rounded-md hover:bg-cream-deep/40 transition-colors group"
+              >
+                <div className="min-w-0">
+                  <div className="font-head text-moss text-[0.9375rem] font-medium truncate">
+                    {m.billingName}
+                  </div>
+                  <div className="text-stone text-[0.75rem] mt-0.5 truncate">
+                    Window opens{' '}
+                    {m.dueAt.toLocaleDateString('en-GB', {
+                      day: 'numeric',
+                      month: 'short',
+                      timeZone: 'Europe/London',
+                    })}
+                    {' · '}
+                    {m.companionName}
                   </div>
                 </div>
                 <ChevronRight

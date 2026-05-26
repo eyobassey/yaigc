@@ -149,8 +149,17 @@ export async function submitPostVisitReport(
     before.secondaryCompanionId && before.subscription.originatingMatchId,
   );
 
+  // SDD Addendum §4: when the second post-visit report for a Match is
+  // filed, auto-schedule the two-visit calibration review for 72 hours
+  // later. Only fires once - the field is non-null after the first
+  // schedule so subsequent reports do not reset it.
+  const twoVisitReviewSchedule = await deriveTwoVisitReviewSchedule(
+    before.subscription.originatingMatchId,
+  );
+
   // Atomic: write the report + move the visit to reported + bump
-  // coverIntroductionVisitsCompleted on the match if applicable.
+  // coverIntroductionVisitsCompleted on the match if applicable +
+  // stamp twoVisitReviewScheduledFor on the second report.
   const report = await prisma.$transaction(async (tx) => {
     const r = await tx.postVisitReport.create({
       data: {
@@ -172,6 +181,12 @@ export async function submitPostVisitReport(
       await tx.match.update({
         where: { id: before.subscription.originatingMatchId },
         data: { coverIntroductionVisitsCompleted: { increment: 1 } },
+      });
+    }
+    if (twoVisitReviewSchedule) {
+      await tx.match.update({
+        where: { id: twoVisitReviewSchedule.matchId },
+        data: { twoVisitReviewScheduledFor: twoVisitReviewSchedule.scheduledFor },
       });
     }
     return r;
@@ -490,9 +505,12 @@ export async function submitPostVisitReportByCompanion(
     };
   }
 
-  // SDD Addendum §2.4: see operator-submission path for context.
+  // SDD Addendum §2.4 + §4: see operator-submission path for context.
   const bumpCoverCount = Boolean(
     before.secondaryCompanionId && before.subscription.originatingMatchId,
+  );
+  const twoVisitReviewSchedule = await deriveTwoVisitReviewSchedule(
+    before.subscription.originatingMatchId,
   );
 
   const report = await prisma.$transaction(async (tx) => {
@@ -516,6 +534,12 @@ export async function submitPostVisitReportByCompanion(
       await tx.match.update({
         where: { id: before.subscription.originatingMatchId },
         data: { coverIntroductionVisitsCompleted: { increment: 1 } },
+      });
+    }
+    if (twoVisitReviewSchedule) {
+      await tx.match.update({
+        where: { id: twoVisitReviewSchedule.matchId },
+        data: { twoVisitReviewScheduledFor: twoVisitReviewSchedule.scheduledFor },
       });
     }
     return r;
@@ -607,3 +631,38 @@ export async function submitPostVisitReportByCompanion(
   revalidatePath(`/ops/families/${before.familyId}`);
   redirect(`/companion/visits/${d.visitId}`);
 }
+
+// SDD Addendum §4. When the second post-visit report for a Match is
+// filed, the operator team gets 72 hours to conduct the two-visit
+// calibration review. Returns { matchId, scheduledFor } if the
+// current report is the second AND no review has yet been scheduled;
+// otherwise null. Phase-1 scale - concurrent submissions on the same
+// match are not a realistic risk; the field is gated by an
+// "already-null" check so a race would simply double-write the same
+// timestamp.
+const TWO_VISIT_REVIEW_WINDOW_HOURS = 72;
+
+async function deriveTwoVisitReviewSchedule(
+  matchId: string | null,
+): Promise<{ matchId: string; scheduledFor: Date } | null> {
+  if (!matchId) return null;
+  const [existingCount, match] = await Promise.all([
+    prisma.postVisitReport.count({
+      where: { visit: { subscription: { originatingMatchId: matchId } } },
+    }),
+    prisma.match.findUnique({
+      where: { id: matchId },
+      select: { twoVisitReviewScheduledFor: true },
+    }),
+  ]);
+  if (!match || match.twoVisitReviewScheduledFor !== null) return null;
+  // existingCount is the number of reports BEFORE this transaction
+  // writes its own. The current report will be the (existingCount + 1)th.
+  // We trigger on the second report.
+  if (existingCount !== 1) return null;
+  const scheduledFor = new Date(
+    Date.now() + TWO_VISIT_REVIEW_WINDOW_HOURS * 60 * 60 * 1000,
+  );
+  return { matchId, scheduledFor };
+}
+
