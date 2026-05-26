@@ -595,7 +595,9 @@ export const faq = {
           answer:
             'Recently retired teachers, nurses returning part-time, ' +
             'people who looked after their own parents, ' +
-            'people who want meaningful flexible work. ' +
+            'people who have lived in the area for a long time and ' +
+            'already know how to be alongside someone without ' +
+            'rushing them. Aged 21 or over. ' +
             'Warmth and reliability matter more than experience.',
         },
         {
@@ -724,10 +726,22 @@ export const joinCompanionClub = {
 
   whatWeLookFor: {
     title: 'What we look for',
+    intro:
+      'The right shape of life matters more than any one job title. ' +
+      'We meet recently retired teachers, nurses returning part-time, ' +
+      'small-business owners winding down, parents whose own children ' +
+      'have grown up, neighbours who already look in on the older people ' +
+      'on their street. Aged 21 or over, settled in the area, energised ' +
+      'by being alongside someone unhurried.',
     list: [
       'Warmth and patience',
       'Reliability above almost everything else',
-      'Common sense and good judgement',
+      'A history of being alongside friends, family, or neighbours ' +
+        'without rushing them',
+      'Settled life in the UK - we look for five or so years of ' +
+        'residence, though we are open to fewer when the rest fits',
+      'Stable weekly availability you can hold for at least six months',
+      'Common sense and good judgement under pressure',
       'A car or comfortable public transport access in South Manchester, ' +
         'Trafford, Stockport, or Salford',
       'Willingness to go through Enhanced DBS, references, and our training',

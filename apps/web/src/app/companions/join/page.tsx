@@ -90,6 +90,9 @@ function WhatWeLookFor() {
         <h2 className="font-head font-normal text-moss text-[clamp(1.75rem,4vw,2.75rem)] leading-[1.1] tracking-[-0.02em]">
           {joinCompanionClub.whatWeLookFor.title}
         </h2>
+        <p className="text-charcoal text-[1.0625rem] leading-[1.65] mt-6 max-w-[58ch]">
+          {joinCompanionClub.whatWeLookFor.intro}
+        </p>
         <ul className="mt-8 grid gap-3 min-[700px]:grid-cols-2 min-[700px]:gap-x-12">
           {joinCompanionClub.whatWeLookFor.list.map((item) => (
             <li key={item} className="flex items-start gap-3 text-charcoal leading-[1.55]">
