@@ -17,12 +17,25 @@ export default async function EditVisitPage({
       family: { select: { id: true, billingName: true } },
       companion: { select: { firstName: true, lastName: true } },
       recipient: { select: { firstName: true, preferredName: true } },
+      subscription: {
+        select: {
+          originatingMatch: {
+            select: {
+              coverCompanion: {
+                select: { id: true, firstName: true, lastName: true },
+              },
+            },
+          },
+        },
+      },
     },
   });
   if (!visit) notFound();
   if (visit.state !== 'scheduled' && visit.state !== 'confirmed') {
     redirect(`/ops/visits/${visit.id}`);
   }
+
+  const cover = visit.subscription.originatingMatch?.coverCompanion ?? null;
 
   // Render the existing scheduledStartAt as UK-local date + time strings
   // so the operator sees what the family sees.
@@ -70,6 +83,8 @@ export default async function EditVisitPage({
         defaultDurationMinutes={visit.scheduledDurationMinutes}
         defaultAgreedActivity={visit.agreedActivity}
         defaultSafetyFlags={visit.safetyFlags}
+        defaultSecondaryCompanionId={visit.secondaryCompanionId}
+        cover={cover}
       />
     </div>
   );

@@ -120,6 +120,8 @@ export async function submitPostVisitReport(
       companionId: true,
       familyId: true,
       subscriptionId: true,
+      secondaryCompanionId: true,
+      subscription: { select: { originatingMatchId: true } },
       report: { select: { id: true } },
     },
   });
@@ -139,7 +141,16 @@ export async function submitPostVisitReport(
     };
   }
 
-  // Atomic: write the report + move the visit to reported.
+  // SDD Addendum §2.4: cover-introduction visits feed the
+  // "Cover introductions due this week" dashboard via a counter on the
+  // originating Match. We bump it inside the same transaction that
+  // creates the report so the count and the report are consistent.
+  const bumpCoverCount = Boolean(
+    before.secondaryCompanionId && before.subscription.originatingMatchId,
+  );
+
+  // Atomic: write the report + move the visit to reported + bump
+  // coverIntroductionVisitsCompleted on the match if applicable.
   const report = await prisma.$transaction(async (tx) => {
     const r = await tx.postVisitReport.create({
       data: {
@@ -157,6 +168,12 @@ export async function submitPostVisitReport(
       where: { id: d.visitId },
       data: { state: 'reported', stateChangedAt: new Date() },
     });
+    if (bumpCoverCount && before.subscription.originatingMatchId) {
+      await tx.match.update({
+        where: { id: before.subscription.originatingMatchId },
+        data: { coverIntroductionVisitsCompleted: { increment: 1 } },
+      });
+    }
     return r;
   });
 
@@ -450,6 +467,8 @@ export async function submitPostVisitReportByCompanion(
       companionId: true,
       familyId: true,
       subscriptionId: true,
+      secondaryCompanionId: true,
+      subscription: { select: { originatingMatchId: true } },
       report: { select: { id: true } },
     },
   });
@@ -471,6 +490,11 @@ export async function submitPostVisitReportByCompanion(
     };
   }
 
+  // SDD Addendum §2.4: see operator-submission path for context.
+  const bumpCoverCount = Boolean(
+    before.secondaryCompanionId && before.subscription.originatingMatchId,
+  );
+
   const report = await prisma.$transaction(async (tx) => {
     const r = await tx.postVisitReport.create({
       data: {
@@ -488,6 +512,12 @@ export async function submitPostVisitReportByCompanion(
       where: { id: d.visitId },
       data: { state: 'reported', stateChangedAt: new Date() },
     });
+    if (bumpCoverCount && before.subscription.originatingMatchId) {
+      await tx.match.update({
+        where: { id: before.subscription.originatingMatchId },
+        data: { coverIntroductionVisitsCompleted: { increment: 1 } },
+      });
+    }
     return r;
   });
 

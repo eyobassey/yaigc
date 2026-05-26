@@ -54,6 +54,14 @@ export default async function OpsVisitDetailPage({
           lastName: true,
         },
       },
+      secondaryCompanion: {
+        select: {
+          id: true,
+          applicationId: true,
+          firstName: true,
+          lastName: true,
+        },
+      },
       subscription: { select: { id: true } },
       report: {
         include: {
@@ -221,6 +229,20 @@ export default async function OpsVisitDetailPage({
             <div className="font-head text-moss text-[1.0625rem] font-medium">
               {visit.companion.firstName} {visit.companion.lastName}
             </div>
+            {visit.secondaryCompanion ? (
+              <div className="mt-3 pt-3 border-t border-moss/10">
+                <div className="font-body text-[0.7rem] font-medium uppercase tracking-[0.08em] text-stone mb-1">
+                  Cover present
+                </div>
+                <Link
+                  href={`/ops/companions/${visit.secondaryCompanion.applicationId}`}
+                  className="text-moss text-[0.9375rem] hover:text-terracotta inline-flex items-center gap-1"
+                >
+                  {visit.secondaryCompanion.firstName} {visit.secondaryCompanion.lastName}
+                  <ChevronRight size={14} strokeWidth={1.75} aria-hidden="true" />
+                </Link>
+              </div>
+            ) : null}
           </section>
 
           {visit.agreedActivity ? (

@@ -21,6 +21,8 @@ export function EditForm({
   defaultDurationMinutes,
   defaultAgreedActivity,
   defaultSafetyFlags,
+  defaultSecondaryCompanionId,
+  cover,
 }: {
   visitId: string;
   defaultDate: string;
@@ -28,8 +30,16 @@ export function EditForm({
   defaultDurationMinutes: number;
   defaultAgreedActivity: string | null;
   defaultSafetyFlags: string | null;
+  defaultSecondaryCompanionId: string | null;
+  cover: { id: string; firstName: string; lastName: string } | null;
 }) {
   const [state, action] = useFormState(editVisit, initial);
+  const coverOptions = cover
+    ? [
+        { value: '', label: 'No cover present on this visit' },
+        { value: cover.id, label: `${cover.firstName} ${cover.lastName} (named cover)` },
+      ]
+    : null;
 
   return (
     <form action={action} noValidate className="flex flex-col gap-6">
@@ -94,6 +104,29 @@ export function EditForm({
           hint="Anything specific to this visit. Persistent things go on the recipient record."
         />
       </Section>
+
+      {coverOptions ? (
+        <Section
+          title="Cover companion"
+          description="Mark this visit as one where the named cover is present alongside the primary. The cover does not file a separate report; the primary's report stands."
+        >
+          <Select
+            name="secondaryCompanionId"
+            label="Cover present on this visit"
+            options={coverOptions}
+            defaultValue={
+              state.values?.secondaryCompanionId ?? defaultSecondaryCompanionId ?? ''
+            }
+            error={state.errors?.secondaryCompanionId}
+          />
+        </Section>
+      ) : (
+        <input
+          type="hidden"
+          name="secondaryCompanionId"
+          value={defaultSecondaryCompanionId ?? ''}
+        />
+      )}
 
       <div className="flex flex-wrap gap-3">
         <SubmitButton />

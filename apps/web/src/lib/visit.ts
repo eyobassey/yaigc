@@ -216,6 +216,10 @@ const EditVisitSchema = z.object({
   scheduledDurationMinutes: z.coerce.number().int().min(30).max(480),
   agreedActivity: z.string().max(2000).optional(),
   safetyFlags: z.string().max(2000).optional(),
+  // SDD Addendum §2: empty string = no cover present on this visit. A
+  // non-empty value must match the named cover on the originating match;
+  // arbitrary companions cannot be marked as cover.
+  secondaryCompanionId: z.string().optional(),
 });
 
 export type EditVisitState = {
@@ -238,6 +242,7 @@ export async function editVisit(
     scheduledDurationMinutes: String(formData.get('scheduledDurationMinutes') ?? ''),
     agreedActivity: String(formData.get('agreedActivity') ?? '').trim() || undefined,
     safetyFlags: String(formData.get('safetyFlags') ?? '').trim() || undefined,
+    secondaryCompanionId: String(formData.get('secondaryCompanionId') ?? '').trim() || undefined,
   };
 
   const parsed = EditVisitSchema.safeParse(raw);
@@ -265,6 +270,14 @@ export async function editVisit(
       scheduledDurationMinutes: true,
       agreedActivity: true,
       safetyFlags: true,
+      secondaryCompanionId: true,
+      subscription: {
+        select: {
+          originatingMatch: {
+            select: { coverCompanionId: true },
+          },
+        },
+      },
     },
   });
   if (!before) return { ok: false, errors: { _form: 'Visit not found.' }, values: raw };
@@ -272,6 +285,23 @@ export async function editVisit(
     return {
       ok: false,
       errors: { _form: `Cannot edit a visit in state ${before.state}.` },
+      values: raw,
+    };
+  }
+
+  // Cover companion on a visit must match the named cover on the
+  // originating match. Empty = no cover present. Any other value is a
+  // misuse of the picker (or stale form state).
+  const matchCoverId = before.subscription.originatingMatch?.coverCompanionId ?? null;
+  const nextSecondaryCompanionId = d.secondaryCompanionId
+    ? d.secondaryCompanionId === matchCoverId
+      ? matchCoverId
+      : null
+    : null;
+  if (d.secondaryCompanionId && nextSecondaryCompanionId === null) {
+    return {
+      ok: false,
+      errors: { secondaryCompanionId: 'Only the named cover companion can be marked as present.' },
       values: raw,
     };
   }
@@ -288,6 +318,7 @@ export async function editVisit(
   if (d.scheduledDurationMinutes !== before.scheduledDurationMinutes) changed.push('scheduledDurationMinutes');
   if ((d.agreedActivity ?? null) !== (before.agreedActivity ?? null)) changed.push('agreedActivity');
   if ((d.safetyFlags ?? null) !== (before.safetyFlags ?? null)) changed.push('safetyFlags');
+  if ((nextSecondaryCompanionId ?? null) !== (before.secondaryCompanionId ?? null)) changed.push('secondaryCompanionId');
 
   if (changed.length === 0) {
     redirect(`/ops/visits/${d.visitId}`);
@@ -300,6 +331,7 @@ export async function editVisit(
       scheduledDurationMinutes: d.scheduledDurationMinutes,
       agreedActivity: d.agreedActivity ?? null,
       safetyFlags: d.safetyFlags ?? null,
+      secondaryCompanionId: nextSecondaryCompanionId,
     },
   });
 
@@ -315,12 +347,14 @@ export async function editVisit(
       scheduledDurationMinutes: before.scheduledDurationMinutes,
       agreedActivity: before.agreedActivity,
       safetyFlags: before.safetyFlags,
+      secondaryCompanionId: before.secondaryCompanionId,
     },
     afterState: {
       scheduledStartAt: newStartAt.toISOString(),
       scheduledDurationMinutes: d.scheduledDurationMinutes,
       agreedActivity: d.agreedActivity ?? null,
       safetyFlags: d.safetyFlags ?? null,
+      secondaryCompanionId: nextSecondaryCompanionId,
     },
     metadata: { event: 'visit_updated', changedFields: changed },
   });
