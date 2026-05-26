@@ -67,6 +67,19 @@ export function ProposeForm({
         />
       </Section>
 
+      <Section
+        title="Cover companion (optional)"
+        description="A named back-up who shadows the primary on roughly one visit in five during the first two months, then steps in when the primary cannot. You can leave this blank and name a cover later."
+      >
+        <Select
+          name="coverCompanionId"
+          label="Cover companion"
+          options={[{ value: '', label: 'Not yet named' }, ...companionOptions]}
+          defaultValue={state.values?.coverCompanionId ?? ''}
+          error={state.errors?.coverCompanionId}
+        />
+      </Section>
+
       <Section title="Rationale">
         <TextArea
           name="rationale"

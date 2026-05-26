@@ -37,15 +37,24 @@ import {
 // PROPOSE A MATCH
 // -------------------------------------------------------------------------
 
-const ProposeSchema = z.object({
-  familyId: z.string().min(1),
-  recipientId: z.string().min(1),
-  candidateCompanionId: z.string().min(1),
-  rationale: z
-    .string()
-    .min(20, 'Tell us why this companion. A few sentences please.')
-    .max(2000),
-});
+const ProposeSchema = z
+  .object({
+    familyId: z.string().min(1),
+    recipientId: z.string().min(1),
+    candidateCompanionId: z.string().min(1),
+    coverCompanionId: z.string().optional(),
+    rationale: z
+      .string()
+      .min(20, 'Tell us why this companion. A few sentences please.')
+      .max(2000),
+  })
+  .refine(
+    (d) => !d.coverCompanionId || d.coverCompanionId !== d.candidateCompanionId,
+    {
+      message: 'Cover must be a different companion to the primary.',
+      path: ['coverCompanionId'],
+    },
+  );
 
 export type ProposeMatchState = {
   ok: boolean;
@@ -64,6 +73,7 @@ export async function proposeMatch(
     familyId: String(formData.get('familyId') ?? ''),
     recipientId: String(formData.get('recipientId') ?? ''),
     candidateCompanionId: String(formData.get('candidateCompanionId') ?? ''),
+    coverCompanionId: String(formData.get('coverCompanionId') ?? '').trim(),
     rationale: String(formData.get('rationale') ?? '').trim(),
   };
 
@@ -84,10 +94,13 @@ export async function proposeMatch(
 
   // Defensive: ensure the recipient belongs to the family and the
   // companion is in a usable state.
-  const [family, recipient, companion] = await Promise.all([
+  const [family, recipient, companion, cover] = await Promise.all([
     prisma.family.findUnique({ where: { id: d.familyId } }),
     prisma.recipient.findUnique({ where: { id: d.recipientId } }),
     prisma.companion.findUnique({ where: { id: d.candidateCompanionId } }),
+    d.coverCompanionId
+      ? prisma.companion.findUnique({ where: { id: d.coverCompanionId } })
+      : Promise.resolve(null),
   ]);
   if (!family) return { ok: false, errors: { _form: 'Family not found.' } };
   if (!recipient || recipient.familyId !== family.id) {
@@ -100,6 +113,15 @@ export async function proposeMatch(
         candidateCompanionId: 'Companion is not currently bookable.',
       },
     };
+  }
+  if (d.coverCompanionId) {
+    if (!cover || (cover.status !== 'onboarding' && cover.status !== 'active')) {
+      return {
+        ok: false,
+        errors: { coverCompanionId: 'Cover companion is not currently bookable.' },
+        values: raw,
+      };
+    }
   }
 
   // Single-match-at-a-time per family. Curated, not a marketplace -
@@ -130,6 +152,7 @@ export async function proposeMatch(
       familyId: d.familyId,
       recipientId: d.recipientId,
       candidateCompanionId: d.candidateCompanionId,
+      coverCompanionId: d.coverCompanionId || null,
       proposedByOperatorId: operator.id,
       rationale: d.rationale,
     },
@@ -145,6 +168,7 @@ export async function proposeMatch(
     afterState: {
       familyId: match.familyId,
       candidateCompanionId: match.candidateCompanionId,
+      coverCompanionId: match.coverCompanionId,
       recipientId: match.recipientId,
       status: match.status,
     },
@@ -241,6 +265,91 @@ export async function transitionMatch(formData: FormData): Promise<void> {
   revalidatePath('/ops/matches');
   revalidatePath(`/ops/matches/${d.matchId}`);
   revalidatePath(`/ops/families/${before.familyId}`);
+}
+
+// -------------------------------------------------------------------------
+// ASSIGN / CHANGE / CLEAR the cover companion on a Match.
+//
+// Per SDD Addendum §2: cover is a nudge, not a gate. Acceptance does
+// not wait on cover, and visits can start without one. This action is
+// how operators close that gap when a cover becomes available, and
+// how they swap or remove the cover if circumstances change.
+//
+// Allowed on matches in status proposed or accepted (not ended,
+// withdrawn, or declined). Submitting an empty companionId clears the
+// cover. The cover must be a bookable companion and cannot be the
+// same as the primary candidate.
+// -------------------------------------------------------------------------
+
+const AssignCoverSchema = z.object({
+  matchId: z.string().min(1),
+  coverCompanionId: z.string().optional(),
+});
+
+export async function assignCoverCompanion(formData: FormData): Promise<void> {
+  'use server';
+  const operator = await getSessionUser();
+  if (!operator) return;
+
+  const parsed = AssignCoverSchema.safeParse({
+    matchId: String(formData.get('matchId') ?? ''),
+    coverCompanionId: String(formData.get('coverCompanionId') ?? '').trim() || undefined,
+  });
+  if (!parsed.success) return;
+  const d = parsed.data;
+
+  const before = await prisma.match.findUnique({
+    where: { id: d.matchId },
+    select: {
+      status: true,
+      familyId: true,
+      candidateCompanionId: true,
+      coverCompanionId: true,
+    },
+  });
+  if (!before) return;
+  if (before.status !== 'proposed' && before.status !== 'accepted') return;
+  if (d.coverCompanionId === before.candidateCompanionId) return;
+
+  if (d.coverCompanionId) {
+    const cover = await prisma.companion.findUnique({
+      where: { id: d.coverCompanionId },
+      select: { status: true },
+    });
+    if (!cover || (cover.status !== 'onboarding' && cover.status !== 'active')) {
+      return;
+    }
+  }
+
+  const next = d.coverCompanionId ?? null;
+  if (next === before.coverCompanionId) return;
+
+  await prisma.match.update({
+    where: { id: d.matchId },
+    data: { coverCompanionId: next },
+  });
+
+  await audit({
+    actorType: 'user',
+    actorId: operator.id,
+    actorRole: operator.role,
+    actionType: 'update',
+    targetType: 'Match',
+    targetId: d.matchId,
+    beforeState: { coverCompanionId: before.coverCompanionId },
+    afterState: { coverCompanionId: next },
+    metadata: {
+      event: 'match_cover_companion_change',
+      changeKind: next === null ? 'clear' : before.coverCompanionId === null ? 'assign' : 'swap',
+    },
+  });
+
+  revalidatePath('/ops');
+  revalidatePath('/ops/matches');
+  revalidatePath(`/ops/matches/${d.matchId}`);
+  revalidatePath(`/ops/families/${before.familyId}`);
+  revalidatePath('/family/companion');
+  revalidatePath('/companion/matches');
 }
 
 // -------------------------------------------------------------------------

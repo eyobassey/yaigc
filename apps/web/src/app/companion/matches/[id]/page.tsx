@@ -41,8 +41,19 @@ export default async function CompanionMatchDetailPage({
     },
   });
 
-  // Defensive: this match must be assigned to the signed-in companion.
-  if (!match || match.candidateCompanionId !== companion.id) notFound();
+  // Defensive: this match must involve the signed-in companion as
+  // either the primary or the named cover (SDD Addendum S.4 - covers
+  // see the matches they may need to step in for).
+  if (
+    !match ||
+    (match.candidateCompanionId !== companion.id &&
+      match.coverCompanionId !== companion.id)
+  ) {
+    notFound();
+  }
+  const isCoverOnly =
+    match.coverCompanionId === companion.id &&
+    match.candidateCompanionId !== companion.id;
 
   // Pre-accept travel estimate. Prefer the Companion's own
   // addressPostcode (added in O.12); fall back to the application
@@ -64,7 +75,10 @@ export default async function CompanionMatchDetailPage({
   const travel = await estimateTravel(companionPostcode, recipientPostcode);
 
   const responded = Boolean(match.companionResponseAt);
-  const canRespond = match.status === 'proposed' && !responded;
+  // Cover-only companions never respond to this match - the primary
+  // did. The RespondPanel is hidden for them; they get a cover-status
+  // panel instead.
+  const canRespond = !isCoverOnly && match.status === 'proposed' && !responded;
   const decliner = inferDecliner(
     match.status,
     match.familyResponseAt,
@@ -110,6 +124,11 @@ export default async function CompanionMatchDetailPage({
       <header className="mb-6">
         <div className="flex items-center gap-2 flex-wrap mb-2">
           <CompanionMatchStatusPill status={match.status} companionResponded={responded} />
+          {isCoverOnly ? (
+            <span className="inline-flex items-center font-body text-[0.6875rem] font-medium uppercase tracking-[0.08em] px-2 py-0.5 rounded bg-terracotta/15 text-terracotta">
+              You are the cover
+            </span>
+          ) : null}
           <time
             dateTime={match.createdAt.toISOString()}
             className="text-stone text-[0.8125rem] font-mono"
@@ -117,6 +136,13 @@ export default async function CompanionMatchDetailPage({
             proposed {match.createdAt.toISOString().slice(0, 10)}
           </time>
         </div>
+        {isCoverOnly ? (
+          <p className="text-stone text-[0.875rem] leading-[1.55] mt-2 mb-2 max-w-[60ch]">
+            You are the named cover on this match. You will shadow the primary on
+            roughly one visit in five during the first two months, then step in
+            when the primary cannot make a visit.
+          </p>
+        ) : null}
         <h1 className="font-head font-normal text-moss text-[clamp(1.75rem,3vw,2.25rem)] leading-[1.1] break-words">
           {match.family.billingName}
         </h1>
@@ -233,6 +259,17 @@ export default async function CompanionMatchDetailPage({
         <aside className="flex flex-col gap-6">
           {canRespond ? (
             <RespondPanel matchId={match.id} />
+          ) : isCoverOnly ? (
+            <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
+              <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-2">
+                Your role
+              </h2>
+              <p className="text-charcoal text-[0.875rem] leading-[1.55]">
+                Cover companion. The accept / decline conversation happens
+                between the family and the primary; you do not need to respond
+                to this match.
+              </p>
+            </section>
           ) : (
             <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
               <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-2">

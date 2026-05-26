@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { MatchStatusPill } from '../page';
 import { TransitionPanel } from './TransitionPanel';
+import { CoverCompanionPanel } from './CoverCompanionPanel';
 import { Paginator } from '@/components/ui/Paginator';
 import { parsePagination, buildView } from '@/lib/pagination';
 
@@ -39,12 +40,37 @@ export default async function OpsMatchDetailPage({
           hourlyRate: true,
         },
       },
+      coverCompanion: {
+        select: {
+          id: true,
+          applicationId: true,
+          firstName: true,
+          lastName: true,
+          borough: true,
+        },
+      },
       proposedBy: { select: { id: true, email: true, firstName: true, lastName: true } },
       subscription: { select: { id: true } },
       endedBy: { select: { id: true, email: true, firstName: true, lastName: true } },
     },
   });
   if (!match) notFound();
+
+  // Cover-eligible companions: every bookable companion except the
+  // primary on this match. Operator picks from this list to assign or
+  // change the cover. Small list at Phase-1 scale; no pagination.
+  const canEditCover = match.status === 'proposed' || match.status === 'accepted';
+  const coverEligibleCompanions = canEditCover
+    ? await prisma.companion.findMany({
+        where: {
+          deletedAt: null,
+          status: { in: ['onboarding', 'active'] },
+          id: { not: match.companion.id },
+        },
+        orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+        select: { id: true, firstName: true, lastName: true, borough: true },
+      })
+    : [];
 
   const historyWhere = { targetType: 'Match', targetId: match.id };
   const historyState = parsePagination(searchParams, {
@@ -250,6 +276,33 @@ export default async function OpsMatchDetailPage({
           ) : null}
 
           <TransitionPanel matchId={match.id} currentStatus={match.status} />
+
+          {canEditCover ? (
+            <CoverCompanionPanel
+              matchId={match.id}
+              cover={match.coverCompanion}
+              eligible={coverEligibleCompanions.map((c) => ({
+                value: c.id,
+                label: `${c.firstName} ${c.lastName} (${c.borough.replace(/_/g, ' ')})`,
+              }))}
+            />
+          ) : match.coverCompanion ? (
+            <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
+              <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-2">
+                Cover companion
+              </h2>
+              <Link
+                href={`/ops/companions/${match.coverCompanion.applicationId}`}
+                className="font-head text-moss text-[1.0625rem] font-medium hover:text-terracotta inline-flex items-center gap-1"
+              >
+                {match.coverCompanion.firstName} {match.coverCompanion.lastName}
+                <ChevronRight size={14} strokeWidth={1.75} aria-hidden="true" />
+              </Link>
+              <div className="text-stone text-[0.8125rem] mt-1">
+                {match.coverCompanion.borough.replace(/_/g, ' ')}
+              </div>
+            </section>
+          ) : null}
 
           <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6">
             <h2 className="font-body text-[0.75rem] font-medium uppercase tracking-[0.1em] text-stone mb-3">

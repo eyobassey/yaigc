@@ -26,6 +26,13 @@ export default async function FamilyCompanionPage() {
           select: { id: true, firstName: true, bio: true, photoUrl: true, photoFilename: true, borough: true },
         },
         recipient: { select: { firstName: true, preferredName: true } },
+        originatingMatch: {
+          select: {
+            coverCompanion: {
+              select: { firstName: true, borough: true },
+            },
+          },
+        },
       },
       orderBy: { startedAt: 'asc' },
     }),
@@ -38,6 +45,9 @@ export default async function FamilyCompanionPage() {
       include: {
         companion: {
           select: { id: true, firstName: true, bio: true, photoUrl: true, photoFilename: true, borough: true },
+        },
+        coverCompanion: {
+          select: { firstName: true, borough: true },
         },
         recipient: { select: { firstName: true, preferredName: true } },
       },
@@ -55,6 +65,7 @@ export default async function FamilyCompanionPage() {
       photoFilename: string | null;
       borough: string;
     };
+    cover: { firstName: string; borough: string } | null;
     recipientLabel: string;
     state: 'active' | 'paused' | 'matched';
   };
@@ -63,12 +74,14 @@ export default async function FamilyCompanionPage() {
     ...activeSubs.map((s) => ({
       key: `sub-${s.id}`,
       companion: s.companion,
+      cover: s.originatingMatch?.coverCompanion ?? null,
       recipientLabel: s.recipient.preferredName || s.recipient.firstName,
       state: s.status as 'active' | 'paused',
     })),
     ...openMatches.map((m) => ({
       key: `match-${m.id}`,
       companion: m.companion,
+      cover: m.coverCompanion ?? null,
       recipientLabel:
         m.recipient?.preferredName || m.recipient?.firstName || 'your household',
       state: 'matched' as const,
@@ -136,6 +149,23 @@ export default async function FamilyCompanionPage() {
                     {p.companion.firstName} has not shared a bio yet.
                   </p>
                 )}
+                <div className="mt-4 pt-3 border-t border-moss/10">
+                  <div className="font-body text-[0.7rem] font-medium uppercase tracking-[0.08em] text-stone mb-1">
+                    Cover companion
+                  </div>
+                  {p.cover ? (
+                    <p className="text-charcoal text-[0.9375rem]">
+                      {p.cover.firstName}
+                      <span className="text-stone text-[0.8125rem] ml-2">
+                        ({p.cover.borough.replace(/_/g, ' ')})
+                      </span>
+                    </p>
+                  ) : (
+                    <p className="text-stone text-[0.875rem] italic">
+                      Your cover companion will be named soon. They step in when {p.companion.firstName} cannot.
+                    </p>
+                  )}
+                </div>
               </div>
             </article>
           ))}

@@ -34,6 +34,11 @@ export default async function CompanionMatchesPage({
   // accepted (if family already responded) or stays in 'proposed'
   // awaiting family - either way we move it out of the companion's
   // 'open' bucket on the assumption that they have already acted.
+  //
+  // SDD Addendum S.4: a companion is also surfaced matches where they
+  // are named cover - the cover-only matches appear in the accepted /
+  // declined / all buckets so the companion knows which households
+  // they may need to step in for.
   let where: Prisma.MatchWhereInput;
   if (status === 'open') {
     where = {
@@ -42,14 +47,24 @@ export default async function CompanionMatchesPage({
       companionResponseAt: null,
     };
   } else if (status === 'accepted') {
-    where = { candidateCompanionId: companion.id, status: 'accepted' };
+    where = {
+      OR: [
+        { candidateCompanionId: companion.id, status: 'accepted' },
+        { coverCompanionId: companion.id, status: 'accepted' },
+      ],
+    };
   } else if (status === 'declined') {
     where = {
       candidateCompanionId: companion.id,
       status: { in: ['declined', 'withdrawn', 'ended'] as MatchStatus[] },
     };
   } else {
-    where = { candidateCompanionId: companion.id };
+    where = {
+      OR: [
+        { candidateCompanionId: companion.id },
+        { coverCompanionId: companion.id, status: { in: ['accepted'] as MatchStatus[] } },
+      ],
+    };
   }
 
   const pagination = parsePagination(searchParams, { pageSize: 20 });
@@ -62,7 +77,12 @@ export default async function CompanionMatchesPage({
       },
     }),
     prisma.match.count({
-      where: { candidateCompanionId: companion.id, status: 'accepted' },
+      where: {
+        OR: [
+          { candidateCompanionId: companion.id, status: 'accepted' },
+          { coverCompanionId: companion.id, status: 'accepted' },
+        ],
+      },
     }),
     prisma.match.count({
       where: {
@@ -70,7 +90,14 @@ export default async function CompanionMatchesPage({
         status: { in: ['declined', 'withdrawn', 'ended'] as MatchStatus[] },
       },
     }),
-    prisma.match.count({ where: { candidateCompanionId: companion.id } }),
+    prisma.match.count({
+      where: {
+        OR: [
+          { candidateCompanionId: companion.id },
+          { coverCompanionId: companion.id, status: { in: ['accepted'] as MatchStatus[] } },
+        ],
+      },
+    }),
     prisma.match.count({ where }),
     prisma.match.findMany({
       where,
@@ -137,6 +164,9 @@ export default async function CompanionMatchesPage({
               const recipientLabel = m.recipient
                 ? m.recipient.preferredName || m.recipient.firstName
                 : 'unspecified recipient';
+              const isCoverOnly =
+                m.coverCompanionId === companion.id &&
+                m.candidateCompanionId !== companion.id;
               return (
                 <li key={m.id}>
                   <Link
@@ -149,6 +179,11 @@ export default async function CompanionMatchesPage({
                           status={m.status}
                           companionResponded={Boolean(m.companionResponseAt)}
                         />
+                        {isCoverOnly ? (
+                          <span className="inline-flex items-center font-body text-[0.6875rem] font-medium uppercase tracking-[0.08em] px-2 py-0.5 rounded bg-terracotta/15 text-terracotta">
+                            You are the cover
+                          </span>
+                        ) : null}
                         <time
                           dateTime={m.createdAt.toISOString()}
                           className="text-stone text-[0.75rem] font-mono"
