@@ -64,6 +64,7 @@ model User {
   assignedCases           SafeguardingCase[]     @relation("CaseAssignedTo")
   caseNotes               SafeguardingCaseNote[]
   rightToWorkVerified     CompanionApplication[] @relation("RightToWorkVerifiedBy")
+  interviewsLogged        CompanionInterview[]   @relation("InterviewerOperator")
   badgesAwarded           CompanionBadge[]       @relation("BadgeAwardedBy")
   threadsAsOperator       Thread[]               @relation("ThreadsAsOperator")
   threadsAsParty          Thread[]               @relation("ThreadsAsParty")
@@ -838,9 +839,20 @@ model CompanionApplication {
   declineReason        String? @db.Text
   assignedToOperatorId String?
 
+  // SDD Addendum §3.4 - Phase 0 questionnaire. Four optional
+  // open-ended prompts that probe the cultural-fit dimensions before
+  // the interview happens. Nullable because the apply form may have
+  // been submitted before these fields existed; new submissions get
+  // the prompts but may skip them.
+  motivation             String? @db.Text // "What brings you to this work?"
+  experienceAlongside    String? @db.Text // "Tell us about a time you were alongside a friend, family member, or neighbour who needed company"
+  yearsSettledLocally    String? @db.Text // "How long have you been settled in this part of the UK?"
+  weeklyStabilityNote    String? @db.Text // "How stable does your week look over the next six months?"
+
   companion         Companion?
   rightToWorkVerifiedBy User?               @relation("RightToWorkVerifiedBy", fields: [rightToWorkVerifiedByOperatorId], references: [id])
   documents         CompanionDocument[]
+  interviews        CompanionInterview[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -849,6 +861,46 @@ model CompanionApplication {
   @@index([status, createdAt(sort: Desc)])
   @@index([email])
   @@index([rightToWorkVerifiedAt])
+}
+
+// SDD Addendum §3. One row per interview event against a
+// CompanionApplication. Operator-internal; rubric values are
+// judgement bands, not numeric scores. Pre-interview Phase 0 answers
+// live on the CompanionApplication itself; this row captures what the
+// operator read in the actual conversation.
+model CompanionInterview {
+  id                     String                  @id @default(cuid())
+  companionApplicationId String
+  kind                   InterviewKind
+  happenedAt             DateTime
+  interviewerOperatorId  String
+
+  notes                  String                  @db.Text
+  recommendation         InterviewRecommendation
+
+  // Cultural-fit dimensions (addendum §3.2). All nullable - a phone
+  // screen often cannot read every dimension, and the operator may
+  // explicitly leave a band blank when they have not formed a view.
+  ukSettledness           UkSettledness?
+  communityTemperament    RubricBand?
+  readsARoom              RubricBand?
+  schedulingStability     RubricBand?
+  motivationBeyondIncome  MotivationBand?
+
+  // Existing harder gates (addendum §3.3).
+  dbsClearable            VettingState?
+  referencesPositive      VettingState?
+  engagementTermsComfort  ComfortBand?
+  trainingAcceptance      ComfortBand?
+
+  application CompanionApplication @relation(fields: [companionApplicationId], references: [id], onDelete: Cascade)
+  interviewer User                 @relation("InterviewerOperator", fields: [interviewerOperatorId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companionApplicationId, happenedAt(sort: Desc)])
+  @@index([interviewerOperatorId, happenedAt(sort: Desc)])
 }
 
 // CompanionDocument — uploaded evidence for right-to-work, DBS, and
@@ -1128,6 +1180,79 @@ enum CompanionApplicationStatus {
   complete
   declined
   withdrawn
+}
+
+// SDD Addendum §3.3. The interview rubric is operator-internal and
+// never customer-facing. Three event kinds map onto the existing
+// application status pipeline: a phone screen, an in-person interview,
+// and a final sign-off. final is the gate that promotes the
+// application to vetting → complete.
+enum InterviewKind {
+  phone_screen
+  in_person
+  final
+}
+
+// Operator's read at the close of an interview. proceed = move to the
+// next interview in the pipeline; second_interview = surface for a
+// second pair of eyes (per addendum §3.6); decline = stop the pipeline
+// for this applicant; accept = used on a final-kind interview to
+// promote the application to vetting.
+enum InterviewRecommendation {
+  proceed
+  second_interview
+  decline
+  accept
+}
+
+// Soft Likert vocabulary for the three behavioural cultural-fit
+// dimensions: community-driven temperament, ability to read a room,
+// scheduling stability. Deliberately not numeric - the rubric is a
+// judgement aid, not a scored assessment.
+enum RubricBand {
+  strong
+  present
+  unclear
+  absent
+}
+
+// UK settledness is a soft preference (addendum §3.6 working answer):
+// five years of residence is the target, three to five is a yellow
+// flag, under three is a meaningful concern, n_a covers cases where
+// the dimension does not apply (e.g. UK national).
+enum UkSettledness {
+  unclear
+  five_plus
+  three_to_five
+  under_three
+  n_a
+}
+
+// "Money is meaningful but not the primary motivation." Operator
+// reads from the interview answer to "what brings you to this work?".
+enum MotivationBand {
+  clear
+  mixed
+  primarily_financial
+}
+
+// Harder vetting gates: DBS clearable + references positive. Uses
+// not_taken_yet because the check or the calls may not have happened
+// by the time the interview is logged.
+enum VettingState {
+  yes
+  no
+  unknown
+  not_taken_yet
+}
+
+// Comfort gates: engagement terms + training requirement. concerns
+// captures candidates who are not a flat "no" but want to talk it
+// through before agreeing.
+enum ComfortBand {
+  yes
+  concerns
+  no
 }
 
 enum CompanionStatus {
