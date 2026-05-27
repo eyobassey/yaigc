@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { Settings, LogOut, FileText, ShieldCheck, Wallet } from 'lucide-react';
+import { Settings, LogOut, FileText, ShieldCheck, Wallet, Sparkles } from 'lucide-react';
+import { brand } from '@igc/content';
 import { prisma } from '@/lib/prisma';
 import { requireCompanion } from '@/lib/auth-helpers';
 import { signOut } from '@/lib/auth';
@@ -52,7 +53,7 @@ export default async function CompanionAccountPage() {
   // columns that aren't on requireCompanion's narrower context.
   // Also fetch the most recent sign-in from the audit log (Auth.js
   // writes actionType=auth on every magic-link callback).
-  const [full, lastSignIn, passwordInfo, passkeys, sessions] = await Promise.all([
+  const [full, lastSignIn, passwordInfo, passkeys, sessions, completedVisitsCount] = await Promise.all([
     prisma.companion.findUnique({
       where: { id: companion.id },
       select: {
@@ -68,6 +69,14 @@ export default async function CompanionAccountPage() {
         driverLicenceExpiresAt: true,
         createdAt: true,
         user: { select: { createdAt: true } },
+        application: {
+          select: {
+            motivation: true,
+            experienceAlongside: true,
+            yearsSettledLocally: true,
+            weeklyStabilityNote: true,
+          },
+        },
       },
     }),
     prisma.auditLogEntry.findFirst({
@@ -81,11 +90,32 @@ export default async function CompanionAccountPage() {
     }),
     listUserPasskeys(user.id),
     listUserSessions(user.id),
+    prisma.visit.count({
+      where: { companionId: companion.id, state: { in: ['completed', 'reported'] } },
+    }),
   ]);
 
   const joinedAt = full?.user.createdAt ?? full?.createdAt ?? null;
   const hourlyRate = full?.hourlyRate ? Number(full.hourlyRate).toFixed(2) : null;
   const payoutsConnected = Boolean(full?.stripeConnectedAccountId);
+
+  // W.1 - Phase 0 panel. Show when any field has a value, or when the
+  // companion is established enough (≥1 completed visit) that we'd
+  // like to invite them to fill the gaps. Brand-new companions still
+  // pre-onboarding see nothing here — the interview captures their
+  // answers in person.
+  const phaseZero = full?.application ?? null;
+  const phaseZeroFilled =
+    Boolean(phaseZero?.motivation) ||
+    Boolean(phaseZero?.experienceAlongside) ||
+    Boolean(phaseZero?.yearsSettledLocally) ||
+    Boolean(phaseZero?.weeklyStabilityNote);
+  const showPhaseZero = phaseZeroFilled || completedVisitsCount > 0;
+  const phaseZeroAnyBlank =
+    !phaseZero?.motivation ||
+    !phaseZero?.experienceAlongside ||
+    !phaseZero?.yearsSettledLocally ||
+    !phaseZero?.weeklyStabilityNote;
 
   return (
     <div className="max-w-[760px]">
@@ -119,6 +149,46 @@ export default async function CompanionAccountPage() {
           {lastSignIn ? formatDateTime(lastSignIn.occurredAt) : 'This session'}
         </Row>
       </Section>
+
+      {showPhaseZero ? (
+        <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6 mb-6">
+          <h2 className="font-body text-[0.7rem] font-medium uppercase tracking-[0.1em] text-stone mb-3 flex items-center gap-2">
+            <Sparkles size={12} strokeWidth={1.75} aria-hidden="true" />
+            From your application
+          </h2>
+          <div className="flex flex-col gap-4 text-[0.9375rem]">
+            <PhaseZeroBlock
+              label="What brings you to this work"
+              value={phaseZero?.motivation ?? null}
+            />
+            <PhaseZeroBlock
+              label="A time you were alongside someone"
+              value={phaseZero?.experienceAlongside ?? null}
+            />
+            <PhaseZeroBlock
+              label="How long settled in this part of the UK"
+              value={phaseZero?.yearsSettledLocally ?? null}
+            />
+            <PhaseZeroBlock
+              label="Weekly stability over six months"
+              value={phaseZero?.weeklyStabilityNote ?? null}
+            />
+          </div>
+          {phaseZeroAnyBlank ? (
+            <p className="text-stone text-[0.8125rem] italic leading-[1.55] mt-4 pt-4 border-t border-moss/10">
+              We did not ask you all of these at the time. If you would like
+              to tell us now, drop us a quick email at{' '}
+              <a
+                href={`mailto:${brand.supportEmail}`}
+                className="link not-italic"
+              >
+                {brand.supportEmail}
+              </a>{' '}
+              and we will add them to your record.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       <Section title="Where you work">
         <Row label="Borough">{companion.borough.replace(/_/g, ' ')}</Row>
@@ -286,5 +356,28 @@ function Row({
         {children}
       </dd>
     </>
+  );
+}
+
+function PhaseZeroBlock({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | null;
+}) {
+  return (
+    <div>
+      <div className="font-body text-[0.7rem] font-medium uppercase tracking-[0.08em] text-stone mb-1">
+        {label}
+      </div>
+      {value ? (
+        <p className="text-charcoal leading-[1.55] whitespace-pre-wrap break-words">
+          {value}
+        </p>
+      ) : (
+        <p className="text-stone italic">—</p>
+      )}
+    </div>
   );
 }
