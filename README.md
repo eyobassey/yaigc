@@ -29,7 +29,12 @@ check-ins, brand-voice lint that catches goals/outcomes drift. Stage S
 match (non-blocking — visits start without one), the two-visit
 calibration review at 72h with a structured workflow page + dual-side
 email, and a cultural-fit refresh of the `/companions/join` copy.
-Stripe payments are the next major block. See
+Stage T (the cultural-fit interview rubric + Phase 0 questionnaire)
+is in: an operator-internal `CompanionInterview` model with Likert
+rubric, a log-an-interview workflow with a second-interview soft
+warning before declining, glance-able interview history on the
+application detail, and four optional Phase 0 questions on the public
+apply form. Stripe payments are the next major block. See
 [Where things are](#where-things-are) below for the honest list of what is
 built versus what is queued.
 
@@ -447,7 +452,7 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 ### Built and working
 
 > Tick each box only when the thing actually works in production, not when
-> the PR is open. Last updated 2026-05-26.
+> the PR is open. Last updated 2026-05-27.
 
 **Infrastructure**
 
@@ -477,7 +482,7 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 
 - [x] Home, `/how-it-works`, `/pricing`, `/safeguarding`, `/companions/join` (cultural-fit refresh S.7 — settled life as soft preference, broader temperament framing per addendum §3.2)
 - [x] `/about`, `/privacy`, `/terms`, `/accessibility`
-- [x] Public application form at `/companions/join/apply` (structured availability picker)
+- [x] Public application form at `/companions/join/apply` (structured availability picker + optional Phase 0 questionnaire T.4 — motivation, time alongside someone, settled-life sense, six-month stability)
 - [x] Public enquiry form at `/contact` → `Enquiry` triage queue in ops
 
 **SEO + social**
@@ -527,6 +532,7 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 - [x] Today-dashboard cover-companion cards (S.3) — "Cover assignments pending" lists accepted matches without a named cover; "Cover introductions due" lists matches in their first two months that are behind on the ~one-cover-visit-per-fortnight pace
 - [x] Visit edit form gains a "Cover companion present" picker (S.2) when the originating match has a named cover; on post-visit-report submission with `Visit.secondaryCompanionId` set, the report transaction atomically bumps `Match.coverIntroductionVisitsCompleted`
 - [x] Two-visit calibration review (S.5 → S.6) — second post-visit report auto-stamps `Match.twoVisitReviewScheduledFor = now + 72h` inside the same transaction; today-dashboard "Two-visit reviews due" card; structured workflow at `/ops/matches/[id]/two-visit-review` surfaces both reports side by side, takes a `continue / adjust / reset` decision plus a 20–4000 char note, audit-logs, and emails both sides via a new shared `two-visit-review` template. Match detail surfaces the recorded decision; `reset` outcomes on still-accepted matches get a terracotta "rematch needed" treatment (24h SLA per §4.5)
+- [x] Companion interview rubric (T.1 → T.5) — `/ops/companions/[id]/interviews/new` takes a structured read: kind (phone screen / in-person / final), Likert cultural-fit bands (UK settledness soft band, community temperament, reads-a-room, scheduling stability, motivation beyond income), harder vetting gates (DBS / references / engagement terms / training), 20–4000 char narrative, recommendation. Soft gates: `kind = final` requires `operator_admin`; `recommendation = accept` requires `kind = final`. Pre-loads the application's Phase 0 answers above the rubric so the operator reads while scoring. T.5 second-interview soft warning fires when `decline` lands on a thin history — non-blocking terracotta banner. Interview history panel on `/ops/companions/[id]` renders each row chronologically with header chips + glance-able rubric pills (toned moss / terracotta / stone by semantics) + narrative
 - [x] Pagination across every list page (offset, page=N) and every detail-page history feed (`hp=N`)
 
 **Family portal (`/family`)**
@@ -568,7 +574,7 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 - [x] Real-time delivery (M.1.1): standalone WebSocket server on `:3004`, nginx `/realtime/` upgrade location, Redis pub/sub (`messaging:user:<id>`) fanning out from server actions; client hydrates `ThreadView` without refresh
 - [x] Attachments + emoji picker (M.1.2): images (JPEG/PNG/WebP/HEIC, max 10 MB, EXIF preserved, HEIC→JPEG transcode), documents (PDF / Office / TXT / CSV, max 25 MB), videos (MP4/MOV/WebM, max 100 MB). Magic-byte validation, per-thread S3 prefix, auth-gated streaming, lazy-loaded emoji picker
 - [x] Shape-of-the-relationship surfaces (R.1 → R.6): family-payer prose fields (`Recipient.aboutTheRecipient`, `Family.whatWeAreHopingFor`) with `FamilyTextRevision` edit history, companion `What matters about [name]` block on every visit, operator log-a-call workflow + Today-dashboard "due this week" cards driven by `Family.checkInCadenceDays` + `lastReflectionAt` / `lastCheckInAt`, `RelationshipNote` timeline on the family detail, brand-voice lint extension covering §6.2 of the design memo (goals / outcomes / progress / care plan / wellbeing score / intervention / treatment / therapy / programme + cousins)
-- [x] SDD Addendum — Three patterns (S.1 → S.7): named cover companion per Match (`coverCompanionId` nullable + `coverIntroductionVisitsCompleted` counter), per-visit cover-present marker (`Visit.secondaryCompanionId`), two-visit calibration review fields on Match (`twoVisitReviewScheduledFor` / `CompletedAt` / `Outcome enum` / `Notes` / `ByOperatorId`). Cover is operationally a nudge — match acceptance and visits proceed without one (project rule, see `memory/project_cover_companion_non_blocking.md`); the literal "Required at match acceptance" wording in the addendum is softened in this build. `/companions/join` copy refresh broadens the supply-pool framing per §3.2 (settled life in the UK as soft preference, history of being alongside friends / family / neighbours, stable weekly availability). The addendum is **not** yet folded into the SDD master — waiting on the §6 triggers (matching surface build, or companion interview rubric build, or the 2026-11-26 six-month re-read)
+- [x] SDD Addendum — Three patterns (S.1 → S.7) + interview rubric (T.1 → T.5): named cover companion per Match (`coverCompanionId` nullable + `coverIntroductionVisitsCompleted` counter), per-visit cover-present marker (`Visit.secondaryCompanionId`), two-visit calibration review fields on Match (`twoVisitReviewScheduledFor` / `CompletedAt` / `Outcome enum` / `Notes` / `ByOperatorId`). Cover is operationally a nudge — match acceptance and visits proceed without one (project rule, see `memory/project_cover_companion_non_blocking.md`); the literal "Required at match acceptance" wording in the addendum is softened in this build. `/companions/join` copy refresh broadens the supply-pool framing per §3.2 (settled life in the UK as soft preference, history of being alongside friends / family / neighbours, stable weekly availability). Stage T adds a `CompanionInterview` model with Likert rubric, operator workflow + history panel, Phase 0 questionnaire on the public apply form, and a soft warning before declining on a thin interview history. **One of the addendum's two §6 fold-in triggers (cultural-fit refinement → SDD §10.6.3) has now fired**; held until the second trigger (matching surface build → SDD §11.3 + §11.4) also lands, then fold both in one pass
 - [x] Direct family ↔ companion threads (M.2.1 → M.2.5): new `ThreadKind` enum (`OPS_FAMILY` / `OPS_COMPANION` / `FAMILY_COMPANION`) with backfilled existing rows; `Companion.directMessagingEnabled` gates eligibility per-companion (operator_admin only). Find-or-create via `openDirectThread(matchId)`. Lifecycle derived at runtime from `Match.status` + `Companion.directMessagingEnabled` — match-ended OR gate-revoked flips the thread read-only without losing history. Email notify reuses the M.1 template with an optional `senderLabel`. Dismissible "office can read" disclosure banner on both participant sides (per-browser via `localStorage`), `Lock`-iconed "read-only" banner once lifecycle closes
 - [x] Sender-side delete with a 15-minute window (M.3.1 → M.3.4): `Message.deletedAt` + `deletedByUserId` soft-delete columns; `deleteMessage(formData)` server action re-checks sender + window + idempotency on every call; audit log carries the original body in `metadata` so the message is reconstructible from the log alone. Real-time via a new `message-deleted` envelope on the existing Redis fan-out (the standalone realtime server is kind-agnostic, no restart there). `ThreadView` renders tombstones, listens for the WS event, and shows a `Trash2` button on own bubbles within the window. `operator_admin` viewing the FAMILY_COMPANION oversight surface sees the original body with strike-through + `[deleted by sender]` marker so safeguarding has full recovery
 
