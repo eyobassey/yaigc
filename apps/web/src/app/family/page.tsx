@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Calendar, Heart, AlertTriangle } from 'lucide-react';
+import { Calendar, Heart } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { requireFamilyMember } from '@/lib/auth-helpers';
 import { formatUkDateTime } from '@/lib/visit-schedule';
@@ -67,19 +67,7 @@ export default async function FamilyHomePage() {
             See the match
           </Link>
         </div>
-      ) : (
-        <div className="mb-8 bg-amber-50 border-l-4 border-amber-400 px-5 py-4 rounded-r">
-          <p className="font-body text-[0.7rem] font-medium uppercase tracking-[0.12em] text-amber-700 mb-1 flex items-center gap-2">
-            <AlertTriangle size={14} strokeWidth={2} aria-hidden="true" />
-            Early access
-          </p>
-          <p className="text-charcoal text-[0.9375rem] leading-[1.55]">
-            The visits, companion, subscription and account sections are
-            coming online over the next few days. For anything urgent,
-            email or call us and we will sort it.
-          </p>
-        </div>
-      )}
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5">

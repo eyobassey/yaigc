@@ -38,7 +38,7 @@ export function isCompanion(role: UserRole | null | undefined) {
 export function defaultLandingForRole(role: UserRole): string {
   if (isOperator(role)) return '/ops';
   if (isFamily(role)) return '/family';
-  if (isCompanion(role)) return '/companion'; // Phase 2
+  if (isCompanion(role)) return '/companion';
   return '/me';
 }
 
@@ -146,7 +146,7 @@ export type FamilyContext = {
  * FamilyMember row, and the resolved Family. Redirects:
  *   - not signed in -> /sign-in?callbackUrl=<path>
  *   - operator role -> /ops (wrong portal)
- *   - companion role -> /companion (Phase 2; today /no-access)
+ *   - companion role -> /companion (wrong portal)
  *   - family role but no FamilyMember row -> /no-access
  */
 export async function requireFamilyMember(callbackPath: string): Promise<FamilyContext> {
@@ -155,7 +155,7 @@ export async function requireFamilyMember(callbackPath: string): Promise<FamilyC
     redirect(`/sign-in?callbackUrl=${encodeURIComponent(callbackPath)}`);
   }
   if (isOperator(user.role)) redirect('/ops');
-  if (isCompanion(user.role)) redirect('/no-access'); // Phase 2: /companion
+  if (isCompanion(user.role)) redirect('/companion');
   if (!isFamily(user.role)) redirect('/no-access');
 
   const member = await prisma.familyMember.findFirst({

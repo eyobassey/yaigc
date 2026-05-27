@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Calendar, Heart, AlertTriangle } from 'lucide-react';
+import { Calendar, Heart } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { requireCompanion } from '@/lib/auth-helpers';
 import { formatUkDateTime } from '@/lib/visit-schedule';
@@ -57,20 +57,6 @@ export default async function CompanionHomePage() {
             : 'Glad to have you with us.'}
         </p>
       </header>
-
-      <div className="mb-8 bg-amber-50 border-l-4 border-amber-400 px-5 py-4 rounded-r">
-        <p className="font-body text-[0.7rem] font-medium uppercase tracking-[0.12em] text-amber-700 mb-1 flex items-center gap-2">
-          <AlertTriangle size={14} strokeWidth={2} aria-hidden="true" />
-          Early access
-        </p>
-        <p className="text-charcoal text-[0.9375rem] leading-[1.55]">
-          We are rolling out the companion portal section by section. For
-          anything you cannot do here yet - including state changes
-          during a visit and submitting your note - ring us and we will
-          do it for you. The portal-driven version of those will land in
-          the next few days.
-        </p>
-      </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <section className="bg-paper border border-moss/[0.08] rounded-[12px] p-5">
