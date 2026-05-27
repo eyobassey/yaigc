@@ -75,11 +75,14 @@ export async function generateNextVisitForSubscription(
 
   // Anchor the next-visit search at the later of (now, most recent existing
   // visit's scheduledStartAt) so we don't double-book the same slot.
-  const last = await prisma.visit.findFirst({
-    where: { subscriptionId: sub.id },
-    orderBy: { scheduledStartAt: 'desc' },
-    select: { scheduledStartAt: true },
-  });
+  const [last, existingCount] = await Promise.all([
+    prisma.visit.findFirst({
+      where: { subscriptionId: sub.id },
+      orderBy: { scheduledStartAt: 'desc' },
+      select: { scheduledStartAt: true },
+    }),
+    prisma.visit.count({ where: { subscriptionId: sub.id } }),
+  ]);
   const now = new Date();
   const after = last && last.scheduledStartAt.getTime() > now.getTime() ? last.scheduledStartAt : now;
 
@@ -93,6 +96,16 @@ export async function generateNextVisitForSubscription(
     after,
   );
 
+  // SDD Addendum §2.5 / Stage U.4. The 5th, 10th, 15th visit within
+  // the first 60 days of the subscription is suggested as a cover
+  // visit. Hint only - operator confirms (and picks who) on the visit
+  // edit form.
+  const ordinal = existingCount + 1;
+  const withinFirst60Days =
+    scheduledStartAt.getTime() - sub.startedAt.getTime() <=
+    60 * 24 * 60 * 60 * 1000;
+  const coverSuggested = ordinal % 5 === 0 && withinFirst60Days;
+
   const visit = await prisma.visit.create({
     data: {
       subscriptionId: sub.id,
@@ -102,6 +115,7 @@ export async function generateNextVisitForSubscription(
       scheduledStartAt,
       scheduledDurationMinutes: sub.durationMinutes,
       agreedActivity: sub.notes,
+      coverSuggested,
     },
   });
 

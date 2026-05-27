@@ -42,6 +42,10 @@ const SubmitSchema = z
     howWereThey: z.enum(WELLBEING_VALUES),
     howWereTheyNote: z.string().max(2000).optional(),
     thingsToFlag: z.string().max(4000).optional(),
+    // V.2 - optional companion-relayed reading of the recipient's
+    // experience. Companion writes when there's something worth
+    // capturing in the recipient's own framing.
+    recipientPerspective: z.string().max(4000).optional(),
   })
   .refine(
     (d) => d.howWereThey !== 'other' || (d.howWereTheyNote && d.howWereTheyNote.length >= 5),
@@ -71,6 +75,7 @@ export async function submitPostVisitReport(
     howWereThey: String(formData.get('howWereThey') ?? ''),
     howWereTheyNote: String(formData.get('howWereTheyNote') ?? '').trim() || undefined,
     thingsToFlag: String(formData.get('thingsToFlag') ?? '').trim() || undefined,
+    recipientPerspective: String(formData.get('recipientPerspective') ?? '').trim() || undefined,
   };
 
   const parsed = SubmitSchema.safeParse(raw);
@@ -170,6 +175,7 @@ export async function submitPostVisitReport(
         howWereThey: d.howWereThey,
         howWereTheyNote: d.howWereTheyNote ?? null,
         thingsToFlag: d.thingsToFlag ?? null,
+        recipientPerspective: d.recipientPerspective ?? null,
         submittedByOperatorId: operator.id,
       },
     });
@@ -434,6 +440,7 @@ export async function submitPostVisitReportByCompanion(
     howWereThey: String(formData.get('howWereThey') ?? ''),
     howWereTheyNote: String(formData.get('howWereTheyNote') ?? '').trim() || undefined,
     thingsToFlag: String(formData.get('thingsToFlag') ?? '').trim() || undefined,
+    recipientPerspective: String(formData.get('recipientPerspective') ?? '').trim() || undefined,
   };
 
   const parsed = SubmitSchema.safeParse(raw);
@@ -523,6 +530,7 @@ export async function submitPostVisitReportByCompanion(
         howWereThey: d.howWereThey,
         howWereTheyNote: d.howWereTheyNote ?? null,
         thingsToFlag: d.thingsToFlag ?? null,
+        recipientPerspective: d.recipientPerspective ?? null,
         // submittedByOperatorId stays NULL - this is self-submitted.
       },
     });

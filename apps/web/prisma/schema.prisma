@@ -403,6 +403,19 @@ model Match {
   twoVisitReviewNotes        String?   @db.Text
   twoVisitReviewByOperatorId String?
 
+  // SDD Addendum §4.6 / Stage V. Per-channel capture for the review.
+  // The recipient's voice reaches the platform through up to four
+  // routes; each lands in its own nullable field so the review surface
+  // can honestly say which channels reached the recipient this round.
+  // The companion's post-visit reports already capture the visit-by-
+  // visit observation (PostVisitReport.recipientPerspective from V.2);
+  // the three fields below are operator notes from the structured
+  // debrief calls + the optional recipient call.
+  twoVisitReviewCompanionCallNotes String?   @db.Text
+  twoVisitReviewFamilyCallNotes    String?   @db.Text
+  twoVisitReviewRecipientCallNotes String?   @db.Text
+  twoVisitReviewRecipientCalledAt  DateTime?
+
   family           Family            @relation(fields: [familyId], references: [id])
   recipient        Recipient?        @relation(fields: [recipientId], references: [id])
   companion        Companion         @relation(fields: [candidateCompanionId], references: [id])
@@ -552,6 +565,15 @@ model Visit {
   // the visit record rather than generating a second report.
   secondaryCompanionId String?
 
+  // SDD Addendum §2.5 / Stage U.4. Cover-introduction scheduling
+  // suggestion. Set by generateNextVisitForSubscription on every 5th
+  // visit within the first 60 days of the subscription's startedAt
+  // (the "1 in 5 during the first two months" rule from §2.1).
+  // Surfaces as a hint on the visit edit form so the operator can
+  // toggle the cover picker on with one click. Never auto-assigns the
+  // cover — operator agency is preserved.
+  coverSuggested Boolean @default(false)
+
   stateChangedAt              DateTime   @default(now())
   reminderSentAt              DateTime?  // 24h-before reminder; null until the cron fires
   confirmationReminderSentAt  DateTime?  // single-fire nudge for unconfirmed visits ~4h out
@@ -601,6 +623,12 @@ model PostVisitReport {
   howWereThey           WellbeingRating
   howWereTheyNote       String?          @db.Text
   thingsToFlag          String?          @db.Text
+
+  // SDD Addendum §4.6 / Stage V.2. Companion-relayed reading of the
+  // recipient's experience of the visit. Optional - companions write
+  // it when the recipient communicated something worth capturing.
+  // Framed as the companion's reading, not a verbatim quote.
+  recipientPerspective  String?          @db.Text
 
   submittedAt           DateTime         @default(now())
   submittedByOperatorId String?

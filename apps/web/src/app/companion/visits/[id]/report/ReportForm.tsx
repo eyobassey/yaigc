@@ -171,6 +171,19 @@ export function ReportForm({
         />
       </Section>
 
+      <Section
+        title="In their words (optional)"
+        description="Something they said or communicated about the visit. Frame it as your reading of how they felt, not a verbatim quote. Operator-internal — the family does not see this."
+      >
+        <TextArea
+          name="recipientPerspective"
+          label="What they communicated"
+          rows={3}
+          defaultValue={state.values?.recipientPerspective}
+          hint="Leave blank if nothing stood out this visit."
+        />
+      </Section>
+
       <div className="flex flex-wrap gap-3">
         <SubmitButton />
         <a

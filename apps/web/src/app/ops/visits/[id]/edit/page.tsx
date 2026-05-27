@@ -85,6 +85,7 @@ export default async function EditVisitPage({
         defaultSafetyFlags={visit.safetyFlags}
         defaultSecondaryCompanionId={visit.secondaryCompanionId}
         cover={cover}
+        coverSuggested={visit.coverSuggested}
       />
     </div>
   );

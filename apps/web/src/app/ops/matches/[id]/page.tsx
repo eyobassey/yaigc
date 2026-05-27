@@ -240,9 +240,74 @@ export default async function OpsMatchDetailPage({
                   ? ' · rematch needed'
                   : ''}
               </h2>
-              <p className="text-charcoal text-[0.9375rem] leading-[1.55] whitespace-pre-wrap break-words mb-2">
+              <p className="text-charcoal text-[0.9375rem] leading-[1.55] whitespace-pre-wrap break-words mb-3">
                 {match.twoVisitReviewNotes}
               </p>
+
+              <div className="bg-cream/60 border border-moss/[0.08] rounded-md px-4 py-3 mb-3">
+                <div className="font-body text-[0.65rem] font-medium uppercase tracking-[0.08em] text-stone mb-2">
+                  Which channels reached {match.recipient?.preferredName || match.recipient?.firstName || 'the recipient'}?
+                </div>
+                <ul className="flex flex-col gap-2 text-[0.875rem]">
+                  <li className="flex items-start gap-2">
+                    <span className="font-body text-[0.65rem] uppercase tracking-[0.06em] text-moss bg-moss/10 rounded px-1.5 py-0.5 mt-0.5">
+                      Companion reports
+                    </span>
+                    <span className="text-stone text-[0.8125rem]">
+                      Always on (visit-by-visit post-visit reports).
+                    </span>
+                  </li>
+                  {match.twoVisitReviewCompanionCallNotes ? (
+                    <li className="flex items-start gap-2">
+                      <span className="font-body text-[0.65rem] uppercase tracking-[0.06em] text-moss bg-moss/10 rounded px-1.5 py-0.5 mt-0.5">
+                        Companion debrief
+                      </span>
+                      <span className="text-charcoal whitespace-pre-wrap break-words">
+                        {match.twoVisitReviewCompanionCallNotes}
+                      </span>
+                    </li>
+                  ) : null}
+                  {match.twoVisitReviewFamilyCallNotes ? (
+                    <li className="flex items-start gap-2">
+                      <span className="font-body text-[0.65rem] uppercase tracking-[0.06em] text-moss bg-moss/10 rounded px-1.5 py-0.5 mt-0.5">
+                        Family debrief
+                      </span>
+                      <span className="text-charcoal whitespace-pre-wrap break-words">
+                        {match.twoVisitReviewFamilyCallNotes}
+                      </span>
+                    </li>
+                  ) : null}
+                  {match.twoVisitReviewRecipientCallNotes || match.twoVisitReviewRecipientCalledAt ? (
+                    <li className="flex items-start gap-2">
+                      <span className="font-body text-[0.65rem] uppercase tracking-[0.06em] text-terracotta bg-terracotta/10 rounded px-1.5 py-0.5 mt-0.5">
+                        Direct call
+                      </span>
+                      <span className="text-charcoal whitespace-pre-wrap break-words">
+                        {match.twoVisitReviewRecipientCalledAt ? (
+                          <span className="text-stone text-[0.75rem] block mb-1">
+                            Called{' '}
+                            {match.twoVisitReviewRecipientCalledAt
+                              .toISOString()
+                              .replace('T', ' ')
+                              .slice(0, 16)}
+                          </span>
+                        ) : null}
+                        {match.twoVisitReviewRecipientCallNotes ?? '(no notes captured)'}
+                      </span>
+                    </li>
+                  ) : (
+                    <li className="flex items-start gap-2">
+                      <span className="font-body text-[0.65rem] uppercase tracking-[0.06em] text-stone bg-stone/10 rounded px-1.5 py-0.5 mt-0.5">
+                        Direct call
+                      </span>
+                      <span className="text-stone text-[0.8125rem] italic">
+                        No direct call this round.
+                      </span>
+                    </li>
+                  )}
+                </ul>
+              </div>
+
               <p className="text-stone text-[0.75rem]">
                 Logged{' '}
                 {match.twoVisitReviewCompletedAt.toISOString().replace('T', ' ').slice(0, 19)}

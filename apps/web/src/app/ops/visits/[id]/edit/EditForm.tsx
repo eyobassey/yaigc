@@ -23,6 +23,7 @@ export function EditForm({
   defaultSafetyFlags,
   defaultSecondaryCompanionId,
   cover,
+  coverSuggested,
 }: {
   visitId: string;
   defaultDate: string;
@@ -32,6 +33,7 @@ export function EditForm({
   defaultSafetyFlags: string | null;
   defaultSecondaryCompanionId: string | null;
   cover: { id: string; firstName: string; lastName: string } | null;
+  coverSuggested: boolean;
 }) {
   const [state, action] = useFormState(editVisit, initial);
   const coverOptions = cover
@@ -40,6 +42,11 @@ export function EditForm({
         { value: cover.id, label: `${cover.firstName} ${cover.lastName} (named cover)` },
       ]
     : null;
+  // U.4 — when generateNextVisitForSubscription flagged this as one of
+  // the first-2-months "every 5th visit" cover candidates, default the
+  // picker to the named cover so a single Save confirms the suggestion.
+  const suggestedDefault =
+    coverSuggested && cover && !defaultSecondaryCompanionId ? cover.id : null;
 
   return (
     <form action={action} noValidate className="flex flex-col gap-6">
@@ -110,12 +117,19 @@ export function EditForm({
           title="Cover companion"
           description="Mark this visit as one where the named cover is present alongside the primary. The cover does not file a separate report; the primary's report stands."
         >
+          {coverSuggested && !defaultSecondaryCompanionId ? (
+            <div className="bg-moss/5 border-l-4 border-moss/40 px-3 py-2 rounded-r text-charcoal text-[0.8125rem] leading-[1.55]">
+              Suggested cover visit (every 5th visit in the first two
+              months). The picker defaults to the named cover; clear it if
+              this one should not include cover.
+            </div>
+          ) : null}
           <Select
             name="secondaryCompanionId"
             label="Cover present on this visit"
             options={coverOptions}
             defaultValue={
-              state.values?.secondaryCompanionId ?? defaultSecondaryCompanionId ?? ''
+              state.values?.secondaryCompanionId ?? defaultSecondaryCompanionId ?? suggestedDefault ?? ''
             }
             error={state.errors?.secondaryCompanionId}
           />

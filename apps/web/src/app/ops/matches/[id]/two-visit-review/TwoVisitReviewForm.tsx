@@ -84,6 +84,75 @@ export function TwoVisitReviewForm({
 
       <fieldset className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6 flex flex-col gap-3">
         <legend className="font-body text-[0.7rem] font-medium uppercase tracking-[0.1em] text-stone px-2 -ml-2">
+          Companion debrief call
+        </legend>
+        <p className="text-stone text-[0.875rem] leading-[1.55]">
+          The 15-minute call with the companion (per addendum §4.1). Your
+          notes here are operator-internal. Optional.
+        </p>
+        <textarea
+          name="companionCallNotes"
+          rows={4}
+          maxLength={4000}
+          defaultValue={state.values?.companionCallNotes}
+          className="w-full px-3 py-2 rounded-md border border-moss/15 bg-cream text-charcoal text-[0.9375rem] leading-[1.55] focus:outline-none focus:ring-2 focus:ring-moss/30"
+        />
+      </fieldset>
+
+      <fieldset className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6 flex flex-col gap-3">
+        <legend className="font-body text-[0.7rem] font-medium uppercase tracking-[0.1em] text-stone px-2 -ml-2">
+          Family debrief call
+        </legend>
+        <p className="text-stone text-[0.875rem] leading-[1.55]">
+          The 15-minute call with the family payer. Capture anything the
+          family relayed about how {recipientLabel} is finding the visits.
+          Operator-internal. Optional.
+        </p>
+        <textarea
+          name="familyCallNotes"
+          rows={4}
+          maxLength={4000}
+          defaultValue={state.values?.familyCallNotes}
+          className="w-full px-3 py-2 rounded-md border border-moss/15 bg-cream text-charcoal text-[0.9375rem] leading-[1.55] focus:outline-none focus:ring-2 focus:ring-moss/30"
+        />
+      </fieldset>
+
+      <fieldset className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6 flex flex-col gap-3">
+        <legend className="font-body text-[0.7rem] font-medium uppercase tracking-[0.1em] text-stone px-2 -ml-2">
+          Direct call with {recipientLabel} (if it happened)
+        </legend>
+        <p className="text-stone text-[0.875rem] leading-[1.55]">
+          When capacity + consent + capability allowed, the operator can
+          call the recipient directly to hear their own read on the first
+          two visits (addendum §4.6). Leave both fields blank when no
+          direct call happened this round — the review surface will
+          honestly say so.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-[max-content_1fr] sm:items-start">
+          <label className="flex flex-col gap-1 text-[0.8125rem] text-stone">
+            When you called
+            <input
+              type="datetime-local"
+              name="recipientCalledAt"
+              defaultValue={state.values?.recipientCalledAt}
+              className="px-3 py-2 rounded-md border border-moss/15 bg-cream text-charcoal text-[0.9375rem] focus:outline-none focus:ring-2 focus:ring-moss/30"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-[0.8125rem] text-stone">
+            Notes from the call
+            <textarea
+              name="recipientCallNotes"
+              rows={4}
+              maxLength={4000}
+              defaultValue={state.values?.recipientCallNotes}
+              className="px-3 py-2 rounded-md border border-moss/15 bg-cream text-charcoal text-[0.9375rem] leading-[1.55] focus:outline-none focus:ring-2 focus:ring-moss/30"
+            />
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset className="bg-paper border border-moss/[0.08] rounded-[12px] p-5 sm:p-6 flex flex-col gap-3">
+        <legend className="font-body text-[0.7rem] font-medium uppercase tracking-[0.1em] text-stone px-2 -ml-2">
           Note for both sides
         </legend>
         <p className="text-stone text-[0.875rem] leading-[1.55]">

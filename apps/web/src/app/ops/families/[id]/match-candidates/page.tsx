@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ChevronLeft, ChevronRight, MapPin, Sparkles, Heart } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
+import { audit } from '@/lib/audit';
+import { requireOperator } from '@/lib/auth-helpers';
 import { companionPhotoSrc } from '@/lib/companion-photo-src';
 import {
   rankCandidates,
@@ -25,6 +27,9 @@ export default async function MatchCandidatesPage({
   params: { id: string };
   searchParams: Record<string, string | string[] | undefined>;
 }) {
+  const actor = await requireOperator(
+    `/ops/families/${params.id}/match-candidates`,
+  );
   const lockedPrimaryId = (() => {
     const v = searchParams.primary;
     if (Array.isArray(v)) return v[0] ?? null;
@@ -72,6 +77,34 @@ export default async function MatchCandidatesPage({
         recipientInterests: recipient?.interests ?? null,
       })
     : null;
+
+  // U.3 — append-only record of who was considered for this family.
+  // One audit row per page view; metadata lists every candidate the
+  // operator saw + the locked primary when one is set. Safeguarding
+  // can query "show me everyone we ever considered for family X" by
+  // filtering on event=match_candidates_listed and targetId.
+  if (candidates.length > 0 || lockedPrimaryId) {
+    await audit({
+      actorType: 'user',
+      actorId: actor.id,
+      actorRole: actor.role,
+      actionType: 'read_sensitive',
+      targetType: 'Family',
+      targetId: family.id,
+      metadata: {
+        event: 'match_candidates_listed',
+        familyId: family.id,
+        recipientId: recipient?.id ?? null,
+        lockedPrimaryId: lockedPrimaryId,
+        candidates: candidates.map((c) => ({
+          companionId: c.companion.id,
+          score: Math.round(c.score * 10) / 10,
+          interestOverlap: c.signals.interestOverlap,
+          travelMinutes: c.travel?.drivingMinutes ?? null,
+        })),
+      },
+    });
+  }
 
   return (
     <div>
