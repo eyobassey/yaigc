@@ -61,6 +61,14 @@ const ApplicationSchema = z.object({
     ),
   whyJoinReason: z.string().min(20, 'A few sentences please.').max(4000),
   aboutYou: z.string().min(20, 'A few sentences please.').max(4000),
+  // SDD Addendum §3.4 - Phase 0 questionnaire. Four optional probes
+  // that feed the operator's interview rubric (T.2). Optional because
+  // applicants may not have an answer ready; the operator can also
+  // explore them in the interview itself.
+  motivation: z.string().max(4000).optional(),
+  experienceAlongside: z.string().max(4000).optional(),
+  yearsSettledLocally: z.string().max(2000).optional(),
+  weeklyStabilityNote: z.string().max(2000).optional(),
   rightToWork: z
     .union([z.literal('on'), z.literal('off')])
     .refine((v) => v === 'on', {
@@ -127,6 +135,10 @@ export async function submitCompanionApplication(
     dateOfBirth: get('dateOfBirth'),
     whyJoinReason: get('whyJoinReason'),
     aboutYou: get('aboutYou'),
+    motivation: get('motivation') || undefined,
+    experienceAlongside: get('experienceAlongside') || undefined,
+    yearsSettledLocally: get('yearsSettledLocally') || undefined,
+    weeklyStabilityNote: get('weeklyStabilityNote') || undefined,
     rightToWork: (formData.get('rightToWork') as string) || 'off',
     rightToWorkType: get('rightToWorkType'),
     rightToWorkShareCode: get('rightToWorkShareCode') || undefined,
@@ -177,6 +189,10 @@ export async function submitCompanionApplication(
       availabilitySlots: slots,
       whyJoinReason: d.whyJoinReason,
       aboutYou: d.aboutYou,
+      motivation: d.motivation ?? null,
+      experienceAlongside: d.experienceAlongside ?? null,
+      yearsSettledLocally: d.yearsSettledLocally ?? null,
+      weeklyStabilityNote: d.weeklyStabilityNote ?? null,
       rightToWork: true,
       rightToWorkType: d.rightToWorkType,
       rightToWorkShareCode: d.rightToWorkShareCode ?? null,

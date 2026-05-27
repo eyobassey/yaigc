@@ -125,6 +125,41 @@ export function ApplyForm() {
         />
       </Section>
 
+      <Section title="A few more open questions">
+        <p className="text-stone text-[0.875rem] leading-[1.55] -mt-1">
+          All optional. Skip any that do not have an answer ready. We will
+          explore them together if you come in for an interview.
+        </p>
+        <TextArea
+          name="motivation"
+          label="What brings you to this work?"
+          rows={4}
+          defaultValue={state.values?.motivation}
+          hint="Money is meaningful. We are also curious what else is in the mix."
+        />
+        <TextArea
+          name="experienceAlongside"
+          label="A time you were alongside someone"
+          rows={5}
+          defaultValue={state.values?.experienceAlongside}
+          hint="A friend, family member, or neighbour who needed company. What did being alongside them look like for you?"
+        />
+        <TextArea
+          name="yearsSettledLocally"
+          label="How long have you been settled in this part of the UK?"
+          rows={2}
+          defaultValue={state.values?.yearsSettledLocally}
+          hint="Settled life makes the weekly rhythm easier to hold. A rough sense is fine."
+        />
+        <TextArea
+          name="weeklyStabilityNote"
+          label="How stable does your week look over the next six months?"
+          rows={3}
+          defaultValue={state.values?.weeklyStabilityNote}
+          hint="Holding the same visit time week after week matters for the relationship. Tell us anything we should know."
+        />
+      </Section>
+
       <Section title="Right to work in the UK">
         <p className="text-stone text-[0.875rem] leading-[1.55] -mt-1">
           UK law requires us to check this before you can take on visits. We will run the check using the details and document you upload here.
