@@ -44,7 +44,10 @@ report, three new operator capture sections on the review form
 (companion debrief / family debrief / optional direct call with the
 recipient), and a review surface that honestly lays out which
 channels reached the recipient this round. The SDD Addendum is now
-folded into the SDD master (ADR 0007). Stripe payments are the next
+folded into the SDD master (ADR 0007). Stage W (Phase 0 on the
+companion portal) is in: read-only "From your application" panel on
+`/companion/account` plus operator retrospective Phase 0 capture
+under the existing companion edit form. Stripe payments are the next
 major block. See
 [Where things are](#where-things-are) below for the honest list of what is
 built versus what is queued.
@@ -463,7 +466,7 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 ### Built and working
 
 > Tick each box only when the thing actually works in production, not when
-> the PR is open. Last updated 2026-05-27 (Stages U + V).
+> the PR is open. Last updated 2026-05-27 (Stages U + V + W).
 
 **Infrastructure**
 
@@ -544,6 +547,7 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 - [x] Visit edit form gains a "Cover companion present" picker (S.2) when the originating match has a named cover; on post-visit-report submission with `Visit.secondaryCompanionId` set, the report transaction atomically bumps `Match.coverIntroductionVisitsCompleted`
 - [x] Two-visit calibration review (S.5 → S.6) — second post-visit report auto-stamps `Match.twoVisitReviewScheduledFor = now + 72h` inside the same transaction; today-dashboard "Two-visit reviews due" card; structured workflow at `/ops/matches/[id]/two-visit-review` surfaces both reports side by side, takes a `continue / adjust / reset` decision plus a 20–4000 char note, audit-logs, and emails both sides via a new shared `two-visit-review` template. Match detail surfaces the recorded decision; `reset` outcomes on still-accepted matches get a terracotta "rematch needed" treatment (24h SLA per §4.5)
 - [x] Companion interview rubric (T.1 → T.5) — `/ops/companions/[id]/interviews/new` takes a structured read: kind (phone screen / in-person / final), Likert cultural-fit bands (UK settledness soft band, community temperament, reads-a-room, scheduling stability, motivation beyond income), harder vetting gates (DBS / references / engagement terms / training), 20–4000 char narrative, recommendation. Soft gates: `kind = final` requires `operator_admin`; `recommendation = accept` requires `kind = final`. Pre-loads the application's Phase 0 answers above the rubric so the operator reads while scoring. T.5 second-interview soft warning fires when `decline` lands on a thin history — non-blocking terracotta banner. Interview history panel on `/ops/companions/[id]` renders each row chronologically with header chips + glance-able rubric pills (toned moss / terracotta / stone by semantics) + narrative
+- [x] Phase 0 retrospective capture on `/ops/companions/[id]/edit` (W.2) — new section adds the four Phase 0 fields (motivation / experienceAlongside / yearsSettledLocally / weeklyStabilityNote) to the existing companion edit form so an operator can add them after a phone call with a companion who skipped them at intake. Writes hit the linked `CompanionApplication` row inside the same transaction as the Companion edit; a focused `phase_zero_updated` audit row fires only when at least one of the four moved, with `metadata.changedFields[]`
 - [x] Matching surface (U.1 → U.4) — ranked candidate workspace at `/ops/families/[id]/match-candidates` with hard filters (DBS clear, capacity not maxed, ≤60 min drive) and composite score (interest overlap × 3 + availability flexibility × 2 − travel penalty − load penalty). "Lock as primary, pick cover" two-step flow lets the operator confirm both before proposing. Propose page renders a side-by-side comparison of primary + cover with photos, borough, rate, load, travel, DBS, shared interests, and per-candidate gate-failure warnings. Candidates-considered audit log fires one `match_candidates_listed` row per page view (U.3) so safeguarding can answer "who did we consider for family X." `Visit.coverSuggested` (U.4) marks every 5th visit in the first 60 days as a suggested cover visit; edit form defaults the picker to the named cover with a small hint, one save confirms
 - [x] Recipient voice in the two-visit review (V.1 → V.5) — `PostVisitReport.recipientPerspective` (companion-relayed reading on every visit, operator-internal). Review form expands with three optional channels: companion debrief notes, family debrief notes, direct call with the recipient (datetime + notes). The match-detail review surface lays out which channels reached the recipient, with explicit attribution per channel; when no direct call happened it honestly says so. Outbound email stays unchanged — the family + companion see the operator's distilled summary in appropriate language
 - [x] Pagination across every list page (offset, page=N) and every detail-page history feed (`hp=N`)
@@ -574,6 +578,7 @@ still empty. It is updated as Sprint 0 progresses and beyond.
 - [x] Messaging at `/companion/messages` (M.1 + M.2.3) — thread with the office plus, when the office has cleared it, a direct thread per matched family. "Start a direct thread" panel for eligible matches without a thread; threads flip read-only on match-end or gate-revoke
 - [x] "What matters about [name]" block on `/companion/visits/[id]` (R.3) — terracotta-rule card above the structured profile surfacing the family's latest prose. Hidden when the family has not written anything yet. `whatWeAreHopingFor` is deliberately not shown to the companion (memo §5.4)
 - [x] Cover-named matches surface on `/companion/matches` (S.4) — a companion sees the matches they are the named cover for (accepted bucket + all bucket), tagged with a "You are the cover" pill. Match detail allows cover-only viewers; the RespondPanel is hidden and replaced with a "Your role: Cover companion" panel so cover-only viewers do not see accept/decline controls. Cover-present visits surface on the visit detail too
+- [x] "From your application" panel on `/companion/account` (W.1) — read-only display of the four Phase 0 fields with the apply-form question text as labels and "—" placeholders for null values. Hidden entirely when all four are null AND the companion has zero completed/reported visits (brand-new pre-onboarding companions don't see it). When any field is blank, an italic CTA invites the companion to email the office and have us add the answer to their record. Intake-is-historical: the panel is read-only and operator-mediated for capture (see W.2)
 - [x] Visit detail surfaces "Cover present: [name]" (S.2) on the operator + companion views when the visit's `secondaryCompanionId` is set
 
 **Cron / scheduled jobs**
