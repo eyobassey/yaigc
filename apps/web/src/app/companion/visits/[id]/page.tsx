@@ -13,6 +13,7 @@ import { prisma } from '@/lib/prisma';
 import { requireCompanion } from '@/lib/auth-helpers';
 import { formatUkDateTime, formatUkTime } from '@/lib/visit-schedule';
 import { CompanionVisitStatePill } from '../_pill';
+import { CompanionTransitionPanel } from './CompanionTransitionPanel';
 
 export const metadata = { title: 'Visit' };
 
@@ -103,15 +104,8 @@ export default async function CompanionVisitDetailPage({
         </h1>
       </header>
 
-      <div className="mb-6 bg-amber-50 border-l-4 border-amber-400 px-5 py-4 rounded-r">
-        <p className="font-body text-[0.7rem] font-medium uppercase tracking-[0.12em] text-amber-700 mb-1">
-          State changes coming soon
-        </p>
-        <p className="text-charcoal text-[0.9375rem] leading-[1.55]">
-          For now, ring or message us during the visit and we will move
-          the state through on your behalf. Submitting your own state
-          changes from here lands in the next update.
-        </p>
+      <div className="mb-6 max-w-[760px]">
+        <CompanionTransitionPanel visitId={visit.id} state={visit.state} />
       </div>
 
       <div className="flex flex-col gap-6 max-w-[760px]">
