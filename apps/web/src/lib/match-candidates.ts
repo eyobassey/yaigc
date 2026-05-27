@@ -287,3 +287,122 @@ function renderSlotSummary(slots: AvailabilitySlots): string {
 // importing from two places.
 export type { PeriodKey };
 export const PERIOD_LABELS = PERIODS;
+
+// --- previewCandidate -------------------------------------------------------
+
+export type GateFailure =
+  | 'dbs_expired'
+  | 'dbs_missing'
+  | 'capacity_maxed'
+  | 'travel_far'
+  | 'archived';
+
+export type CandidatePreview = {
+  companion: Pick<
+    Companion,
+    | 'id'
+    | 'applicationId'
+    | 'firstName'
+    | 'lastName'
+    | 'photoUrl'
+    | 'photoFilename'
+    | 'borough'
+    | 'bio'
+    | 'interests'
+    | 'hourlyRate'
+    | 'maxConcurrentMatches'
+    | 'dbsRenewalDueAt'
+    | 'maxTravelMiles'
+    | 'status'
+  >;
+  openMatchCount: number;
+  travel: { distanceMiles: number; drivingMinutes: number } | null;
+  sharedInterests: string[];
+  gateFailures: GateFailure[];
+};
+
+/**
+ * Enriches a single, known-by-id companion against a family/recipient
+ * context. Unlike rankCandidates this does NOT filter the companion out
+ * when a gate fails - instead the failures land in gateFailures so the
+ * propose-page caller can surface them as warnings while still letting
+ * the operator override.
+ */
+export async function previewCandidate(
+  companionId: string,
+  ctx: CandidateContext,
+): Promise<CandidatePreview | null> {
+  const c = await prisma.companion.findUnique({
+    where: { id: companionId },
+    select: {
+      id: true,
+      applicationId: true,
+      firstName: true,
+      lastName: true,
+      photoUrl: true,
+      photoFilename: true,
+      borough: true,
+      bio: true,
+      interests: true,
+      hourlyRate: true,
+      maxConcurrentMatches: true,
+      dbsRenewalDueAt: true,
+      maxTravelMiles: true,
+      status: true,
+      deletedAt: true,
+      addressPostcode: true,
+      application: { select: { postcode: true } },
+    },
+  });
+  if (!c) return null;
+
+  const openMatchCount = await prisma.match.count({
+    where: {
+      candidateCompanionId: c.id,
+      endedAt: null,
+      status: { in: ['proposed', 'accepted'] },
+    },
+  });
+
+  const companionPostcode = c.addressPostcode ?? c.application.postcode ?? null;
+  const travelEstimate = await estimateTravel(companionPostcode, ctx.recipientPostcode);
+
+  const companionTokens = tokenise(c.interests);
+  const recipientTokens = tokenise(ctx.recipientInterests);
+  const sharedInterests = intersect(recipientTokens, companionTokens).slice(0, 5);
+
+  const now = new Date();
+  const gateFailures: GateFailure[] = [];
+  if (c.deletedAt) gateFailures.push('archived');
+  if (!c.dbsRenewalDueAt) gateFailures.push('dbs_missing');
+  else if (c.dbsRenewalDueAt.getTime() <= now.getTime()) gateFailures.push('dbs_expired');
+  if (openMatchCount >= c.maxConcurrentMatches) gateFailures.push('capacity_maxed');
+  if (
+    travelEstimate &&
+    travelEstimate.drivingMinutes > TRAVEL_HARD_FILTER_MINUTES
+  ) {
+    gateFailures.push('travel_far');
+  }
+
+  const { deletedAt: _deletedAt, addressPostcode: _addressPostcode, application: _application, ...companionCols } = c;
+  return {
+    companion: companionCols,
+    openMatchCount,
+    travel: travelEstimate
+      ? {
+          distanceMiles: travelEstimate.distanceMiles,
+          drivingMinutes: travelEstimate.drivingMinutes,
+        }
+      : null,
+    sharedInterests,
+    gateFailures,
+  };
+}
+
+export const GATE_FAILURE_LABEL: Record<GateFailure, string> = {
+  dbs_expired: 'DBS expired',
+  dbs_missing: 'DBS not on file',
+  capacity_maxed: 'At max concurrent matches',
+  travel_far: 'More than 60 min drive from recipient',
+  archived: 'Companion record archived',
+};

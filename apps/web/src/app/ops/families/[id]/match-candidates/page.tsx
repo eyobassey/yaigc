@@ -3,7 +3,12 @@ import { notFound } from 'next/navigation';
 import { ChevronLeft, ChevronRight, MapPin, Sparkles, Heart } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { companionPhotoSrc } from '@/lib/companion-photo-src';
-import { rankCandidates, type CandidateRow } from '@/lib/match-candidates';
+import {
+  rankCandidates,
+  previewCandidate,
+  type CandidateRow,
+  type CandidatePreview,
+} from '@/lib/match-candidates';
 
 export const metadata = { title: 'Find a companion' };
 
@@ -15,9 +20,16 @@ export const metadata = { title: 'Find a companion' };
 
 export default async function MatchCandidatesPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
+  const lockedPrimaryId = (() => {
+    const v = searchParams.primary;
+    if (Array.isArray(v)) return v[0] ?? null;
+    return v ?? null;
+  })();
   const family = await prisma.family.findUnique({
     where: { id: params.id },
     select: {
@@ -50,6 +62,16 @@ export default async function MatchCandidatesPage({
     recipientPostcode,
     recipientInterests: recipient?.interests ?? null,
   });
+
+  // U.2 — when a primary is locked via ?primary=, render a banner with
+  // the locked primary's preview at the top, and the remaining rows
+  // offer "Pick as cover" instead of "Propose with this primary."
+  const lockedPrimary: CandidatePreview | null = lockedPrimaryId
+    ? await previewCandidate(lockedPrimaryId, {
+        recipientPostcode,
+        recipientInterests: recipient?.interests ?? null,
+      })
+    : null;
 
   return (
     <div>
@@ -99,20 +121,53 @@ export default async function MatchCandidatesPage({
         ) : null}
       </header>
 
+      {lockedPrimary ? (
+        <section className="mb-6 bg-moss/5 border border-moss/15 rounded-[12px] p-5 sm:p-6">
+          <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+            <h2 className="font-body text-[0.7rem] font-medium uppercase tracking-[0.1em] text-moss inline-flex items-center gap-2">
+              <Sparkles size={14} strokeWidth={1.75} aria-hidden="true" />
+              Primary locked
+            </h2>
+            <Link
+              href={`/ops/families/${family.id}/match-candidates`}
+              className="text-stone text-[0.8125rem] hover:text-moss"
+            >
+              Clear and rank for primary
+            </Link>
+          </div>
+          <p className="text-charcoal text-[0.9375rem] mb-3">
+            {lockedPrimary.companion.firstName} {lockedPrimary.companion.lastName} is
+            set as the primary. Pick a cover from the list below, or skip
+            cover for now.
+          </p>
+          <Link
+            href={`/ops/families/${family.id}/matches/new?primary=${lockedPrimaryId}${
+              recipient ? `&recipientId=${recipient.id}` : ''
+            }`}
+            className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-moss text-cream text-[0.875rem] font-medium hover:bg-moss-dark transition-colors"
+          >
+            Propose with this primary, no cover yet
+          </Link>
+        </section>
+      ) : null}
+
       {candidates.length === 0 ? (
         <p className="text-stone text-[0.9375rem] italic">
           No bookable companions match the hard filters right now.
         </p>
       ) : (
         <ul className="flex flex-col gap-4">
-          {candidates.map((row) => (
-            <CandidateCard
-              key={row.companion.id}
-              row={row}
-              familyId={family.id}
-              recipientId={recipient?.id ?? null}
-            />
-          ))}
+          {candidates
+            .filter((row) => row.companion.id !== lockedPrimaryId)
+            .map((row) => (
+              <CandidateCard
+                key={row.companion.id}
+                row={row}
+                familyId={family.id}
+                recipientId={recipient?.id ?? null}
+                lockedPrimaryId={lockedPrimaryId}
+              />
+            ))}
         </ul>
       )}
     </div>
@@ -123,10 +178,12 @@ function CandidateCard({
   row,
   familyId,
   recipientId,
+  lockedPrimaryId,
 }: {
   row: CandidateRow;
   familyId: string;
   recipientId: string | null;
+  lockedPrimaryId: string | null;
 }) {
   const { companion, openMatchCount, travel, signals, score, scoreParts } = row;
   const photo = companionPhotoSrc({
@@ -134,9 +191,12 @@ function CandidateCard({
     photoFilename: companion.photoFilename,
     photoUrl: companion.photoUrl,
   });
-  const proposeHref = `/ops/families/${familyId}/matches/new?primary=${companion.id}${
-    recipientId ? `&recipientId=${recipientId}` : ''
-  }`;
+  const recipientParam = recipientId ? `&recipientId=${recipientId}` : '';
+  const proposeAsPrimary = `/ops/families/${familyId}/matches/new?primary=${companion.id}${recipientParam}`;
+  const lockAsPrimary = `/ops/families/${familyId}/match-candidates?primary=${companion.id}`;
+  const proposeAsCover = lockedPrimaryId
+    ? `/ops/families/${familyId}/matches/new?primary=${lockedPrimaryId}&cover=${companion.id}${recipientParam}`
+    : null;
   const detailHref = `/ops/companions/${companion.applicationId}`;
 
   return (
@@ -215,12 +275,30 @@ function CandidateCard({
             </p>
           ) : null}
           <div className="flex flex-wrap gap-3">
-            <Link
-              href={proposeHref}
-              className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-moss text-cream text-[0.875rem] font-medium hover:bg-moss-dark transition-colors"
-            >
-              Propose with this primary
-            </Link>
+            {proposeAsCover ? (
+              <Link
+                href={proposeAsCover}
+                className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-moss text-cream text-[0.875rem] font-medium hover:bg-moss-dark transition-colors"
+              >
+                Pick as cover
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href={proposeAsPrimary}
+                  className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-moss text-cream text-[0.875rem] font-medium hover:bg-moss-dark transition-colors"
+                >
+                  Propose with this primary
+                </Link>
+                <Link
+                  href={lockAsPrimary}
+                  className="inline-flex items-center justify-center px-4 py-2 rounded-md border border-moss/40 text-moss text-[0.875rem] font-medium hover:bg-moss/5 transition-colors"
+                  title="Keep this candidate as primary while you compare covers"
+                >
+                  Lock as primary, pick cover
+                </Link>
+              </>
+            )}
             <Link
               href={detailHref}
               className="inline-flex items-center gap-1 text-moss text-[0.875rem] hover:text-terracotta"
