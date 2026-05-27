@@ -86,6 +86,10 @@ export default async function OpsCompanionEditPage({
               ? String(companion.maxTravelMiles)
               : '',
           badgeSlugs: currentBadgeSlugs,
+          motivation: application.motivation ?? '',
+          experienceAlongside: application.experienceAlongside ?? '',
+          yearsSettledLocally: application.yearsSettledLocally ?? '',
+          weeklyStabilityNote: application.weeklyStabilityNote ?? '',
         }}
         currentPhotoSrc={photoSrc}
       />

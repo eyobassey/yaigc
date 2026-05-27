@@ -51,6 +51,10 @@ interface InitialValues {
   addressPostcode: string;
   maxTravelMiles: string;
   badgeSlugs: string[];
+  motivation: string;
+  experienceAlongside: string;
+  yearsSettledLocally: string;
+  weeklyStabilityNote: string;
 }
 
 interface Props {
@@ -300,6 +304,42 @@ export function EditCompanionForm({
           rows={4}
           defaultValue={v('interests')}
           error={state.errors?.interests}
+        />
+      </Section>
+
+      <Section title="Phase 0 (intake questions)">
+        <p className="text-stone text-[0.875rem] leading-[1.55] -mt-1">
+          Captured at intake on the public apply form, or added here later
+          by phone or email. Surfaces to the operator running the
+          interview rubric and to the companion on their account page.
+        </p>
+        <TextArea
+          name="motivation"
+          label="What brings you to this work?"
+          rows={3}
+          defaultValue={v('motivation')}
+          error={state.errors?.motivation}
+        />
+        <TextArea
+          name="experienceAlongside"
+          label="A time you were alongside someone"
+          rows={4}
+          defaultValue={v('experienceAlongside')}
+          error={state.errors?.experienceAlongside}
+        />
+        <TextArea
+          name="yearsSettledLocally"
+          label="How long settled in this part of the UK"
+          rows={2}
+          defaultValue={v('yearsSettledLocally')}
+          error={state.errors?.yearsSettledLocally}
+        />
+        <TextArea
+          name="weeklyStabilityNote"
+          label="Weekly stability over six months"
+          rows={3}
+          defaultValue={v('weeklyStabilityNote')}
+          error={state.errors?.weeklyStabilityNote}
         />
       </Section>
 

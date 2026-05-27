@@ -842,6 +842,14 @@ const EditCompanionSchema = z.object({
   // so we don't have to fight FormData multi-value handling. Validation
   // against the catalogue happens after parsing.
   badgesCsv: z.string().trim().max(2000).optional(),
+  // W.2 - Phase 0 retrospective capture. Same four optional fields the
+  // companion fills in on the public apply form (T.4); operator can
+  // add them later via a phone call or email. Writes hit the linked
+  // CompanionApplication row, not the Companion row.
+  motivation: z.string().trim().max(4000).optional(),
+  experienceAlongside: z.string().trim().max(4000).optional(),
+  yearsSettledLocally: z.string().trim().max(2000).optional(),
+  weeklyStabilityNote: z.string().trim().max(2000).optional(),
 });
 
 export type EditCompanionState = {
@@ -884,6 +892,13 @@ export async function editCompanionByOperator(
     maxTravelMiles:
       String(formData.get('maxTravelMiles') ?? '').trim() || undefined,
     badgesCsv: String(formData.get('badgesCsv') ?? '').trim() || undefined,
+    motivation: String(formData.get('motivation') ?? '').trim() || undefined,
+    experienceAlongside:
+      String(formData.get('experienceAlongside') ?? '').trim() || undefined,
+    yearsSettledLocally:
+      String(formData.get('yearsSettledLocally') ?? '').trim() || undefined,
+    weeklyStabilityNote:
+      String(formData.get('weeklyStabilityNote') ?? '').trim() || undefined,
   };
   const parsed = EditCompanionSchema.safeParse(raw);
   if (!parsed.success) {
@@ -944,10 +959,40 @@ export async function editCompanionByOperator(
       bio: true,
       interests: true,
       availability: true,
+      application: {
+        select: {
+          motivation: true,
+          experienceAlongside: true,
+          yearsSettledLocally: true,
+          weeklyStabilityNote: true,
+        },
+      },
     },
   });
   if (!before) {
     return { ok: false, errors: { _form: 'Companion not found.' } };
+  }
+
+  // W.2 - compute which Phase 0 fields changed against what we already
+  // have on the application. Used both to drive the conditional write
+  // and to attach a focused audit-log row when something actually moved.
+  const phaseZeroNext = {
+    motivation: d.motivation ?? null,
+    experienceAlongside: d.experienceAlongside ?? null,
+    yearsSettledLocally: d.yearsSettledLocally ?? null,
+    weeklyStabilityNote: d.weeklyStabilityNote ?? null,
+  };
+  const phaseZeroBefore = {
+    motivation: before.application.motivation,
+    experienceAlongside: before.application.experienceAlongside,
+    yearsSettledLocally: before.application.yearsSettledLocally,
+    weeklyStabilityNote: before.application.weeklyStabilityNote,
+  };
+  const phaseZeroChangedFields: string[] = [];
+  for (const k of Object.keys(phaseZeroNext) as (keyof typeof phaseZeroNext)[]) {
+    if ((phaseZeroBefore[k] ?? null) !== (phaseZeroNext[k] ?? null)) {
+      phaseZeroChangedFields.push(k);
+    }
   }
 
   // Photo upload is optional. Save first, update row, then delete the
@@ -1055,6 +1100,12 @@ export async function editCompanionByOperator(
         })),
       });
     }
+    if (phaseZeroChangedFields.length > 0) {
+      await tx.companionApplication.update({
+        where: { id: before.applicationId },
+        data: phaseZeroNext,
+      });
+    }
   });
 
   if (newFilename && before.photoFilename) {
@@ -1095,11 +1146,32 @@ export async function editCompanionByOperator(
     },
   });
 
+  // Phase 0 changes are big enough signal to warrant their own audit row
+  // - safeguarding may want to know "who added this candidate's
+  // motivation post-onboarding and when."
+  if (phaseZeroChangedFields.length > 0) {
+    await audit({
+      actorType: 'user',
+      actorId: operator.id,
+      actorRole: operator.role,
+      actionType: 'update',
+      targetType: 'CompanionApplication',
+      targetId: before.applicationId,
+      beforeState: phaseZeroBefore,
+      afterState: phaseZeroNext,
+      metadata: {
+        event: 'phase_zero_updated',
+        changedFields: phaseZeroChangedFields,
+      },
+    });
+  }
+
   revalidatePath(`/ops/companions/${before.applicationId}`);
   revalidatePath('/ops/companions');
   revalidatePath('/ops/compliance');
   revalidatePath('/companion');
   revalidatePath('/companion/profile');
+  revalidatePath('/companion/account');
   redirect(`/ops/companions/${before.applicationId}`);
   return { ok: true };
 }
