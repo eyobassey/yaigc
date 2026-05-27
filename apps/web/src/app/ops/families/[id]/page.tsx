@@ -339,13 +339,22 @@ export default async function OpsFamilyDetailPage({
                 Matches ({family.matches.length})
               </h2>
               {family.recipients.length > 0 ? (
-                <Link
-                  href={`/ops/families/${family.id}/matches/new`}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-moss/20 text-moss text-[0.75rem] font-medium hover:bg-moss hover:text-cream transition-colors whitespace-nowrap"
-                >
-                  <Plus size={12} strokeWidth={2} aria-hidden="true" />
-                  Propose a match
-                </Link>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Link
+                    href={`/ops/families/${family.id}/match-candidates`}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-moss/20 text-moss text-[0.75rem] font-medium hover:bg-moss hover:text-cream transition-colors whitespace-nowrap"
+                  >
+                    <Sparkles size={12} strokeWidth={2} aria-hidden="true" />
+                    Find a companion
+                  </Link>
+                  <Link
+                    href={`/ops/families/${family.id}/matches/new`}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-moss/20 text-moss text-[0.75rem] font-medium hover:bg-moss hover:text-cream transition-colors whitespace-nowrap"
+                  >
+                    <Plus size={12} strokeWidth={2} aria-hidden="true" />
+                    Propose a match
+                  </Link>
+                </div>
               ) : null}
             </div>
             {family.matches.length === 0 ? (
